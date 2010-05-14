@@ -53,7 +53,7 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 static gboolean
 snippets_manager_deactivate (AnjutaPlugin * plugin)
 {
-	DEBUG_PRINT ("%s", "SnippetsManager: Activating SnippetsManager plugin ...");	
+	DEBUG_PRINT ("%s", "SnippetsManager: Deactivating SnippetsManager plugin ...");	
 	return TRUE;
 }
 

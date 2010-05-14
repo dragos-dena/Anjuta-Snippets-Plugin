@@ -108,15 +108,15 @@ snippets_manager_save_xml_file (const gchar* snippet_packet_filename,
 	{
 		case NATIVE_FORMAT:
 			return snippets_manager_save_native_xml_file (snippet_packet_filename, 
-														  snippets, 
-														  group_name, 
-														  group_description);
+                                                          snippets, 
+                                                          group_name, 
+                                                          group_description);
 		
 		case GEDIT_FORMAT:
 			return snippets_manager_save_gedit_xml_file (snippet_packet_filename,
-														 snippets,
-														 group_name,
-														 group_description);
+                                                         snippets,
+                                                         group_name,
+                                                         group_description);
 		
 		default:
 			return FALSE;
