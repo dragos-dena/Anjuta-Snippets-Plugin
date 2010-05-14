@@ -74,13 +74,13 @@ typedef enum
 
 
 GType           snippets_db_get_type                (void) G_GNUC_CONST;
-SnippetsDB*		snippets_db_new	                    (void);
+SnippetsDB*     snippets_db_new	                    (void);
 gint32          snippets_db_load_file               (SnippetsDB* snippets_db,
                                                      const gchar* snippet_packet_file_path,
                                                      gboolean overwrite,
                                                      GList* conflicting_snippets,
                                                      FormatType format_type);
-gboolean        snippets_db_save_file				(SnippetsDB* snippets_db,
+gboolean        snippets_db_save_file               (SnippetsDB* snippets_db,
                                                      gint32 snippet_packet_loaded_id);
 gboolean        snippets_db_save_all                (SnippetsDB* snippets_db);
 GList*          snippets_db_search                  (SnippetsDB* snippets_db,
