@@ -19,8 +19,8 @@
 	Boston, MA  02110-1301  USA
 */
 
+#include <glib.h>
 #include "snippets-db.h"
-#include "snippet.h"
 
 GList*		snippets_manager_parse_xml_file	(const gchar* snippet_packet_filename,
 											 FormatType format_type);

@@ -20,34 +20,39 @@
 */
 
 #include "snippets-xml-parser.h"
+#include "snippet.h"
 #include <libxml/parser.h>
 
 
-gboolean snippets_manager_save_native_xml_file	(const gchar *snippet_packet_filename, 
-												 GList* snippets, 
-												 const gchar* group_name, 
-												 const gchar* group_description)
+static gboolean 
+snippets_manager_save_native_xml_file (const gchar *snippet_packet_filename, 
+                                       GList* snippets, 
+                                       const gchar* group_name, 
+                                       const gchar* group_description)
 {
 	/* TODO */
 	return FALSE;
 }
 
-gboolean snippets_manager_save_gedit_xml_file	(const gchar *snippet_packet_filename, 
-												 GList* snippets, 
-												 const gchar* group_name, 
-												 const gchar* group_description)
+static gboolean 
+snippets_manager_save_gedit_xml_file (const gchar *snippet_packet_filename, 
+                                      GList* snippets, 
+                                      const gchar* group_name, 
+                                      const gchar* group_description)
 {
 	/* TODO */
 	return FALSE;
 }
 
-GList* snippets_manager_parse_native_xml_file 	(const gchar* snippet_packet_filename)
+static GList* 
+snippets_manager_parse_native_xml_file (const gchar* snippet_packet_filename)
 {
 	/* TODO */
 	return NULL;
 }
 
-GList* snippets_manager_parse_gedit_xml_file 	(const gchar* snippet_packet_filename)
+static GList* 
+snippets_manager_parse_gedit_xml_file (const gchar* snippet_packet_filename)
 {
 	/* TODO */
 	return NULL;
@@ -63,8 +68,9 @@ GList* snippets_manager_parse_gedit_xml_file 	(const gchar* snippet_packet_filen
  *
  * Returns: A list of snippets (of type Snippet) on success or NULL on failure.
  **/
-GList*		snippets_manager_parse_xml_file	(const gchar* snippet_packet_filename,
-											 FormatType format_type)
+GList*	
+snippets_manager_parse_xml_file (const gchar* snippet_packet_filename,
+                                 FormatType format_type)
 {
 	switch (format_type)
 	{
@@ -91,11 +97,12 @@ GList*		snippets_manager_parse_xml_file	(const gchar* snippet_packet_filename,
  *
  * Returns: TRUE on success.
  **/
-gboolean	snippets_manager_save_xml_file	(const gchar* snippet_packet_filename,
-											 FormatType format_type,
-											 GList* snippets,
-											 const gchar* group_name,
-											 const gchar* group_description)
+gboolean
+snippets_manager_save_xml_file (const gchar* snippet_packet_filename,
+                                FormatType format_type,
+                                GList* snippets,
+                                const gchar* group_name,
+                                const gchar* group_description)
 {
 	switch (format_type)
 	{

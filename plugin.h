@@ -29,7 +29,6 @@
 #include "snippets-editor.h"
 #include "snippets-browser.h"
 #include "snippets-db.h"
-//#include "snippets-xml-parser.h"		FIXME should be included in snippets-dabase.h
 #include "snippets-interaction-interpreter.h"
 
 

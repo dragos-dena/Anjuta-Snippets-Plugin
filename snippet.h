@@ -23,71 +23,64 @@
 #define __ANJUTA_SNIPPET_H__
 
 #include <glib.h>
+#include <glib-object.h>
+#include <gio/gio.h>
 
-#define SNIPPET_TYPE            (snippet_get_type ())
-#define SNIPPET(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), SNIPPET_TYPE, Snippet))
-#define SNIPPET_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), SNIPPET_TYPE, SnippetClass))
-#define IS_SNIPPET(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), SNIPPET_TYPE))
-#define IS_SNIPPET_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), SNIPPET_TYPE))
+G_BEGIN_DECLS
 
-typedef struct _Snippet Snippet;
-typedef struct _SnippetClass SnippetClass;
+#define ANJUTA_TYPE_SNIPPET            (snippet_get_type ())
+#define ANJUTA_SNIPPET(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), ANJUTA_TYPE_SNIPPET, AnjutaSnippet))
+#define ANJUTA_SNIPPET_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), ANJUTA_TYPE_SNIPPET, AnjutaSnippetClass))
+#define ANJUTA_IS_SNIPPET(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), ANJUTA_TYPE_SNIPPET))
+#define ANJUTA_IS_SNIPPET_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), ANJUTA_TYPE_SNIPPET))
 
-/* The snippet key is formed by concatenating the trigger_key, "." and snippet_language.
-   Example: If the trigger key is "class" and the snippet language is "C++", the snippet key
-   will be: "class.C++" */
-struct _Snippet
+typedef struct _AnjutaSnippet AnjutaSnippet;
+typedef struct _AnjutaSnippetClass AnjutaSnippetClass;
+
+struct _AnjutaSnippet
 {
-	/* The trigger key of the snippet. Unique per language. */
+	GObject parent_instance;
+
 	gchar* trigger_key;
-
-	/* A list of languages for which the snippet is meant. */
 	gchar* snippet_language;
-
-	/* A short, intuitive name for the snippet. */
 	gchar* snippet_name;
 	
-	/* The actual snippet content. */
 	gchar* snippet_content;
-
-	/* A list of the variables (SnippetVariable) in the snippet. */
+	
 	GList* variables;
-
-	/* A list of keywords (gchar*) for searching purposes. */
 	GList* keywords;
 	
-	/* Characters inserted since the user started to edit the snippet. */
 	gint32 chars_inserted;
 };
 
-struct _SnippetClass
+struct _AnjutaSnippetClass
 {
-	GObjectClass klass;
+	GObjectClass parent_class;
 
 };
 
+GType           snippet_get_type                        (void) G_GNUC_CONST;
+AnjutaSnippet*  snippet_new                             (const gchar* trigger_key,
+                                                         const gchar* snippet_language,
+                                                         const gchar* snippet_name,
+                                                         const gchar* snippet_content,
+                                                         GList* variable_names,
+                                                         GList* variable_default_values,
+                                                         GList* keywords);
+gchar*          snippet_get_key                         (AnjutaSnippet* snippet);
+const gchar*    snippet_get_trigger_key                 (AnjutaSnippet* snippet);
+const gchar*    snippet_get_language                    (AnjutaSnippet* snippet);
+const gchar*    snippet_get_name                        (AnjutaSnippet* snippet);
+GList*          snippet_get_keywords_list               (AnjutaSnippet* snippet);
+GList*          snippet_get_variable_names_list         (AnjutaSnippet* snippet);
+GList*          snippet_get_variable_defaults_list      (AnjutaSnippet* snippet);
+gchar*          snippet_get_default_content             (AnjutaSnippet* snippet);
+void            snippet_set_editing_mode                (AnjutaSnippet* snippet);
+GList*          snippet_get_variable_relative_positions (AnjutaSnippet* snippet,
+                                                         const gchar* variable_name);
+void            snippet_update_chars_inserted           (AnjutaSnippet* snippet,
+                                                         gint32 inserted_chars);
 
-GType			snippet_get_type						(void);
-Snippet*		snippet_new								(const gchar* trigger_key,
-														 const gchar* snippet_language,
-														 const gchar* snippet_name,
-														 const gchar* snippet_content,
-														 GList* variable_names,
-														 GList* variable_default_values,
-														 GList* keywords);
-gchar*			snippet_get_key							(Snippet* snippet);
-const gchar*	snippet_get_trigger_key					(Snippet* snippet);
-const gchar*	snippet_get_language					(Snippet* snippet);
-const gchar*	snippet_get_name						(Snippet* snippet);
-GList*			snippet_get_keywords_list				(Snippet* snippet);
-GList*			snippet_get_variables_list				(Snippet* snippet);
-gchar*			snippet_get_default_content				(Snippet* snippet);
-void			snippet_set_editing_mode 				(Snippet* snippet);
-gint32			snippet_get_next_variable_relative_pos	(Snippet* snippet);
-void			snippet_update_chars_inserted			(Snippet* snippet,
-														 gint32 inserted_chars);
-void			snippet_clear_editing_mode 				(Snippet* snippet);
-
-
+G_END_DECLS
 
 #endif /* __ANJUTA_SNIPPET_H__ */

@@ -26,9 +26,6 @@
 #include <gio/gio.h>
 #include <libanjuta/anjuta-shell.h>
 #include <libanjuta/anjuta-debug.h>
-/*#include <libanjuta/interfaces/ianjuta-document.h>*/
-/*#include <libanjuta/interfaces/ianjuta-language.h>*/ /* FIXME should go in appropiate files */
-/*#include <libanjuta/interfaces/ianjuta-indicable.h>*/
 
 #define ICON_FILE	"anjuta-snippets-manager.png"
 #define PREFERENCES_UI	PACKAGE_DATA_DIR"/glade/snippets-manager-preferences.ui"
@@ -108,7 +105,7 @@ snippets_manager_plugin_instance_init (GObject * obj)
 	snippets_manager->show_only_document_language_snippets = FALSE;
 	
 	/* TODO */
-	snippets_manager->snippets_db = NULL;
+	snippets_manager->snippets_db = snippets_db_new();
 	snippets_manager->snippet_interpreter = NULL;
 	snippets_manager->snippet_browser = NULL;
 	snippets_manager->snippet_editor = NULL;

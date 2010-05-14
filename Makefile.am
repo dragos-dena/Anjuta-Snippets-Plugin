@@ -40,8 +40,8 @@ libanjuta_snippets_manager_la_LIBADD = \
 	$(LIBANJUTA_LIBS)
 
 libanjuta_snippets_manager_la_SOURCES = \
-	plugin.c\
-	plugin.h\
+	snippet.c\
+	snippet.h\
 	snippets-db.c\
 	snippets-db.h\
 	snippets-xml-parser.c\
@@ -52,8 +52,9 @@ libanjuta_snippets_manager_la_SOURCES = \
 	snippets-editor.h\
 	snippets-interaction-interpreter.c\
 	snippets-interaction-interpreter.h\
-	snippet.c\
-	snippet.h
+	plugin.c\
+	plugin.h
+
 	
 EXTRA_DIST = \
 	$(plugin_in_files) \
