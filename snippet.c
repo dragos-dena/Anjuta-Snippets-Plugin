@@ -90,7 +90,7 @@ snippet_init (AnjutaSnippet* snippet)
  * Returns: The new #AnjutaSnippet or NULL on failure.
  **/
 AnjutaSnippet* 
-snippet_new	(const gchar* trigger_key,
+snippet_new (const gchar* trigger_key,
              const gchar* snippet_language,
              const gchar* snippet_name,
              const gchar* snippet_content,
