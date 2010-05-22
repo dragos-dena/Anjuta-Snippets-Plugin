@@ -125,16 +125,14 @@ snippet_class_init (AnjutaSnippetClass* klass)
 	snippet_parent_class = g_type_class_peek_parent (klass);
 	object_class->dispose = snippet_dispose;
 	object_class->finalize = snippet_finalize;
-	
-	g_type_class_add_private (klass, sizeof (AnjutaSnippetPrivate));
 }
 
 static void
 snippet_init (AnjutaSnippet* snippet)
 {
-	AnjutaSnippetPrivate* priv;
+	AnjutaSnippetPrivate* priv = g_new0 (AnjutaSnippetPrivate, 1);
 	
-	snippet->priv = priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
+	snippet->priv = priv;
 }
 
 /**
@@ -162,7 +160,7 @@ snippet_new (const gchar* trigger_key,
              GList* variable_globals,
              GList* keywords)
 {
-	AnjutaSnippet* snippet = ANJUTA_SNIPPET (g_object_new (snippet_get_type (), NULL));
+	AnjutaSnippet* snippet = NULL;
 	guint iter = 0;
 	gchar* temporary_string_holder = NULL;
 	AnjutaSnippetVariable* cur_snippet_var;
@@ -173,6 +171,9 @@ snippet_new (const gchar* trigger_key,
 	if (g_list_length (variable_names) != g_list_length (variable_default_values) ||
 	    g_list_length (variable_names) != g_list_length (variable_globals))
 		return NULL;
+	
+	/* Initialize the object */
+	snippet = ANJUTA_SNIPPET (g_object_new (snippet_get_type (), NULL));
 	
 	/* Make a copy of the given strings */
 	snippet->priv->trigger_key = g_strdup (trigger_key);
