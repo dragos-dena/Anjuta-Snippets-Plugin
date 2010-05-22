@@ -1,0 +1,214 @@
+From a9c9aff66cd5f2f1fc188dca1258b5e37aa105b7 Mon Sep 17 00:00:00 2001
+From: Dragos Dena <dragos.dena@gmail.com>
+Date: Sun, 9 May 2010 03:31:47 +0300
+Subject: [PATCH] libanjuta/macro/file-wizard: Changed IAnjutaMacro to IAnjutaSnippetsManager
+
+---
+ libanjuta/interfaces/libanjuta.idl   |   25 +++++++++++++++----------
+ plugins/file-wizard/file.c           |   26 +++++++++++++-------------
+ plugins/file-wizard/file.h           |    2 +-
+ plugins/macro/anjuta-macro.plugin.in |    2 +-
+ plugins/macro/plugin.c               |   13 +++++++------
+ 5 files changed, 37 insertions(+), 31 deletions(-)
+
+diff --git a/libanjuta/interfaces/libanjuta.idl b/libanjuta/interfaces/libanjuta.idl
+index 529025e..a98dbcf 100644
+--- a/libanjuta/interfaces/libanjuta.idl
++++ b/libanjuta/interfaces/libanjuta.idl
+@@ -5150,25 +5150,30 @@ interface IAnjutaVcs
+ }
+ 
+ /**
+- * SECTION:ianjuta-macro
+- * @title: IAnjutaMacro
+- * @short_description: Macro processor interface
++ * SECTION:ianjuta-snippets-manager
++ * @title: IAnjutaSnippetsManager
++ * @short_description: Snippets Manager interface
+  * @see_also: 
+  * @stability: Unstable
+- * @include: libanjuta/interfaces/ianjuta-macro.h
+- * 
++ * @include: libanjuta/interfaces/ianjuta-snippets-manager.h
++ *
++ * Each snippet has an associated key which is unique per language. 
+  */
+-interface IAnjutaMacro
++interface IAnjutaSnippetsManager
+ {
+ 	/**
+-	 * ianjuta_macro_insert:
+-	 * @key: Key of the macro
++	 * ianjuta_snippets_manager_insert:
++	 * @snippet_key: Key of the Snippet
+ 	 * @obj: Self
+ 	 * @err: Error propagation and reporting
+ 	 *
+-	 * Insert Macro to editor
++	 * Insert Snippet to editor at the current cursor position. The method will get the language
++	 * of the current document and choose the appropiate snippet of that language for the
++	 * key given.
++	 *
++	 * Returns: TRUE on insertion success.
+ 	 */
+-	void insert(const gchar* key);
++	gboolean insert(const gchar* snippet_key);
+ }
+ 
+ /**
+diff --git a/plugins/file-wizard/file.c b/plugins/file-wizard/file.c
+index 1fbf6d3..de466fb 100644
+--- a/plugins/file-wizard/file.c
++++ b/plugins/file-wizard/file.c
+@@ -34,7 +34,7 @@
+ #include <libanjuta/interfaces/ianjuta-file.h>
+ #include <libanjuta/interfaces/ianjuta-file-savable.h>
+ #include <libanjuta/interfaces/ianjuta-document-manager.h>
+-#include <libanjuta/interfaces/ianjuta-macro.h>
++#include <libanjuta/interfaces/ianjuta-snippets-manager.h>
+ #include <libanjuta/interfaces/ianjuta-file.h>
+ #include <libanjuta/interfaces/ianjuta-project.h>
+ #include <libanjuta/interfaces/ianjuta-project-manager.h>
+@@ -109,8 +109,8 @@ static NewFileGUI *nfg = NULL;
+ 
+ 
+ static gboolean create_new_file_dialog(IAnjutaDocumentManager *docman);
+-static void insert_notice(IAnjutaMacro* macro, const gchar* license_type, gint comment_type);
+-static void insert_header(IAnjutaMacro* macro, gint source_type);
++static void insert_notice(IAnjutaSnippetsManager* macro, const gchar* license_type, gint comment_type);
++static void insert_header(IAnjutaSnippetsManager* macro, gint source_type);
+ 
+ static void
+ on_add_to_project_toggled (GtkWidget* toggle_button, NewFileGUI *gui)
+@@ -246,7 +246,7 @@ on_new_file_okbutton_clicked(GtkWidget *window, GdkEvent *event,
+ 	gint source_type;
+ 	IAnjutaDocumentManager *docman;
+ 	GtkWidget *toplevel;
+-	IAnjutaMacro* macro;
++	IAnjutaSnippetsManager* macro;
+ 	IAnjutaEditor *te = NULL;
+ 	IAnjutaEditor *teh = NULL;
+ 	gboolean ok = TRUE;
+@@ -255,7 +255,7 @@ on_new_file_okbutton_clicked(GtkWidget *window, GdkEvent *event,
+ 	docman = IANJUTA_DOCUMENT_MANAGER (g_object_get_data (G_OBJECT(toplevel),
+ 										"IAnjutaDocumentManager"));
+ 	macro = anjuta_shell_get_interface (ANJUTA_PLUGIN(docman)->shell, 
+-		                       IAnjutaMacro, NULL);
++		                       IAnjutaSnippetsManager, NULL);
+ 	entry = GTK_WIDGET (gtk_builder_get_object (nfg->bxml, NEW_FILE_ENTRY));
+ 	name = gtk_entry_get_text(GTK_ENTRY(entry));
+ 
+@@ -461,7 +461,7 @@ on_new_file_license_toggled(GtkToggleButton *button, gpointer user_data)
+ }
+ 
+ static void
+-insert_notice(IAnjutaMacro* macro, const gchar* license_type, gint comment_type)
++insert_notice(IAnjutaSnippetsManager* macro, const gchar* license_type, gint comment_type)
+ {
+ 	const gchar *template;
+ 	gchar *name;
+@@ -483,29 +483,29 @@ insert_notice(IAnjutaMacro* macro, const gchar* license_type, gint comment_type)
+ 	}
+ 
+ 	name = g_strdup_printf(template, license_type);
+-	ianjuta_macro_insert(macro, name, NULL);
++	ianjuta_snippets_manager_insert(macro, name, NULL);
+ 	g_free (name);
+ }
+ 
+ static void
+-insert_header(IAnjutaMacro* macro, gint source_type)
++insert_header(IAnjutaSnippetsManager* macro, gint source_type)
+ {
+ 	switch (source_type)
+ 	{
+ 		case  LGE_C: case LGE_HC:
+-			ianjuta_macro_insert(macro, "Header_c", NULL);
++			ianjuta_snippets_manager_insert(macro, "Header_c", NULL);
+ 			break;
+ 		case  LGE_CPLUS: case LGE_JAVA:
+-			ianjuta_macro_insert(macro, "Header_cpp", NULL);
++			ianjuta_snippets_manager_insert(macro, "Header_cpp", NULL);
+ 			break;
+ 		case  LGE_CSHARP:
+-			ianjuta_macro_insert(macro, "Header_csharp", NULL);
++			ianjuta_snippets_manager_insert(macro, "Header_csharp", NULL);
+ 			break;
+ 		case LGE_PERL:
+-			ianjuta_macro_insert(macro, "Header_perl", NULL);
++			ianjuta_snippets_manager_insert(macro, "Header_perl", NULL);
+ 			break;
+ 		case LGE_SHELL:
+-			ianjuta_macro_insert(macro, "Header_shell", NULL);
++			ianjuta_snippets_manager_insert(macro, "Header_shell", NULL);
+ 			break;
+ 		default:
+ 			break;
+diff --git a/plugins/file-wizard/file.h b/plugins/file-wizard/file.h
+index 57889fa..8d22b3f 100644
+--- a/plugins/file-wizard/file.h
++++ b/plugins/file-wizard/file.h
+@@ -36,7 +36,7 @@ extern "C"
+ #include <libanjuta/anjuta-plugin.h>
+ #include <libanjuta/interfaces/ianjuta-editor.h>
+ #include <libanjuta/interfaces/ianjuta-document-manager.h>
+-#include <libanjuta/interfaces/ianjuta-macro.h>
++#include <libanjuta/interfaces/ianjuta-snippets-manager.h>
+ #include <plugin.h>
+ 
+ void display_new_file(AnjutaFileWizardPlugin *plugin,
+diff --git a/plugins/macro/anjuta-macro.plugin.in b/plugins/macro/anjuta-macro.plugin.in
+index 57eb58a..9731b14 100644
+--- a/plugins/macro/anjuta-macro.plugin.in
++++ b/plugins/macro/anjuta-macro.plugin.in
+@@ -3,4 +3,4 @@ _Name=Macro Plugin
+ _Description=Insert predefined macros into Editor
+ Location=anjuta-macro:MacroPlugin
+ Icon=anjuta-macro.png
+-Interfaces=IAnjutaMacro
++Interfaces=IAnjutaSnippetsManager
+diff --git a/plugins/macro/plugin.c b/plugins/macro/plugin.c
+index 54223a9..3769925 100644
+--- a/plugins/macro/plugin.c
++++ b/plugins/macro/plugin.c
+@@ -20,7 +20,7 @@
+ #include "macro-db.h"
+ 
+ #include <libanjuta/anjuta-debug.h>
+-#include <libanjuta/interfaces/ianjuta-macro.h>
++#include <libanjuta/interfaces/ianjuta-snippets-manager.h>
+ #include <libanjuta/interfaces/ianjuta-document-manager.h>
+ 
+ #define UI_FILE PACKAGE_DATA_DIR"/ui/anjuta-macro.xml"
+@@ -272,22 +272,23 @@ macro_insert (MacroPlugin * plugin, const gchar *keyword)
+ 	return TRUE;
+ }
+ 
+-static void 
+-ianjuta_macro_iface_insert(IAnjutaMacro* macro, const gchar* key, GError** err)
++static gboolean 
++ianjuta_snippet_manager_iface_insert(IAnjutaSnippetsManager* macro, const gchar* key, GError** err)
+ {
+ 	MacroPlugin* plugin = ANJUTA_PLUGIN_MACRO (macro);
+ 	macro_insert(plugin, key);
++	return TRUE;
+ }
+ 
+ /* Interface */
+ static void
+-ianjuta_macro_iface_init (IAnjutaMacroIface *iface)
++ianjuta_snippets_manager_iface_init (IAnjutaSnippetsManagerIface *iface)
+ {
+-	iface->insert = ianjuta_macro_iface_insert;
++	iface->insert = ianjuta_snippets_manager_iface_insert;
+ }
+ 
+ ANJUTA_PLUGIN_BEGIN (MacroPlugin, macro_plugin);
+-ANJUTA_PLUGIN_ADD_INTERFACE (ianjuta_macro, IANJUTA_TYPE_MACRO);
++ANJUTA_PLUGIN_ADD_INTERFACE (ianjuta_snippets_manager, IANJUTA_TYPE_SNIPPETS_MANAGER);
+ ANJUTA_PLUGIN_END;
+ 
+ ANJUTA_SIMPLE_PLUGIN (MacroPlugin, macro_plugin);
+-- 
+1.7.0.4
+
