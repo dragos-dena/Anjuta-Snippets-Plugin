@@ -26,6 +26,38 @@
 
 #define DEFAULT_SNIPPETS_FILE PACKAGE_DATA_DIR"/default-snippets.xml"
 
+#define ANJUTA_SNIPPETS_DB_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ANJUTA_TYPE_SNIPPETS_DB, SnippetsDBPrivate))
+
+struct _SnippetsDBPrivate
+{
+	/* A tree model to be used by the Snippet Browser. */
+	GtkTreeStore* snippets_tree;
+	
+	/* A binary balanced tree with the trigger keys for searching purposes. */
+	GTree* trigger_keys_tree;
+	
+	/* A binary balanced tree with the keywords for searching purposes */
+	GTree* keywords_tree;
+	
+	/* A hashtable with the snippet-key's as keys and pointers to the aproppiate Snippet as value */
+	GHashTable* snippet_keys_map;
+	
+	/* A list of Snippet Group's. Here the actual Snippet's are stored. */
+	GList* snippet_groups;
+	
+	/* A hashtable with the variables names as keys and SnippetsGlobalVariable as value. */
+	GHashTable* global_variables;
+};
+
+typedef struct _SnippetsGlobalVariable
+{
+	/* If this is TRUE, then the value of the variable will be a shell command. Only supported on Linux. */
+	gboolean is_shell_command;
+	
+	/* The value of the variable. This can be an actual value or a command to parse. */
+	gchar* value;
+} SnippetsGlobalVariable;
+
 G_DEFINE_TYPE (SnippetsDB, snippets_db, G_TYPE_OBJECT);
 
 static void
@@ -51,12 +83,18 @@ snippets_db_class_init (SnippetsDBClass* klass)
 	snippets_db_parent_class = g_type_class_peek_parent (klass);
 	object_class->dispose = snippets_db_dispose;
 	object_class->finalize = snippets_db_finalize;
+	
+	g_type_class_add_private (klass, sizeof (SnippetsDBPrivate));
 }
 
 static void
 snippets_db_init (SnippetsDB * snippets_db)
 {
 	/* TODO */
+	SnippetsDBPrivate *priv;
+	
+	snippets_db->priv = priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
+	
 }
 
 /**
@@ -242,7 +280,7 @@ snippets_db_remove_snippet_group (SnippetsDB* snippets_db,
 
 /**
  * snippets_db_get_tree_model:
- * @snippets_db: A #SnippetDB object.
+ * @snippets_db: A #SnippetsDB object.
  * @snippets_language: The language for which the GtkTreeModel is requested or NULL for all languages.
  *
  * A #GtkTreeModel to be used for the Snippet Browser.
@@ -252,6 +290,23 @@ snippets_db_remove_snippet_group (SnippetsDB* snippets_db,
 GtkTreeModel*	
 snippets_db_get_tree_model (SnippetsDB* snippets_db,
                             const gchar* snippets_language)
+{
+	/* TODO */
+	return NULL;
+}
+
+/**
+ * snippets_db_global_variable_get:
+ * @snippets_db: A #SnippetsDB object.
+ * @variable_name: The name of the global variable.
+ *
+ * Gets the value of a global variable. A global variable value can be static, or the output of a 
+ * command.
+ *
+ * Returns: The value of the global variable, or NULL if the variable wasn't found.
+ */
+gchar* snippets_db_global_variable_get (SnippetsDB* snippets_db,
+                                        const gchar* variable_name)
 {
 	/* TODO */
 	return NULL;

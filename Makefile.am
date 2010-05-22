@@ -42,6 +42,10 @@ libanjuta_snippets_manager_la_LIBADD = \
 libanjuta_snippets_manager_la_SOURCES = \
 	snippet.c\
 	snippet.h\
+	snippets-group.c\
+	snippets-group.h\
+	snippets-tree-model.c\
+	snippets-tree-model.h\
 	snippets-db.c\
 	snippets-db.h\
 	snippets-xml-parser.c\

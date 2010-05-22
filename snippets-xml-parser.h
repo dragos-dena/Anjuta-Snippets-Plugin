@@ -20,12 +20,11 @@
 */
 
 #include <glib.h>
+#include "snippets-group.h"
 #include "snippets-db.h"
 
-GList*		snippets_manager_parse_xml_file	(const gchar* snippet_packet_filename,
-											 FormatType format_type);
-gboolean	snippets_manager_save_xml_file	(const gchar* snippet_packet_filename,
-											 FormatType format_type,
-											 GList* snippets,
-											 const gchar* group_name,
-											 const gchar* group_description);
+AnjutaSnippetsGroup* snippets_manager_parse_xml_file (const gchar* snippet_packet_filename,
+                                                      FormatType format_type);
+gboolean             snippets_manager_save_xml_file  (const gchar* snippet_packet_filename,
+                                                      FormatType format_type,
+                                                      AnjutaSnippetsGroup* snippets_group);

@@ -35,22 +35,15 @@ G_BEGIN_DECLS
 #define ANJUTA_IS_SNIPPET_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), ANJUTA_TYPE_SNIPPET))
 
 typedef struct _AnjutaSnippet AnjutaSnippet;
+typedef struct _AnjutaSnippetPrivate AnjutaSnippetPrivate;
 typedef struct _AnjutaSnippetClass AnjutaSnippetClass;
 
 struct _AnjutaSnippet
 {
 	GObject parent_instance;
-
-	gchar* trigger_key;
-	gchar* snippet_language;
-	gchar* snippet_name;
 	
-	gchar* snippet_content;
-	
-	GList* variables;
-	GList* keywords;
-	
-	gint32 chars_inserted;
+	/*< private >*/
+	AnjutaSnippetPrivate *priv;
 };
 
 struct _AnjutaSnippetClass
@@ -66,11 +59,12 @@ AnjutaSnippet*  snippet_new                             (const gchar* trigger_ke
                                                          const gchar* snippet_content,
                                                          GList* variable_names,
                                                          GList* variable_default_values,
+                                                         GList* variable_globals,
                                                          GList* keywords);
 gchar*          snippet_get_key                         (AnjutaSnippet* snippet);
-const gchar*    snippet_get_trigger_key                 (AnjutaSnippet* snippet);
-const gchar*    snippet_get_language                    (AnjutaSnippet* snippet);
-const gchar*    snippet_get_name                        (AnjutaSnippet* snippet);
+gchar*          snippet_get_trigger_key                 (AnjutaSnippet* snippet);
+gchar*          snippet_get_language                    (AnjutaSnippet* snippet);
+gchar*          snippet_get_name                        (AnjutaSnippet* snippet);
 GList*          snippet_get_keywords_list               (AnjutaSnippet* snippet);
 GList*          snippet_get_variable_names_list         (AnjutaSnippet* snippet);
 GList*          snippet_get_variable_defaults_list      (AnjutaSnippet* snippet);

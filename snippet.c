@@ -44,19 +44,77 @@ typedef struct _AnjutaSnippetVariable
 } AnjutaSnippetVariable;
 
 
+#define ANJUTA_SNIPPET_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ANJUTA_TYPE_SNIPPET, AnjutaSnippetPrivate))
+
+struct _AnjutaSnippetPrivate
+{
+	gchar* trigger_key;
+	gchar* snippet_language;
+	gchar* snippet_name;
+	
+	gchar* snippet_content;
+	
+	GList* variables;
+	GList* keywords;
+	
+	gint32 chars_inserted;
+};
+
+
 G_DEFINE_TYPE (AnjutaSnippet, snippet, G_TYPE_OBJECT);
 
 static void
 snippet_dispose (GObject* snippet)
 {
-	/* TODO */
+	AnjutaSnippet* anjuta_snippet = ANJUTA_SNIPPET (snippet);
+	guint iter = 0;
+	gpointer p;
+	AnjutaSnippetVariable* cur_snippet_var;
+	
+	if (anjuta_snippet->priv)
+	{
+		/* Delete the trigger_key, snippet_language, snippet_name and snippet_content fields */
+		g_free (anjuta_snippet->priv->trigger_key);
+		anjuta_snippet->priv->trigger_key = NULL;
+		g_free (anjuta_snippet->priv->snippet_language);
+		anjuta_snippet->priv->snippet_language = NULL;
+		g_free (anjuta_snippet->priv->snippet_name);
+		anjuta_snippet->priv->snippet_name = NULL;
+		g_free (anjuta_snippet->priv->snippet_content);
+		anjuta_snippet->priv->snippet_content = NULL;
+		
+		/* Delete the keywords */
+		for (iter = 0; iter < g_list_length (anjuta_snippet->priv->keywords); iter ++)
+		{
+			p = g_list_nth_data (anjuta_snippet->priv->keywords, iter);
+			g_free (p);
+		}
+		g_list_free (anjuta_snippet->priv->keywords);
+		anjuta_snippet->priv->keywords = NULL;
+		
+		/* Delete the snippet variables */
+		for (iter = 0; iter < g_list_length (anjuta_snippet->priv->variables); iter ++)
+		{
+			cur_snippet_var = g_list_nth_data (anjuta_snippet->priv->variables, iter);
+			g_free (cur_snippet_var->variable_name);
+			g_free (cur_snippet_var->default_value);
+			g_free (cur_snippet_var->relative_positions);
+			
+			g_free (cur_snippet_var);
+		}
+		g_list_free (anjuta_snippet->priv->variables);
+		
+		/* Delete the private structure */
+		g_free (anjuta_snippet->priv);
+		anjuta_snippet->priv = NULL;
+	}
+	
 	G_OBJECT_CLASS (snippet_parent_class)->dispose (snippet);
 }
 
 static void
 snippet_finalize (GObject* snippet)
 {
-	/* TODO */
 	G_OBJECT_CLASS (snippet_parent_class)->finalize (snippet);
 }
 
@@ -67,12 +125,16 @@ snippet_class_init (AnjutaSnippetClass* klass)
 	snippet_parent_class = g_type_class_peek_parent (klass);
 	object_class->dispose = snippet_dispose;
 	object_class->finalize = snippet_finalize;
+	
+	g_type_class_add_private (klass, sizeof (AnjutaSnippetPrivate));
 }
 
 static void
 snippet_init (AnjutaSnippet* snippet)
 {
-	/* TODO */
+	AnjutaSnippetPrivate* priv;
+	
+	snippet->priv = priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
 }
 
 /**
@@ -83,9 +145,10 @@ snippet_init (AnjutaSnippet* snippet)
  * @snippet_content: The actual content of the snippet.
  * @variables_names: A #GList with the variable names.
  * @variables_default_values: A #GList with the default values of the variables.
+ * @variable_globals: A #GList with gboolean's that state if the variable is global or not.
  * @keywords: A #GList with the keywords of the snippet.
  *
- * Creates a new snippet object.
+ * Creates a new snippet object. All the data given to this function will be copied.
  *
  * Returns: The new #AnjutaSnippet or NULL on failure.
  **/
@@ -96,10 +159,55 @@ snippet_new (const gchar* trigger_key,
              const gchar* snippet_content,
              GList* variable_names,
              GList* variable_default_values,
+             GList* variable_globals,
              GList* keywords)
 {
-	/* TODO */
-	return NULL;
+	AnjutaSnippet* snippet = ANJUTA_SNIPPET (g_object_new (snippet_get_type (), NULL));
+	guint iter = 0;
+	gchar* temporary_string_holder = NULL;
+	AnjutaSnippetVariable* cur_snippet_var;
+	
+	/* Assertions */
+	if (trigger_key == NULL || snippet_language == NULL || snippet_name == NULL || snippet_content == NULL)
+		return NULL;
+	if (g_list_length (variable_names) != g_list_length (variable_default_values) ||
+	    g_list_length (variable_names) != g_list_length (variable_globals))
+		return NULL;
+	
+	/* Make a copy of the given strings */
+	snippet->priv->trigger_key = g_strdup (trigger_key);
+	snippet->priv->snippet_language = g_strdup (snippet_language);
+	snippet->priv->snippet_name = g_strdup (snippet_name);
+	snippet->priv->snippet_content = g_strdup (snippet_content);
+	
+	/* Copy all the keywords to a new list */
+	snippet->priv->keywords = NULL;
+	for (iter = 0; iter < g_list_length (keywords); iter ++)
+	{
+		temporary_string_holder = g_strdup ( (gchar*)g_list_nth_data (keywords, iter) );
+		snippet->priv->keywords = g_list_append (snippet->priv->keywords, temporary_string_holder);
+	}
+	
+	/* Make a list of variables */
+	snippet->priv->variables = NULL;
+	for (iter = 0; iter < g_list_length (variable_names); iter ++)
+	{
+		cur_snippet_var = g_malloc (sizeof (AnjutaSnippetVariable));
+		
+		cur_snippet_var->variable_name = g_strdup ( (gchar*)g_list_nth_data (variable_names, iter) );
+		cur_snippet_var->default_value = g_strdup ( (gchar*)g_list_nth_data (variable_default_values, iter));
+		cur_snippet_var->is_global = GPOINTER_TO_INT (g_list_nth_data (variable_globals, iter));
+		cur_snippet_var->appearances = 0;            /* TODO */
+		cur_snippet_var->relative_positions = NULL;  /* TODO The relative positions should be calculated in a single
+		                                                     snippet_content parsing after this block. */
+		
+		snippet->priv->variables = g_list_append (snippet->priv->variables, cur_snippet_var);
+	}
+	
+	/* Initialize the chars_inserted property */
+	snippet->priv->chars_inserted = 0;
+	
+	return snippet;
 }
 														 
 /**
@@ -108,12 +216,12 @@ snippet_new (const gchar* trigger_key,
  *
  * Gets the snippet-key of the snippet which is unique at runtime.
  *
- * Returns: The snippet-key. Should be freed.
+ * Returns: The snippet-key. Should be free'd.
  **/
 gchar*	
 snippet_get_key (AnjutaSnippet* snippet)
 {
-	return g_strconcat(snippet->trigger_key, ".", snippet->snippet_language, NULL);
+	return g_strconcat(snippet->priv->trigger_key, ".", snippet->priv->snippet_language, NULL);
 }
 
 /**
@@ -122,12 +230,12 @@ snippet_get_key (AnjutaSnippet* snippet)
  *
  * Gets the trigger-key of the snippet.
  *
- * Returns: The snippet-key.
+ * Returns: The snippet-key. Should be free'd.
  **/
-const gchar*
+gchar*
 snippet_get_trigger_key (AnjutaSnippet* snippet)
 {
-	return snippet->trigger_key;
+	return g_strdup (snippet->priv->trigger_key);
 }
 
 /**
@@ -136,26 +244,26 @@ snippet_get_trigger_key (AnjutaSnippet* snippet)
  *
  * Gets the language of the snippet.
  *
- * Returns: The snippet language.
+ * Returns: The snippet language. Should be free'd.
  **/
-const gchar*	
+gchar*	
 snippet_get_language (AnjutaSnippet* snippet)
 {
-	return snippet->snippet_language;
+	return g_strdup (snippet->priv->snippet_language);
 }
 
 /**
  * snippet_get_name:
  * @snippet: A #AnjutaSnippet object.
  *
- * Gets the name of the snippet.
+ * Gets the name of the snippet. Should be free'd.
  *
  * Returns: The snippet name.
  **/
-const gchar*
+gchar*
 snippet_get_name (AnjutaSnippet* snippet)
 {
-	return snippet->snippet_name;
+	return g_strdup (snippet->priv->snippet_name);
 }
 
 /**
@@ -164,12 +272,22 @@ snippet_get_name (AnjutaSnippet* snippet)
  *
  * Gets the list with the keywords of the snippet.
  *
- * Returns: A #GList of #gchar* with the keywords of the snippet. Shouldn't be freed.
+ * Returns: A #GList of #gchar* with the keywords of the snippet. Should be free'd.
  **/
 GList*
 snippet_get_keywords_list (AnjutaSnippet* snippet)
 {
-	return snippet->keywords;
+	guint iter = 0;
+	GList* keywords_copy = NULL;
+	gchar* cur_keyword;
+	
+	for (iter = 0; iter < g_list_length (snippet->priv->keywords); iter ++)
+	{
+		cur_keyword = g_list_nth_data (snippet->priv->keywords, iter);
+		keywords_copy = g_list_append (keywords_copy, cur_keyword);
+	}
+	
+	return keywords_copy;
 }
 
 /**
@@ -183,8 +301,19 @@ snippet_get_keywords_list (AnjutaSnippet* snippet)
 GList*
 snippet_get_variable_names_list (AnjutaSnippet* snippet)
 {
-	/* TODO */
-	return NULL;
+	guint iter = 0;
+	GList* variable_names = NULL;
+	gchar* temporary_string_holder = NULL;
+	AnjutaSnippetVariable* cur_snippet_var = NULL;
+	
+	for (iter = 0; iter < g_list_length (snippet->priv->variables); iter ++)
+	{
+		cur_snippet_var = g_list_nth_data (snippet->priv->variables, iter);
+		temporary_string_holder = g_strdup (cur_snippet_var->variable_name);
+		variable_names = g_list_append (variable_names, temporary_string_holder);
+	}
+	
+	return variable_names;
 }
 
 /**
@@ -198,8 +327,19 @@ snippet_get_variable_names_list (AnjutaSnippet* snippet)
 GList*
 snippet_get_variable_defaults_list (AnjutaSnippet* snippet)
 {
-	/* TODO */
-	return NULL;
+	guint iter = 0;
+	GList* variable_defaults = NULL;
+	gchar* temporary_string_holder = NULL;
+	AnjutaSnippetVariable* cur_snippet_var = NULL;
+	
+	for (iter = 0; iter < g_list_length (snippet->priv->variables); iter ++)
+	{
+		cur_snippet_var = g_list_nth_data (snippet->priv->variables, iter);
+		temporary_string_holder = g_strdup (cur_snippet_var->default_value);
+		variable_defaults = g_list_append (variable_defaults, temporary_string_holder);
+	}
+	
+	return variable_defaults;
 }
 
 /**
@@ -227,8 +367,8 @@ snippet_get_default_content (AnjutaSnippet* snippet)
 void
 snippet_set_editing_mode (AnjutaSnippet* snippet)
 {
-	/* TODO */
-	snippet->chars_inserted = 0;
+	/* TODO Compute the relative positions (may be changed after a previous editing mode) */
+	snippet->priv->chars_inserted = 0;
 }
 
 /**
@@ -262,6 +402,5 @@ void
 snippet_update_chars_inserted (AnjutaSnippet* snippet,
                                gint32 inserted_chars)
 {
-	/* TODO */
-	snippet->chars_inserted += inserted_chars;
+	snippet->priv->chars_inserted += inserted_chars;
 }

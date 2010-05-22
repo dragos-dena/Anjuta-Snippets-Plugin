@@ -31,6 +31,7 @@
 G_BEGIN_DECLS
 
 typedef struct _SnippetsDB SnippetsDB;
+typedef struct _SnippetsDBPrivate SnippetsDBPrivate;
 typedef struct _SnippetsDBClass SnippetsDBClass;
 
 #define ANJUTA_TYPE_SNIPPETS_DB            (snippets_db_get_type ())
@@ -44,20 +45,7 @@ struct _SnippetsDB
 	GObject object;
 
 	/*< private >*/
-	/* A tree model to be used by the Snippet Browser. */
-	GtkTreeStore* snippets_tree;
-	
-	/* A binary balanced tree with the trigger keys for searching purposes. */
-	GTree* trigger_keys_tree;
-	
-	/* A binary balanced tree with the keywords for searching purposes */
-	GTree* keywords_tree;
-	
-	/* A hashtable with the snippet-key's as keys and pointers to the aproppiate Snippet as value */
-	GHashTable* snippet_keys_map;
-	
-	/* A list of Snippet Group's. Here the actual Snippet's are stored. */
-	GList* snippet_groups;
+	SnippetsDBPrivate* priv;
 };
 
 struct _SnippetsDBClass
@@ -101,6 +89,8 @@ gboolean        snippets_db_remove_snippet_group    (SnippetsDB* snippets_db,
                                                      const gchar* group_name);	 
 GtkTreeModel*   snippets_db_get_tree_model          (SnippetsDB* snippets_db,
                                                      const gchar* snippets_language);
+gchar*          snippets_db_global_variable_get     (SnippetsDB* snippets_db,
+                                                     const gchar* variable_name);
 
 G_END_DECLS
 
