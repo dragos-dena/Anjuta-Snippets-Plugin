@@ -231,9 +231,9 @@ snippet_get_key (AnjutaSnippet* snippet)
  *
  * Gets the trigger-key of the snippet.
  *
- * Returns: The snippet-key. Should be free'd.
+ * Returns: The snippet-key.
  **/
-gchar*
+const gchar*
 snippet_get_trigger_key (AnjutaSnippet* snippet)
 {
 	return g_strdup (snippet->priv->trigger_key);
@@ -245,9 +245,9 @@ snippet_get_trigger_key (AnjutaSnippet* snippet)
  *
  * Gets the language of the snippet.
  *
- * Returns: The snippet language. Should be free'd.
+ * Returns: The snippet language.
  **/
-gchar*	
+const gchar*	
 snippet_get_language (AnjutaSnippet* snippet)
 {
 	return g_strdup (snippet->priv->snippet_language);
@@ -257,11 +257,11 @@ snippet_get_language (AnjutaSnippet* snippet)
  * snippet_get_name:
  * @snippet: A #AnjutaSnippet object.
  *
- * Gets the name of the snippet. Should be free'd.
+ * Gets the name of the snippet.
  *
  * Returns: The snippet name.
  **/
-gchar*
+const gchar*
 snippet_get_name (AnjutaSnippet* snippet)
 {
 	return g_strdup (snippet->priv->snippet_name);
@@ -341,6 +341,46 @@ snippet_get_variable_defaults_list (AnjutaSnippet* snippet)
 	}
 	
 	return variable_defaults;
+}
+
+/**
+ * snippet_get_variable_defaults_list:
+ * @snippet: A #AnjutaSnippet object.
+ *
+ * A list with the variables global truth value, in the order they should be edited.
+ *
+ * Returns: The variables global truth values #GList. Should be freed.
+ **/
+GList* 
+snippet_get_variable_globals_list (AnjutaSnippet* snippet)
+{
+	guint iter = 0;
+	GList* variable_globals = NULL;
+	gboolean temp_holder = FALSE;
+	AnjutaSnippetVariable* cur_snippet_var = NULL;
+	
+	for (iter = 0; iter < g_list_length (snippet->priv->variables); iter ++)
+	{
+		cur_snippet_var = g_list_nth_data (snippet->priv->variables, iter);
+		temp_holder = cur_snippet_var->is_global;
+		variable_globals = g_list_append (variable_globals, GINT_TO_POINTER (temp_holder));
+	}
+	
+	return variable_globals;
+}
+
+/**
+ * snippet_get_content:
+ * @snippet: A #AnjutaSnippet object.
+ *
+ * The content of the snippet without it being proccesed.
+ *
+ * Returns: The default content of the snippet.
+ **/
+const gchar*
+snippet_get_content (AnjutaSnippet* snippet)
+{
+	return snippet->priv->snippet_content;
 }
 
 /**

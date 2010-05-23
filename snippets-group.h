@@ -42,7 +42,7 @@ struct _AnjutaSnippetsGroup
 {
 	GObject parent_instance;
 
-	gchar* filename;
+	gchar* file_path;
 	
 	/*< private >*/
 	AnjutaSnippetsGroupPrivate* priv;
@@ -55,7 +55,7 @@ struct _AnjutaSnippetsGroupClass
 };
 
 GType                 snippets_group_get_type          (void) G_GNUC_CONST;
-AnjutaSnippetsGroup*  snippets_group_new               (const gchar* snippets_file_name,
+AnjutaSnippetsGroup*  snippets_group_new               (const gchar* snippets_file_path,
                                                         const gchar* snippets_group_name,
                                                         const gchar* snippets_group_description);
 gboolean              snippets_group_add_snippet       (AnjutaSnippetsGroup* snippets_group,
@@ -63,7 +63,7 @@ gboolean              snippets_group_add_snippet       (AnjutaSnippetsGroup* sni
                                                         gboolean overwrite);
 void                  snippets_group_remove_snippet    (AnjutaSnippetsGroup* snippets_group,
                                                         const gchar* snippet_key);
-GList*                snippets_group_get_snippet_list  (AnjutaSnippetsGroup* snippets_group);
+const GList*          snippets_group_get_snippet_list  (AnjutaSnippetsGroup* snippets_group);
 
 G_END_DECLS
 

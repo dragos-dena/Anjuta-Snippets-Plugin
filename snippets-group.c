@@ -65,8 +65,8 @@ snippets_group_dispose (GObject* snippets_group)
 	}
 
 	/* Delete the filename field */
-	g_free (anjuta_snippets_group->filename);
-	anjuta_snippets_group->filename = NULL;
+	g_free (anjuta_snippets_group->file_path);
+	anjuta_snippets_group->file_path = NULL;
 	
 	G_OBJECT_CLASS (snippets_group_parent_class)->dispose (snippets_group);
 }
@@ -104,14 +104,15 @@ snippets_group_init (AnjutaSnippetsGroup* snippets_group)
  *
  * Returns: A new #AnjutaSnippetsGroup object or NULL on failure.
  **/
-AnjutaSnippetsGroup* snippets_group_new (const gchar* snippets_filename,
-                                         const gchar* snippets_group_name,
-                                         const gchar* snippets_group_description)
+AnjutaSnippetsGroup* 
+snippets_group_new (const gchar* snippets_file_path,
+                    const gchar* snippets_group_name,
+                    const gchar* snippets_group_description)
 {
 	AnjutaSnippetsGroup* snippets_group = NULL;
 	
 	/* Assertions */
-	if (snippets_group_name == NULL || snippets_group_description == NULL || snippets_filename == NULL)
+	if (snippets_group_name == NULL || snippets_group_description == NULL || snippets_file_path == NULL)
 		return NULL;
 	
 	/* Initialize the object */
@@ -120,7 +121,7 @@ AnjutaSnippetsGroup* snippets_group_new (const gchar* snippets_filename,
 	/* Copy the name, description and filename */
 	snippets_group->priv->name = g_strdup (snippets_group_name);
 	snippets_group->priv->description = g_strdup (snippets_group_description);
-	snippets_group->filename = g_strdup (snippets_filename);
+	snippets_group->file_path = g_strdup (snippets_file_path);
 	
 	return snippets_group;
 }
@@ -135,9 +136,10 @@ AnjutaSnippetsGroup* snippets_group_new (const gchar* snippets_filename,
  *
  * Returns: TRUE on success.
  **/
-gboolean snippets_group_add_snippet (AnjutaSnippetsGroup* snippets_group,
-                                     AnjutaSnippet* snippet,
-                                     gboolean overwrite)
+gboolean 
+snippets_group_add_snippet (AnjutaSnippetsGroup* snippets_group,
+                            AnjutaSnippet* snippet,
+                            gboolean overwrite)
 {
 	guint iter = 0, to_be_replaced_position = 0;
 	AnjutaSnippet *cur_snippet = NULL, *to_be_replaced_snippet = NULL;
@@ -157,7 +159,7 @@ gboolean snippets_group_add_snippet (AnjutaSnippetsGroup* snippets_group,
 		cur_snippet = g_list_nth_data (snippets_group->priv->snippets, iter);
 		cur_snippet_key = snippet_get_key (cur_snippet);
 		
-		if (g_strcmp0 (cur_snippet_key, added_snippet_key))
+		if (!g_strcmp0 (cur_snippet_key, added_snippet_key))
 		{
 			to_be_replaced_snippet = cur_snippet;
 			 /* Could of used iter here, but just to be clear */
@@ -183,6 +185,11 @@ gboolean snippets_group_add_snippet (AnjutaSnippetsGroup* snippets_group,
 			g_free (added_snippet_key);
 			return FALSE;
 		}
+	}
+	/* If we didn't found a snippet with the same name we just append it to the end */
+	else
+	{
+		snippets_group->priv->snippets = g_list_append (snippets_group->priv->snippets, snippet);
 	}
 	
 	g_free (added_snippet_key);
@@ -240,7 +247,8 @@ void snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
  *
  * Returns: A #GList with entries of type #AnjutaSnippet.
  **/
-GList* snippets_group_get_snippet_list (AnjutaSnippetsGroup* snippets_group)
+const GList* 
+snippets_group_get_snippet_list (AnjutaSnippetsGroup* snippets_group)
 {
 	return snippets_group->priv->snippets;
 }

@@ -62,12 +62,14 @@ AnjutaSnippet*  snippet_new                             (const gchar* trigger_ke
                                                          GList* variable_globals,
                                                          GList* keywords);
 gchar*          snippet_get_key                         (AnjutaSnippet* snippet);
-gchar*          snippet_get_trigger_key                 (AnjutaSnippet* snippet);
-gchar*          snippet_get_language                    (AnjutaSnippet* snippet);
-gchar*          snippet_get_name                        (AnjutaSnippet* snippet);
+const gchar*    snippet_get_trigger_key                 (AnjutaSnippet* snippet);
+const gchar*    snippet_get_language                    (AnjutaSnippet* snippet);
+const gchar*    snippet_get_name                        (AnjutaSnippet* snippet);
 GList*          snippet_get_keywords_list               (AnjutaSnippet* snippet);
 GList*          snippet_get_variable_names_list         (AnjutaSnippet* snippet);
 GList*          snippet_get_variable_defaults_list      (AnjutaSnippet* snippet);
+GList*          snippet_get_variable_globals_list       (AnjutaSnippet* snippet);
+const gchar*    snippet_get_content                     (AnjutaSnippet* snippet);
 gchar*          snippet_get_default_content             (AnjutaSnippet* snippet);
 void            snippet_set_editing_mode                (AnjutaSnippet* snippet);
 GList*          snippet_get_variable_relative_positions (AnjutaSnippet* snippet,

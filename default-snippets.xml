@@ -4,7 +4,7 @@
 	<description>Default Anjuta Snippet Group.</description>
 
 	<anjuta-snippets>
-		<anjuta-snippet language="C" trigger="headercom" >
+		<anjuta-snippet language="C" trigger="headercom" name="C top comment">
 			<variables>
 				<variable name="filename" default="file" is_global="true" />
 				<variable name="date_time" default="" is_global="true" />
@@ -24,7 +24,7 @@
 			<keywords>comment header copyright C email date time</keywords>
 		</anjuta-snippet>
 
-		<anjuta-snippet language="C++" trigger="ifelse">
+		<anjuta-snippet language="C++" trigger="ifelse" name="If Else statement">
 			<variables>
 				<variable name="cond" default="/*condition*/" is_global="false" />
 				<variable name="if_case" default="/* If case */" is_global="false" />
