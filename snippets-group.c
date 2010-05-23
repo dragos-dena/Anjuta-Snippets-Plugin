@@ -63,6 +63,10 @@ snippets_group_dispose (GObject* snippets_group)
 		g_free (anjuta_snippets_group->priv);
 		anjuta_snippets_group->priv = NULL;
 	}
+
+	/* Delete the filename field */
+	g_free (anjuta_snippets_group->filename);
+	anjuta_snippets_group->filename = NULL;
 	
 	G_OBJECT_CLASS (snippets_group_parent_class)->dispose (snippets_group);
 }
@@ -92,6 +96,7 @@ snippets_group_init (AnjutaSnippetsGroup* snippets_group)
 
 /**
  * snippets_group_new:
+ * @snippets_filename: The filename from which the snippet group was loaded.
  * @snippets_group_name: A name for the group. It's unique.
  * @snippets_group_description: A short description of the snippet.
  *
@@ -99,21 +104,23 @@ snippets_group_init (AnjutaSnippetsGroup* snippets_group)
  *
  * Returns: A new #AnjutaSnippetsGroup object or NULL on failure.
  **/
-AnjutaSnippetsGroup* snippets_group_new (const gchar* snippets_group_name,
+AnjutaSnippetsGroup* snippets_group_new (const gchar* snippets_filename,
+                                         const gchar* snippets_group_name,
                                          const gchar* snippets_group_description)
 {
 	AnjutaSnippetsGroup* snippets_group = NULL;
 	
 	/* Assertions */
-	if (snippets_group_name == NULL || snippets_group_description == NULL)
+	if (snippets_group_name == NULL || snippets_group_description == NULL || snippets_filename == NULL)
 		return NULL;
 	
 	/* Initialize the object */
 	snippets_group = ANJUTA_SNIPPETS_GROUP (g_object_new (snippets_group_get_type (), NULL));
 	
-	/* Copy the name and description */
+	/* Copy the name, description and filename */
 	snippets_group->priv->name = g_strdup (snippets_group_name);
 	snippets_group->priv->description = g_strdup (snippets_group_description);
+	snippets_group->filename = g_strdup (snippets_filename);
 	
 	return snippets_group;
 }

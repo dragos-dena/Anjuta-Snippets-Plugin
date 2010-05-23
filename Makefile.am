@@ -6,8 +6,11 @@ snippets_manager_glade_DATA = snippets-manager-preferences.ui
 
 # Plugin default data
 # The default installed plugins here.
-# default_snippets_dir = $(anjuta_data_dir)
-# default_snippets_DATA = default-snippets.xml
+default_snippetsdir = $(anjuta_data_dir)
+default_snippets_DATA = \
+	default-snippets.xml \
+	default-snippets-global-variables.xml
+                        
 
 snippets_manager_pixmapsdir = $(anjuta_image_dir)
 snippets_manager_pixmaps_DATA = \
@@ -64,8 +67,7 @@ EXTRA_DIST = \
 	$(plugin_in_files) \
 	$(snippets_manager_pixmaps_DATA) \
 	$(snippets_manager_plugin_DATA) \
-	$(snippets_manager_glade_DATA)
-#	$(snippets_manager_ui_DATA) \
-#	$(default_snippets_DATA)
+	$(snippets_manager_glade_DATA) \
+	$(default_snippets_DATA)
 
 -include $(top_srcdir)/git.mk

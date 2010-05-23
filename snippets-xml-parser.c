@@ -25,7 +25,7 @@
 
 
 static gboolean 
-snippets_manager_save_native_xml_file (const gchar *snippet_packet_filename, 
+snippets_manager_save_native_xml_file (const gchar *snippet_packet_path, 
                                        AnjutaSnippetsGroup* snippets_group)
 {
 	/* TODO */
@@ -33,7 +33,7 @@ snippets_manager_save_native_xml_file (const gchar *snippet_packet_filename,
 }
 
 static gboolean 
-snippets_manager_save_gedit_xml_file (const gchar *snippet_packet_filename, 
+snippets_manager_save_gedit_xml_file (const gchar *snippet_packet_path, 
                                       AnjutaSnippetsGroup* snippets_group)
 {
 	/* TODO */
@@ -41,14 +41,14 @@ snippets_manager_save_gedit_xml_file (const gchar *snippet_packet_filename,
 }
 
 static AnjutaSnippetsGroup* 
-snippets_manager_parse_native_xml_file (const gchar* snippet_packet_filename)
+snippets_manager_parse_native_xml_file (const gchar* snippet_packet_path)
 {
 	/* TODO */
 	return NULL;
 }
 
 static AnjutaSnippetsGroup*
-snippets_manager_parse_gedit_xml_file (const gchar* snippet_packet_filename)
+snippets_manager_parse_gedit_xml_file (const gchar* snippet_packet_path)
 {
 	/* TODO */
 	return NULL;
@@ -57,7 +57,7 @@ snippets_manager_parse_gedit_xml_file (const gchar* snippet_packet_filename)
 
 /**
  * snippets_manager_parse_xml_file:
- * @snippet_packet_filename: The name (path) of the XML file describing the Snippet Group
+ * @snippet_packet_path: The path of the XML file describing the Snippet Group
  * @format_Type: The type of the XML file (see snippets-db.h for the supported types)
  *
  * Parses the given XML file.
@@ -65,16 +65,16 @@ snippets_manager_parse_gedit_xml_file (const gchar* snippet_packet_filename)
  * Returns: A #AnjutaSnippetsGroup object on success or NULL on failure.
  **/
 AnjutaSnippetsGroup*	
-snippets_manager_parse_xml_file (const gchar* snippet_packet_filename,
-                                 FormatType format_type)
+snippets_manager_parse_snippets_xml_file (const gchar* snippet_packet_path,
+                                          FormatType format_type)
 {
 	switch (format_type)
 	{
 		case NATIVE_FORMAT:
-			return snippets_manager_parse_native_xml_file (snippet_packet_filename);
+			return snippets_manager_parse_native_xml_file (snippet_packet_path);
 		
 		case GEDIT_FORMAT:
-			return snippets_manager_parse_gedit_xml_file (snippet_packet_filename);
+			return snippets_manager_parse_gedit_xml_file (snippet_packet_path);
 		
 		default:
 			return NULL;
@@ -83,7 +83,7 @@ snippets_manager_parse_xml_file (const gchar* snippet_packet_filename,
 
 /**
  * snippets_manager_parse_xml_file:
- * @snippet_packet_filename: The name (path) of the XML file describing the Snippet Group where it should be saved
+ * @snippet_packet_path: The path of the XML file describing the Snippet Group where it should be saved
  * @format_Type: The type of the XML file (see snippets-db.h for the supported types)
  * @snippets_group: A #AnjutaSnippetsGroup object.
  *
@@ -92,21 +92,58 @@ snippets_manager_parse_xml_file (const gchar* snippet_packet_filename,
  * Returns: TRUE on success.
  **/
 gboolean
-snippets_manager_save_xml_file (const gchar* snippet_packet_filename,
-                                FormatType format_type,
-                                AnjutaSnippetsGroup* snippets_group)
+snippets_manager_save_snippets_xml_file (const gchar* snippet_packet_path,
+                                         FormatType format_type,
+                                         AnjutaSnippetsGroup* snippets_group)
 {
 	switch (format_type)
 	{
 		case NATIVE_FORMAT:
-			return snippets_manager_save_native_xml_file (snippet_packet_filename, 
+			return snippets_manager_save_native_xml_file (snippet_packet_path, 
                                                           snippets_group);
 		
 		case GEDIT_FORMAT:
-			return snippets_manager_save_gedit_xml_file (snippet_packet_filename,
+			return snippets_manager_save_gedit_xml_file (snippet_packet_path,
                                                          snippets_group);
 		
 		default:
 			return FALSE;
 	}
+}
+
+/**
+ * snippets_manager_parse_variables_xml_file:
+ * @global_vars_path: A path with a XML file describing snippets global variables.
+ * @snippets_db: A #SnippetsDB object where the global variables should be loaded.
+ *
+ * Loads the global variables from the given XML file in the given #SnippetsDB object.
+ *
+ * Returns: TRUE on success.
+ */
+gboolean snippets_manager_parse_variables_xml_file (const gchar* global_vars_path,
+                                                    SnippetsDB* snippets_db)
+{
+	/* TODO */
+	return FALSE;
+}
+
+/**
+ * snippets_manager_save_variables_xml_file:
+ * @global_vars_path: A path with a XML file describing snippets global variables.
+ * @variables_name: A #GList with the name of the variables.
+ * @variables_values: A #GList with the values of the variables.
+ * @variables_shell_commands: A #Glist with #gboolean values showing if the value
+ *                            of the given variable is a shell command. 
+ *
+ * Saves the given snippets global variables in a XML file at the given path.
+ *
+ * Returns: TRUE on success.
+ */
+gboolean snippets_manager_save_variables_xml_file (const gchar* global_variables_path,
+                                                   GList* variables_names,
+                                                   GList* variables_values,
+                                                   GList* variables_shell_commands)
+{
+	/* TODO */
+	return FALSE;
 }

@@ -27,6 +27,8 @@
 #include <glib-object.h>
 #include <gtk/gtk.h>
 #include "snippet.h"
+#include "snippets-group.h"
+#include <libanjuta/anjuta-shell.h>
 
 G_BEGIN_DECLS
 
@@ -35,14 +37,16 @@ typedef struct _SnippetsDBPrivate SnippetsDBPrivate;
 typedef struct _SnippetsDBClass SnippetsDBClass;
 
 #define ANJUTA_TYPE_SNIPPETS_DB            (snippets_db_get_type ())
-#define ANJUTA_SNIPPETS_DB(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), ANJUTA_SNIPPETS_DB_TYPE, SnippetsDB))
-#define ANJUTA_SNIPPETS_DB_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), ANJUTA_SNIPPETS_DB_TYPE, SnippetsDBClass))
-#define ANJUTA_IS_SNIPPETS_DB(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), ANJUTA_SNIPPETS_DB_TYPE))
-#define ANJUTA_IS_SNIPPETS_DB_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), ANJUTA_SNIPPETS_DB_TYPE))
+#define ANJUTA_SNIPPETS_DB(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), ANJUTA_TYPE_SNIPPETS_DB, SnippetsDB))
+#define ANJUTA_SNIPPETS_DB_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), ANJUTA_TYPE_SNIPPETS_DB, SnippetsDBClass))
+#define ANJUTA_IS_SNIPPETS_DB(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), ANJUTA_TYPE_SNIPPETS_DB))
+#define ANJUTA_IS_SNIPPETS_DB_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), ANJUTA_TYPE_SNIPPETS_DB))
 
 struct _SnippetsDB
 {
 	GObject object;
+
+	AnjutaShell* anjuta_shell;
 
 	/*< private >*/
 	SnippetsDBPrivate* priv;
@@ -62,7 +66,7 @@ typedef enum
 
 
 GType           snippets_db_get_type                (void) G_GNUC_CONST;
-SnippetsDB*     snippets_db_new	                    (void);
+SnippetsDB*     snippets_db_new	                    (AnjutaShell* anjuta_shell);
 gint32          snippets_db_load_file               (SnippetsDB* snippets_db,
                                                      const gchar* snippet_packet_file_path,
                                                      gboolean overwrite,
@@ -89,8 +93,15 @@ gboolean        snippets_db_remove_snippet_group    (SnippetsDB* snippets_db,
                                                      const gchar* group_name);	 
 GtkTreeModel*   snippets_db_get_tree_model          (SnippetsDB* snippets_db,
                                                      const gchar* snippets_language);
-gchar*          snippets_db_global_variable_get     (SnippetsDB* snippets_db,
+gchar*          snippets_db_get_global_variable     (SnippetsDB* snippets_db,
                                                      const gchar* variable_name);
+gboolean        snippets_db_has_global_variable     (SnippetsDB* snippets_db,
+                                                     const gchar* variable_name);
+gboolean        snippets_db_add_global_variable     (SnippetsDB* snippets_db,
+                                                     const gchar* variable_name,
+                                                     const gchar* variable_value,
+                                                     gboolean variable_is_global);
+
 
 G_END_DECLS
 

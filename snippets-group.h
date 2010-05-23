@@ -42,6 +42,8 @@ struct _AnjutaSnippetsGroup
 {
 	GObject parent_instance;
 
+	gchar* filename;
+	
 	/*< private >*/
 	AnjutaSnippetsGroupPrivate* priv;
 };
@@ -53,7 +55,8 @@ struct _AnjutaSnippetsGroupClass
 };
 
 GType                 snippets_group_get_type          (void) G_GNUC_CONST;
-AnjutaSnippetsGroup*  snippets_group_new               (const gchar* snippets_group_name,
+AnjutaSnippetsGroup*  snippets_group_new               (const gchar* snippets_file_name,
+                                                        const gchar* snippets_group_name,
                                                         const gchar* snippets_group_description);
 gboolean              snippets_group_add_snippet       (AnjutaSnippetsGroup* snippets_group,
                                                         AnjutaSnippet* snippet,

@@ -23,8 +23,14 @@
 #include "snippets-group.h"
 #include "snippets-db.h"
 
-AnjutaSnippetsGroup* snippets_manager_parse_xml_file (const gchar* snippet_packet_filename,
-                                                      FormatType format_type);
-gboolean             snippets_manager_save_xml_file  (const gchar* snippet_packet_filename,
-                                                      FormatType format_type,
-                                                      AnjutaSnippetsGroup* snippets_group);
+AnjutaSnippetsGroup* snippets_manager_parse_snippets_xml_file  (const gchar* snippet_packet_path,
+                                                                FormatType format_type);
+gboolean             snippets_manager_save_snippets_xml_file   (const gchar* snippet_packet_path,
+                                                                FormatType format_type,
+                                                                AnjutaSnippetsGroup* snippets_group);
+gboolean             snippets_manager_parse_variables_xml_file (const gchar* global_vars_file_path,
+                                                                SnippetsDB* snippets_db);
+gboolean             snippets_manager_save_variables_xml_file  (const gchar* global_variables_file_path,
+                                                                GList* variables_names,
+                                                                GList* variables_values,
+                                                                GList* variables_shell_commands);

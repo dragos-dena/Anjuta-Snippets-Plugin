@@ -23,8 +23,15 @@
 #include "snippets-xml-parser.h"
 #include <libanjuta/anjuta-utils.h>
 #include <libanjuta/anjuta-debug.h>
+#include <glib.h>
+#include <glib/gstdio.h>
 
-#define DEFAULT_SNIPPETS_FILE PACKAGE_DATA_DIR"/default-snippets.xml"
+#define DEFAULT_GLOBAL_VARS_FILE           "default-snippets-global-variables.xml"
+#define DEFAULT_SNIPPETS_FILE              "default-snippets.xml"
+#define DEFAULT_SNIPPETS_FILE_INSTALL_PATH PACKAGE_DATA_DIR"/"DEFAULT_SNIPPETS_FILE
+#define DEFAULT_GLOBAL_VARS_INSTALL_PATH   PACKAGE_DATA_DIR"/"DEFAULT_GLOBAL_VARS_FILE
+#define USER_SNIPPETS_DB_DIR               "snippets-database"
+#define USER_SNIPPETS_DIR                  "snippets-database/snippet-packages"
 
 #define ANJUTA_SNIPPETS_DB_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ANJUTA_TYPE_SNIPPETS_DB, SnippetsDBPrivate))
 
@@ -38,6 +45,9 @@ struct _SnippetsDBPrivate
 	
 	/* A binary balanced tree with the keywords for searching purposes */
 	GTree* keywords_tree;
+
+	/* A hashtable with group names as keys and FormatType's as values */
+	GHashTable* snippets_group_format_map;
 	
 	/* A hashtable with the snippet-key's as keys and pointers to the aproppiate Snippet as value */
 	GHashTable* snippet_keys_map;
@@ -56,6 +66,11 @@ typedef struct _SnippetsGlobalVariable
 	
 	/* The value of the variable. This can be an actual value or a command to parse. */
 	gchar* value;
+
+	/* A function that computes the value for this variable. If this is not NULL,
+	   it will be the preffered way to get the output. These global variables will
+	   be loaded internally and can't be edited. */
+	gchar* (*output_function) (SnippetsDB* snippets_db);
 } SnippetsGlobalVariable;
 
 G_DEFINE_TYPE (SnippetsDB, snippets_db, G_TYPE_OBJECT);
@@ -64,7 +79,7 @@ static void
 snippets_db_dispose (GObject* snippets_db)
 {
 	DEBUG_PRINT ("%s", "Disposing SnippetsDB");
-	/* TODO */
+	/* TODO Save the snippets */
 	G_OBJECT_CLASS (snippets_db_parent_class)->dispose (snippets_db);
 }
 
@@ -72,7 +87,7 @@ static void
 snippets_db_finalize (GObject* snippets_db)
 {
 	DEBUG_PRINT ("%s", "Finalizing SnippetsDB");
-	/* TODO */
+	
 	G_OBJECT_CLASS (snippets_db_parent_class)->finalize (snippets_db);
 }
 
@@ -83,32 +98,106 @@ snippets_db_class_init (SnippetsDBClass* klass)
 	snippets_db_parent_class = g_type_class_peek_parent (klass);
 	object_class->dispose = snippets_db_dispose;
 	object_class->finalize = snippets_db_finalize;
-	
-	g_type_class_add_private (klass, sizeof (SnippetsDBPrivate));
 }
 
 static void
 snippets_db_init (SnippetsDB * snippets_db)
 {
-	/* TODO */
-	SnippetsDBPrivate *priv;
+	SnippetsDBPrivate *priv = g_new0 (SnippetsDBPrivate, 1);
 	
-	snippets_db->priv = priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
+	snippets_db->priv = priv;
 	
 }
 
 /**
  * snippets_db_new:
+ * @anjuta_shell: A #AnjutaShell object.
  *
  * A new #SnippetDB with snippets loaded from the default folder.
  *
  * Returns: A new #SnippetsDB object.
  **/
 SnippetsDB*	
-snippets_db_new ()
+snippets_db_new (AnjutaShell* anjuta_shell)
 {
+	SnippetsDB* snippets_db = ANJUTA_SNIPPETS_DB (g_object_new (snippets_db_get_type (), NULL));
+	AnjutaSnippetsGroup* cur_snippet_group = NULL;
+	gboolean user_defaults_file_exists = FALSE, user_global_vars_exists = FALSE;
+	gchar *user_snippets_dir_path = NULL, *user_snippets_default = NULL, 
+	      *user_snippets_db_dir_path = NULL, *user_global_vars = NULL,
+	      *cur_file_path = NULL;
+	const gchar *cur_file_name = NULL;
+	GFile *installation_defaults_file = NULL, *user_defaults_file = NULL,
+	      *installation_global_vars_file = NULL, *user_global_vars_file = NULL;
+	GDir *user_snippets_dir = NULL;
+
+	/* Check if there is a "snippets-database/snippets" directory */
+	user_snippets_dir_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DIR, "/", NULL);
+	g_mkdir_with_parents (user_snippets_dir_path, 0755);
+
+	/* Check if the default snippets file is in the user directory */
+	user_snippets_default = g_strconcat (user_snippets_dir_path, "/", DEFAULT_SNIPPETS_FILE, NULL);
+	user_defaults_file_exists = g_file_test (user_snippets_default, G_FILE_TEST_EXISTS);
+
+	/* If it's not in the user directory, copy from the installation path the default snippets */
+	if (!user_defaults_file_exists)
+	{
+		installation_defaults_file = g_file_new_for_path (DEFAULT_SNIPPETS_FILE_INSTALL_PATH);
+		user_defaults_file = g_file_new_for_path (user_snippets_default);
+
+		g_file_copy (installation_defaults_file,
+		             user_defaults_file,
+		             G_FILE_COPY_NONE,
+		             NULL, NULL, NULL, NULL);
+	}
+	g_free (user_snippets_default);
+	
+	/* Check if there is the default-snippets-global-variables.xml file in the user directory */
+	user_snippets_db_dir_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DB_DIR, "/", NULL);
+	user_global_vars = g_strconcat (user_snippets_db_dir_path, "/", DEFAULT_GLOBAL_VARS_FILE, NULL);
+	user_global_vars_exists = g_file_test (user_global_vars, G_FILE_TEST_EXISTS);
+
+	/* If it's not in the user directory, copy from the installation path the default global 
+	   variables file */
+	if (!user_global_vars_exists)
+	{
+		installation_global_vars_file = g_file_new_for_path (DEFAULT_GLOBAL_VARS_INSTALL_PATH);
+		user_global_vars_file = g_file_new_for_path (user_global_vars);
+
+		g_file_copy (installation_global_vars_file,
+		             user_global_vars_file,
+		             G_FILE_COPY_NONE,
+		             NULL, NULL, NULL, NULL);
+	}
+
+	/* Parse the global variables file */
+	snippets_manager_parse_variables_xml_file (user_global_vars, snippets_db);
+	g_free (user_global_vars);
+	g_free (user_snippets_db_dir_path);
+
+	/* Parse all the files in the user snippet-packages directory*/
+	user_snippets_dir = g_dir_open (user_snippets_dir_path, 0, NULL);
+	cur_file_name = g_dir_read_name (user_snippets_dir);
+	while (cur_file_name)
+	{
+		cur_file_path = g_strconcat (user_snippets_dir_path, "/", cur_file_name, NULL);
+
+		/* Parse the current file and make a new SnippetGroup object */
+		cur_snippet_group = snippets_manager_parse_snippets_xml_file (cur_file_path,
+		                                                              NATIVE_FORMAT);
+
+		/* TODO - actually add the snippet group to the database */
+		
+		g_free (cur_file_path);
+		cur_file_name = g_dir_read_name (user_snippets_dir);
+	}
+	g_dir_close (user_snippets_dir);
+	g_free (user_snippets_dir_path);
+
+	
 	/* TODO */
-	return NULL;
+	
+	return snippets_db;
 }
 
 /**
@@ -305,9 +394,48 @@ snippets_db_get_tree_model (SnippetsDB* snippets_db,
  *
  * Returns: The value of the global variable, or NULL if the variable wasn't found.
  */
-gchar* snippets_db_global_variable_get (SnippetsDB* snippets_db,
-                                        const gchar* variable_name)
+gchar* 
+snippets_db_get_global_variable (SnippetsDB* snippets_db,
+                                 const gchar* variable_name)
 {
-	/* TODO */
+	/* TODO Here I should compute instant variables like the filename */
 	return NULL;
+}
+
+/**
+ * snippets_db_has_global_variable:
+ * @snippets_db: A #SnippetsDB object.
+ * @variable_name: A variable name.
+ *
+ * Checks if the Snippet Database has an entry with a variable name as requested.
+ *
+ * Returns: TRUE if the global variable exists.
+ */
+gboolean 
+snippets_db_has_global_variable (SnippetsDB* snippets_db,
+                                 const gchar* variable_name)
+{
+
+	return FALSE;
+}
+
+/**
+ * snippets_db_has_global_variable:
+ * @snippets_db: A #SnippetsDB object.
+ * @variable_name: A variable name.
+ * @variable_value: The global variable value.
+ * @variable_is_shell_command: If the variable is the output of a shell command.
+ *
+ * Adds a global variable to the Snippets Database.
+ *
+ * Returns: TRUE on success.
+ */
+gboolean
+snippets_db_add_global_variable (SnippetsDB* snippets_db,
+                                 const gchar* variable_name,
+                                 const gchar* variable_value,
+                                 gboolean variable_is_shell_command)
+{
+
+	return FALSE;
 }

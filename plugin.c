@@ -26,6 +26,7 @@
 #include <gio/gio.h>
 #include <libanjuta/anjuta-shell.h>
 #include <libanjuta/anjuta-debug.h>
+#include <libanjuta/anjuta-utils.h>
 
 #define ICON_FILE	"anjuta-snippets-manager.png"
 #define PREFERENCES_UI	PACKAGE_DATA_DIR"/glade/snippets-manager-preferences.ui"
@@ -47,6 +48,7 @@ static gboolean
 snippets_manager_activate (AnjutaPlugin * plugin)
 {
 	DEBUG_PRINT ("%s", "SnippetsManager: Activating SnippetsManager plugin ...");
+
 	return TRUE;
 }
 
@@ -105,7 +107,7 @@ snippets_manager_plugin_instance_init (GObject * obj)
 	snippets_manager->show_only_document_language_snippets = FALSE;
 	
 	/* TODO */
-	snippets_manager->snippets_db = snippets_db_new();
+	snippets_manager->snippets_db = snippets_db_new (ANJUTA_PLUGIN (snippets_manager)->shell);
 	snippets_manager->snippet_interpreter = NULL;
 	snippets_manager->snippet_browser = NULL;
 	snippets_manager->snippet_editor = NULL;
@@ -129,7 +131,7 @@ snippets_manager_plugin_class_init (GObjectClass * klass)
 /* IAnjutaSnippetsManager interface */
 
 static gboolean 
-isnippets_manager_iface_insert(IAnjutaSnippetsManager* snippets_manager, const gchar* key, GError** err)
+isnippets_manager_iface_insert (IAnjutaSnippetsManager* snippets_manager, const gchar* key, GError** err)
 {
 	SnippetsManagerPlugin* plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (snippets_manager);
 	snippet_insert(plugin, key);
