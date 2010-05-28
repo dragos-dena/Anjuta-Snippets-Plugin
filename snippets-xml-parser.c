@@ -68,14 +68,13 @@ snippets_manager_parse_native_snippet_node (xmlNodePtr snippet_node)
 	      *cur_var_default = NULL, *cur_var_global = NULL, *keywords_temp = NULL,
 	      **keywords_temp_array = NULL, *keyword_temp = NULL;
 	GList *variable_names = NULL, *variable_default_values = NULL,
-	      *variable_globals = NULL, *keywords = NULL;
+	      *variable_globals = NULL, *keywords = NULL, *iter = NULL;
 	xmlNodePtr cur_field_node = NULL, cur_variable_node = NULL;
 	gboolean cur_var_is_global = FALSE;
-	gint iter = 0;
+	gint i = 0;
 	
 	/* Assert that the snippet_node is indeed a anjuta-snippet tag */
-	if (g_strcmp0 ((gchar *)snippet_node->name, NATIVE_XML_SNIPPET_TAG))
-		return NULL;
+	g_return_val_if_fail (!g_strcmp0 ((gchar *)snippet_node->name, NATIVE_XML_SNIPPET_TAG), NULL);
 	
 	/* Get the snippet name, trigger-key and language properties */
 	trigger_key = (gchar *)xmlGetProp (snippet_node, (const xmlChar *)NATIVE_XML_TRIGGER_PROP);
@@ -142,15 +141,15 @@ snippets_manager_parse_native_snippet_node (xmlNodePtr snippet_node)
 			keywords_temp = (gchar *)xmlNodeGetContent (cur_field_node);
 			keywords_temp_array = g_strsplit (keywords_temp, " ", -1);
 			
-			iter = 0;
-			while (keywords_temp_array[iter])
+			i = 0;
+			while (keywords_temp_array[i])
 			{
-				if (g_strcmp0 (keywords_temp_array[iter], ""))
+				if (g_strcmp0 (keywords_temp_array[i], ""))
 				{
-					keyword_temp = g_strdup (keywords_temp_array[iter]);
+					keyword_temp = g_strdup (keywords_temp_array[i]);
 					keywords = g_list_append (keywords, keyword_temp);
 				}
-				iter ++;
+				i ++;
 			}
 			
 			g_free (keywords_temp);
@@ -175,17 +174,20 @@ snippets_manager_parse_native_snippet_node (xmlNodePtr snippet_node)
 	g_free (snippet_language);
 	g_free (snippet_name);
 	g_free (snippet_content);
-	for (iter = 0; iter < g_list_length (variable_names); iter ++)
+	for (iter = g_list_first (variable_names); iter != NULL; iter = g_list_next (iter))
 	{
-		g_free (g_list_nth_data (variable_names, iter));
-		g_free (g_list_nth_data (variable_default_values, iter));
+		g_free (iter->data);
+	}
+	for (iter = g_list_first (variable_default_values); iter != NULL; iter = g_list_next (iter))
+	{
+		g_free (iter->data);
 	}
 	g_list_free (variable_names);
 	g_list_free (variable_default_values);
 	g_list_free (variable_globals);
-	for (iter = 0; iter < g_list_length (keywords); iter ++)
+	for (iter = g_list_first (keywords); iter != NULL; iter = g_list_next (iter))
 	{
-		g_free (g_list_nth_data (keywords, iter));
+		g_free (iter->data);
 	}
 	g_list_free (keywords);
 
@@ -281,7 +283,8 @@ snippets_manager_parse_native_xml_file (const gchar *snippet_packet_path)
 
 	/* Uncomment for debugging */
 	/* TODO - delete this when it will be stable */
-	/*const GList* snippets = snippets_group_get_snippet_list (snippets_group);
+	/*
+	const GList* snippets = snippets_group_get_snippet_list (snippets_group);
 	GList *var_names, *defaults, *globals;
 	gchar *crt_name, *crt_default;
 	int iter, iter2;
@@ -304,8 +307,8 @@ snippets_manager_parse_native_xml_file (const gchar *snippet_packet_path)
 			                        (gchar*)g_list_nth_data(defaults, iter2),
 			                        GPOINTER_TO_INT (g_list_nth_data (globals, iter2)));
 		}
-	}
-	*/
+	}*/
+	
 	return snippets_group;
 }
 
