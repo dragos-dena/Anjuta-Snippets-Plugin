@@ -42,12 +42,25 @@ typedef struct _SnippetsDBClass SnippetsDBClass;
 #define ANJUTA_IS_SNIPPETS_DB(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), ANJUTA_TYPE_SNIPPETS_DB))
 #define ANJUTA_IS_SNIPPETS_DB_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), ANJUTA_TYPE_SNIPPETS_DB))
 
+enum
+{
+	SNIPPETS_DB_MODEL_COL_ICON = 0,
+	SNIPPETS_DB_MODEL_COL_NAME,
+	SNIPPETS_DB_MODEL_COL_LANG,
+	SNIPPETS_DB_MODEL_COL_TRIGGER,
+	SNIPPETS_DB_MODEL_COL_SNIPPET_KEY,
+	SNIPPETS_DB_MODEL_COL_IS_SNIPPET,
+	SNIPPETS_DB_MODEL_COL_N
+};
+
 struct _SnippetsDB
 {
 	GObject object;
 
 	AnjutaShell* anjuta_shell;
 
+	gint stamp;
+	
 	/*< private >*/
 	SnippetsDBPrivate* priv;
 };

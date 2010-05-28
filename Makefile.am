@@ -9,7 +9,7 @@ snippets_manager_glade_DATA = snippets-manager-preferences.ui
 default_snippetsdir = $(anjuta_data_dir)
 default_snippets_DATA = \
 	default-snippets.xml \
-	default-snippets-global-variables.xml
+	snippets-global-variables.xml
                         
 
 snippets_manager_pixmapsdir = $(anjuta_image_dir)

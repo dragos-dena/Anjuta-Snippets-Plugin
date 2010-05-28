@@ -25,8 +25,9 @@
 #include <libanjuta/anjuta-debug.h>
 #include <glib.h>
 #include <glib/gstdio.h>
+#include <gtk/gtk.h>
 
-#define DEFAULT_GLOBAL_VARS_FILE           "default-snippets-global-variables.xml"
+#define DEFAULT_GLOBAL_VARS_FILE           "snippets-global-variables.xml"
 #define DEFAULT_SNIPPETS_FILE              "default-snippets.xml"
 #define DEFAULT_SNIPPETS_FILE_INSTALL_PATH PACKAGE_DATA_DIR"/"DEFAULT_SNIPPETS_FILE
 #define DEFAULT_GLOBAL_VARS_INSTALL_PATH   PACKAGE_DATA_DIR"/"DEFAULT_GLOBAL_VARS_FILE
@@ -73,7 +74,97 @@ typedef struct _SnippetsGlobalVariable
 	gchar* (*output_function) (SnippetsDB* snippets_db);
 } SnippetsGlobalVariable;
 
-G_DEFINE_TYPE (SnippetsDB, snippets_db, G_TYPE_OBJECT);
+
+/* GObject methods declaration */
+static void snippets_db_dispose    (GObject* snippets_db);
+
+static void snippets_db_finalize   (GObject* snippets_db);
+
+static void snippets_db_class_init (SnippetsDBClass* klass);
+
+static void snippets_db_init       (SnippetsDB *snippets_db);
+
+
+/* GtkTreeModel methods declaration */
+static void              snippets_db_tree_model_init (GtkTreeModelIface *iface);
+
+static GtkTreeModelFlags snippets_db_get_flags       (GtkTreeModel *tree_model);
+
+static gint              snippets_db_get_n_columns   (GtkTreeModel *tree_model);
+
+static GType             snippets_db_get_column_type (GtkTreeModel *tree_model,
+                                                      gint index);
+
+static gboolean          snippets_db_get_iter        (GtkTreeModel *tree_model,
+                                                      GtkTreeIter *iter,
+                                                      GtkTreePath *path);
+
+static GtkTreePath*      snippets_db_get_path        (GtkTreeModel *tree_model,
+                                                      GtkTreeIter *iter);
+
+static void              snippets_db_get_value       (GtkTreeModel *tree_model,
+                                                      GtkTreeIter *iter,
+                                                      gint column,
+                                                      GValue *value);
+
+static gboolean          snippets_db_iter_next       (GtkTreeModel *tree_model,
+                                                      GtkTreeIter *iter);
+
+static gboolean          snippets_db_iter_children   (GtkTreeModel *tree_model,
+                                                      GtkTreeIter *iter,
+                                                      GtkTreeIter *parent);
+
+static gboolean          snippets_db_iter_has_child  (GtkTreeModel *tree_model,
+                                                      GtkTreeIter  *iter);
+
+static gint              snippets_db_iter_n_children (GtkTreeModel *tree_model,
+                                                      GtkTreeIter *iter);
+
+static gboolean          snippets_db_iter_nth_child  (GtkTreeModel *tree_model,
+                                                      GtkTreeIter *iter,
+                                                      GtkTreeIter *parent,
+                                                      gint n);
+
+static gboolean          snippets_db_iter_parent     (GtkTreeModel *tree_model,
+                                                      GtkTreeIter *iter,
+                                                      GtkTreeIter *child);
+
+static GObjectClass *snippets_db_parent_class = NULL;
+
+GType
+snippets_db_get_type (void)
+{
+  static GType snippets_db_type = 0;
+
+	if (snippets_db_type == 0)
+	{
+		static const GTypeInfo snippets_db_info =
+		{
+			sizeof (SnippetsDBClass),
+			NULL,                                         /* base_init */
+			NULL,                                         /* base_finalize */
+			(GClassInitFunc) snippets_db_class_init,
+			NULL,                                         /* class finalize */
+			NULL,                                         /* class_data */
+			sizeof (SnippetsDB),
+			0,                                            /* n_preallocs */
+			(GInstanceInitFunc) snippets_db_init
+		};
+		static const GInterfaceInfo tree_model_info =
+		{
+			(GInterfaceInitFunc) snippets_db_tree_model_init,
+			NULL,
+			NULL
+		};
+
+		snippets_db_type = g_type_register_static (G_TYPE_OBJECT, "SnippetsDB",
+		                                           &snippets_db_info, (GTypeFlags)0);
+
+		g_type_add_interface_static (snippets_db_type, GTK_TYPE_TREE_MODEL, &tree_model_info);
+	}
+
+	return snippets_db_type;
+}
 
 static void
 snippets_db_dispose (GObject* snippets_db)
@@ -101,12 +192,31 @@ snippets_db_class_init (SnippetsDBClass* klass)
 }
 
 static void
-snippets_db_init (SnippetsDB * snippets_db)
+snippets_db_tree_model_init (GtkTreeModelIface *iface)
+{
+	iface->get_flags       = snippets_db_get_flags;
+	iface->get_n_columns   = snippets_db_get_n_columns;
+	iface->get_column_type = snippets_db_get_column_type;
+	iface->get_iter        = snippets_db_get_iter;
+	iface->get_path        = snippets_db_get_path;
+	iface->get_value       = snippets_db_get_value;
+	iface->iter_next       = snippets_db_iter_next;
+	iface->iter_children   = snippets_db_iter_children;
+	iface->iter_has_child  = snippets_db_iter_has_child;
+	iface->iter_n_children = snippets_db_iter_n_children;
+	iface->iter_nth_child  = snippets_db_iter_nth_child;
+	iface->iter_parent     = snippets_db_iter_parent;
+}
+
+
+static void
+snippets_db_init (SnippetsDB *snippets_db)
 {
 	SnippetsDBPrivate *priv = g_new0 (SnippetsDBPrivate, 1);
 	
 	snippets_db->priv = priv;
-	
+	snippets_db->anjuta_shell = NULL;
+	snippets_db->stamp = g_random_int ();
 }
 
 /**
@@ -436,6 +546,102 @@ snippets_db_add_global_variable (SnippetsDB* snippets_db,
                                  const gchar* variable_value,
                                  gboolean variable_is_shell_command)
 {
+	/* Debugging TODO - delete this when stable */
+	/*printf ("\n+++ Debugging Global Variable +++\n");
+	printf ("Global Variable Name: %s\n", variable_name);
+	printf ("Global Variable Is Command (1 for true): %d\n", variable_is_shell_command);
+	printf ("Global Variable Value: %s\n", variable_value);
+	*//* Debugging end */
+	
+	return FALSE;
+}
 
+/* GtkTreeModel methods definition */
+static GtkTreeModelFlags 
+snippets_db_get_flags (GtkTreeModel *tree_model)
+{
+	return 0;
+}
+
+static gint
+snippets_db_get_n_columns (GtkTreeModel *tree_model)
+{
+	return -1;
+}
+
+static GType
+snippets_db_get_column_type (GtkTreeModel *tree_model,
+                             gint index)
+{
+	return G_TYPE_NONE;
+}
+
+static gboolean
+snippets_db_get_iter (GtkTreeModel *tree_model,
+                      GtkTreeIter *iter,
+                      GtkTreePath *path)
+{
+	return FALSE;
+}
+
+static GtkTreePath*
+snippets_db_get_path (GtkTreeModel *tree_model,
+                      GtkTreeIter *iter)
+{
+	return NULL;
+}
+
+static void
+snippets_db_get_value (GtkTreeModel *tree_model,
+                       GtkTreeIter *iter,
+                       gint column,
+                       GValue *value)
+{
+
+}
+
+static gboolean
+snippets_db_iter_next (GtkTreeModel *tree_model,
+                       GtkTreeIter *iter)
+{
+	return FALSE;
+}
+
+static gboolean
+snippets_db_iter_children (GtkTreeModel *tree_model,
+                           GtkTreeIter *iter,
+                           GtkTreeIter *parent)
+{
+	return FALSE;
+}
+
+static gboolean
+snippets_db_iter_has_child (GtkTreeModel *tree_model,
+                            GtkTreeIter  *iter)
+{
+	return FALSE;
+}
+
+static gint
+snippets_db_iter_n_children (GtkTreeModel *tree_model,
+                             GtkTreeIter *iter)
+{
+	return -1;
+}
+
+static gboolean
+snippets_db_iter_nth_child (GtkTreeModel *tree_model,
+                            GtkTreeIter *iter,
+                            GtkTreeIter *parent,
+                            gint n)
+{
+	return FALSE;
+}
+
+static gboolean
+snippets_db_iter_parent (GtkTreeModel *tree_model,
+                         GtkTreeIter *iter,
+                         GtkTreeIter *child)
+{
 	return FALSE;
 }

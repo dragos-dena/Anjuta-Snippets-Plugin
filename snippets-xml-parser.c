@@ -41,7 +41,13 @@
 #define NATIVE_XML_TRUE             "true"
 #define NATIVE_XML_FALSE            "false"
 
-#define DEBUG
+#define GLOBAL_VARS_XML_ROOT         "anjuta-global-variables"
+#define GLOBAL_VARS_XML_VAR_TAG      "global-variable"
+#define GLOBAL_VARS_XML_NAME_PROP    "name"
+#define GLOBAL_VARS_XML_COMMAND_PROP "is_command"
+#define GLOBAL_VARS_XML_TRUE         "true"
+#define GLOBAL_VARS_XML_FALSE        "false"
+
 
 static gboolean 
 snippets_manager_save_native_xml_file (const gchar *snippet_packet_path, 
@@ -205,8 +211,7 @@ snippets_manager_parse_native_xml_file (const gchar *snippet_packet_path)
 	
 	/* Parse the XML file and load it into a xmlDoc */
 	snippet_packet_doc = xmlParseFile (snippet_packet_path);
-	if (snippet_packet_doc == NULL)
-		return NULL;
+	g_return_val_if_fail (snippet_packet_doc != NULL, NULL);
 
 	/* Get the root and assert it */
 	cur_node = xmlDocGetRootElement (snippet_packet_doc);
@@ -388,7 +393,62 @@ snippets_manager_save_snippets_xml_file (const gchar* snippet_packet_path,
 gboolean snippets_manager_parse_variables_xml_file (const gchar* global_vars_path,
                                                     SnippetsDB* snippets_db)
 {
-	/* TODO */
+	xmlDocPtr global_vars_doc = NULL;
+	xmlNodePtr cur_var_node = NULL;
+	gchar *cur_var_name = NULL, *cur_var_is_command = NULL, *cur_var_content = NULL;
+	gboolean cur_var_is_command_bool = FALSE;
+	
+	/* Assertions */
+	g_return_val_if_fail (global_vars_path != NULL &&\
+	                      g_file_test (global_vars_path, G_FILE_TEST_EXISTS) &&\
+	                      snippets_db != NULL,
+	                      FALSE);
+
+	/* Parse the XML file */
+	global_vars_doc = xmlParseFile (global_vars_path);
+	g_return_val_if_fail (global_vars_doc != NULL, FALSE);
+
+	/* Get the root and assert it */
+	cur_var_node = xmlDocGetRootElement (global_vars_doc);
+	if (cur_var_node == NULL ||\
+	    g_strcmp0 ((gchar *)cur_var_node->name, GLOBAL_VARS_XML_ROOT))
+	{
+		xmlFreeDoc (global_vars_doc);
+		return FALSE;
+	}
+
+	/* Get the name and description fields */
+	cur_var_node = cur_var_node->xmlChildrenNode;
+	while (cur_var_node != NULL)
+	{
+		/* Get the current Snippet Global Variable */
+		if (!g_strcmp0 ((gchar*)cur_var_node->name, GLOBAL_VARS_XML_VAR_TAG))
+		{
+			/* Get the name, is_command properties and the content */
+			cur_var_name = (gchar*)xmlGetProp (cur_var_node,\
+		                                       (const xmlChar*)GLOBAL_VARS_XML_NAME_PROP);
+			cur_var_is_command = (gchar*)xmlGetProp (cur_var_node,\
+		                                       (const xmlChar*)GLOBAL_VARS_XML_COMMAND_PROP);
+		    cur_var_content = g_strdup ((gchar *)xmlNodeGetContent (cur_var_node));
+			if (!g_strcmp0 (cur_var_is_command, GLOBAL_VARS_XML_TRUE))
+				cur_var_is_command_bool = TRUE;
+			else
+				cur_var_is_command_bool = FALSE;
+
+			/* Add the Global Variable to the Snippet Database */
+			snippets_db_add_global_variable (snippets_db,
+			                                 cur_var_name,
+			                                 cur_var_content,
+			                                 cur_var_is_command_bool);
+			
+		    g_free (cur_var_content);
+		    g_free (cur_var_name);
+		    g_free (cur_var_is_command);
+		}
+		
+		cur_var_node = cur_var_node->next;
+	}
+	
 	return FALSE;
 }
 
