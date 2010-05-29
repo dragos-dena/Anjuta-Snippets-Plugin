@@ -36,53 +36,63 @@
 
 #define ANJUTA_SNIPPETS_DB_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ANJUTA_TYPE_SNIPPETS_DB, SnippetsDBPrivate))
 
+
+/**
+ * SnippetsDBPrivate:
+ * @snippets_groups: A #GList where the #AnjutaSnippetsGroup objects are loaded.
+ * @unsaved_snippets_group: A #GList where the unsaved #AnjutaSnippetsGroup objects are tracked.
+ *                          Important: One should not try to destroy the objects in this group,
+ *                          as they are saved in @snippets_groups. This is just for tracking 
+ *                          purposes.
+ * @trigger_keys_tree: A #GTree with the keys being a string representing the trigger-key and
+ *                     the values being a #GList with #AnjutaSnippet as entries for the list.
+ *                     Important: One should not try to delete anything. The #GTree was constructed
+ *                     with destroy functions passed to the #GTree that will free the memory.
+ * @keywords_tree: A #GTree with the keys being a string representing the keyword and the values
+ *                 being a #GList with #AnjutaSnippet as entries for the list.
+ *                 Important: One should not try to delete anything. The #GTree was constructed
+ *                 with destroy functions passed to the #GTree that will free the memory.
+ * @snippets_group_format_map: A #GHashTable with strings representing the group name as keys and
+ *                             #FormatType entries as values.
+ *                             Important: One should not try to delete anything. The #GHashTable was 
+ *                             constructed with destroy functions passed to the #GHashTable that will 
+ *                             free the memory.
+ * @snippet_keys_map: A #GHashTable with strings representing the snippet-key as keys and pointers
+ *                    to #AnjutaSnippet objects as values.
+ *                    Important: One should not try to delete anything. The #GHashTable was 
+ *                    constructed with destroy functions passed to the #GHashTable that will 
+ *                    free the memory.
+ * @global_variables: A #GtkListStore where the static and command-based global variables are stored.
+ *                    See snippets-db.h for details about columns.
+ *                    Important: Only static and command-based global variables are stored here!
+ *                    The internal global variables are computed when #snippets_db_get_global_variable
+ *                    is called.
+ *
+ * The private field for the SnippetsDB object.
+ */
 struct _SnippetsDBPrivate
-{
-	/* A tree model to be used by the Snippet Browser. */
-	GtkTreeStore* snippets_tree;
+{	
+	GList* snippets_groups;
+	GList* unsaved_snippets_groups;
 	
-	/* A binary balanced tree with the trigger keys for searching purposes. */
 	GTree* trigger_keys_tree;
-	
-	/* A binary balanced tree with the keywords for searching purposes */
 	GTree* keywords_tree;
 
-	/* A hashtable with group names as keys and FormatType's as values */
 	GHashTable* snippets_group_format_map;
-	
-	/* A hashtable with the snippet-key's as keys and pointers to the aproppiate Snippet as value */
 	GHashTable* snippet_keys_map;
 	
-	/* A list of Snippet Group's. Here the actual Snippet's are stored. */
-	GList* snippet_groups;
-	
-	/* A hashtable with the variables names as keys and SnippetsGlobalVariable as value. */
-	GHashTable* global_variables;
+	GtkListStore* global_variables;
 };
-
-typedef struct _SnippetsGlobalVariable
-{
-	/* If this is TRUE, then the value of the variable will be a shell command. Only supported on Linux. */
-	gboolean is_shell_command;
-	
-	/* The value of the variable. This can be an actual value or a command to parse. */
-	gchar* value;
-
-	/* A function that computes the value for this variable. If this is not NULL,
-	   it will be the preffered way to get the output. These global variables will
-	   be loaded internally and can't be edited. */
-	gchar* (*output_function) (SnippetsDB* snippets_db);
-} SnippetsGlobalVariable;
 
 
 /* GObject methods declaration */
-static void snippets_db_dispose    (GObject* snippets_db);
+static void              snippets_db_dispose         (GObject* snippets_db);
 
-static void snippets_db_finalize   (GObject* snippets_db);
+static void              snippets_db_finalize        (GObject* snippets_db);
 
-static void snippets_db_class_init (SnippetsDBClass* klass);
+static void              snippets_db_class_init      (SnippetsDBClass* klass);
 
-static void snippets_db_init       (SnippetsDB *snippets_db);
+static void              snippets_db_init            (SnippetsDB *snippets_db);
 
 
 /* GtkTreeModel methods declaration */
@@ -128,6 +138,7 @@ static gboolean          snippets_db_iter_nth_child  (GtkTreeModel *tree_model,
 static gboolean          snippets_db_iter_parent     (GtkTreeModel *tree_model,
                                                       GtkTreeIter *iter,
                                                       GtkTreeIter *child);
+
 
 static GObjectClass *snippets_db_parent_class = NULL;
 
@@ -189,6 +200,8 @@ snippets_db_class_init (SnippetsDBClass* klass)
 	snippets_db_parent_class = g_type_class_peek_parent (klass);
 	object_class->dispose = snippets_db_dispose;
 	object_class->finalize = snippets_db_finalize;
+
+	g_type_class_add_private (klass, sizeof (SnippetsDBPrivate));
 }
 
 static void
@@ -208,15 +221,60 @@ snippets_db_tree_model_init (GtkTreeModelIface *iface)
 	iface->iter_parent     = snippets_db_iter_parent;
 }
 
+static gint
+trigger_keys_tree_compare_func (gconstpointer a,
+                                gconstpointer b,
+                                gpointer user_data)
+{
+	gchar* trigger_key1 = (gchar *)a;
+	gchar* trigger_key2 = (gchar *)b;
+
+	return g_ascii_strcasecmp (trigger_key1, trigger_key2);
+}
+
+static gint
+keywords_tree_compare_func (gconstpointer a,
+                            gconstpointer b,
+                            gpointer user_data)
+{
+	gchar* keyword1 = (gchar *)a;
+	gchar* keyword2 = (gchar *)b;
+
+	return g_ascii_strcasecmp (keyword1, keyword2);
+}
 
 static void
 snippets_db_init (SnippetsDB *snippets_db)
 {
-	SnippetsDBPrivate *priv = g_new0 (SnippetsDBPrivate, 1);
+	SnippetsDBPrivate* priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
 	
 	snippets_db->priv = priv;
 	snippets_db->anjuta_shell = NULL;
 	snippets_db->stamp = g_random_int ();
+
+	/* Initialize the private fields */
+	snippets_db->priv->snippets_groups = NULL;
+	snippets_db->priv->unsaved_snippets_groups = NULL;
+	snippets_db->priv->trigger_keys_tree = g_tree_new_full (trigger_keys_tree_compare_func,
+	                                                        NULL,
+	                                                        g_free,
+	                                                        (GDestroyNotify)g_list_free);
+	snippets_db->priv->keywords_tree = g_tree_new_full (keywords_tree_compare_func,
+	                                                    NULL,
+	                                                    g_free,
+	                                                    (GDestroyNotify)g_list_free);
+	snippets_db->priv->snippets_group_format_map = g_hash_table_new_full (g_str_hash, 
+	                                                                      g_str_equal, 
+	                                                                      g_free, 
+	                                                                      NULL);
+	snippets_db->priv->snippet_keys_map = g_hash_table_new_full (g_str_hash, 
+	                                                             g_str_equal, 
+	                                                             g_free, 
+	                                                             NULL);
+	snippets_db->priv->global_variables = gtk_list_store_new (GLOBAL_VARS_MODEL_COL_N,
+	                                                          G_TYPE_STRING,
+	                                                          G_TYPE_STRING,
+	                                                          G_TYPE_BOOLEAN);
 }
 
 /**
@@ -231,7 +289,6 @@ SnippetsDB*
 snippets_db_new (AnjutaShell* anjuta_shell)
 {
 	SnippetsDB* snippets_db = ANJUTA_SNIPPETS_DB (g_object_new (snippets_db_get_type (), NULL));
-	AnjutaSnippetsGroup* cur_snippet_group = NULL;
 	gboolean user_defaults_file_exists = FALSE, user_global_vars_exists = FALSE;
 	gchar *user_snippets_dir_path = NULL, *user_snippets_default = NULL, 
 	      *user_snippets_db_dir_path = NULL, *user_global_vars = NULL,
@@ -293,20 +350,14 @@ snippets_db_new (AnjutaShell* anjuta_shell)
 		cur_file_path = g_strconcat (user_snippets_dir_path, "/", cur_file_name, NULL);
 
 		/* Parse the current file and make a new SnippetGroup object */
-		cur_snippet_group = snippets_manager_parse_snippets_xml_file (cur_file_path,
-		                                                              NATIVE_FORMAT);
+		snippets_db_load_file (snippets_db, cur_file_path, TRUE, TRUE, NATIVE_FORMAT);
 
-		/* TODO - actually add the snippet group to the database */
-		
 		g_free (cur_file_path);
 		cur_file_name = g_dir_read_name (user_snippets_dir);
 	}
 	g_dir_close (user_snippets_dir);
 	g_free (user_snippets_dir_path);
 
-	
-	/* TODO */
-	
 	return snippets_db;
 }
 
@@ -314,37 +365,64 @@ snippets_db_new (AnjutaShell* anjuta_shell)
  * snippets_db_load_file:
  * @snippets_db: A #SnippetsDB object where the file should be loaded.
  * @snippet_packet_file_path: A string with the file path.
- * @overwrite: If on conflicting snippets, it should overwrite them.
- * @conflicting_snippets: A #GList with the conflicting snippets if overwrite is FALSE.
+ * @overwrite_group: If a #AnjutaSnippetsGroup with the same name exists, it will be overwriten.
+ * @overwrite_snippets: If conflicting snippets are found, the old ones will be overwriten.
  * @format_type: A #FormatType with the type of the snippet-packet XML file.
  *
  * Loads the given file in the #SnippetsDB 
  *
- * Returns: The ID of the loaded file (to be saved later) or -1 on failure.
+ * Returns: TRUE on success.
  **/
-gint32	
+gboolean
 snippets_db_load_file (SnippetsDB* snippets_db,
                        const gchar* snippet_packet_file_path,
-                       gboolean overwrite,
-                       GList* conflicting_snippets,
+                       gboolean overwrite_group,
+                       gboolean overwrite_snippets,
                        FormatType format_type)
 {
-	/* TODO */
-	return -1;
+	AnjutaSnippetsGroup *snippets_group = NULL;
+	gboolean success = FALSE;
+	
+	/* Assertions */
+	g_return_val_if_fail (snippets_db != NULL &&
+	                      ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
+	                      snippet_packet_file_path != NULL,
+	                      FALSE);
+
+	/* Get the AnjutaSnippetsGroup object from the file */
+	snippets_group = snippets_manager_parse_snippets_xml_file (snippet_packet_file_path,
+	                                                           format_type);
+	g_return_val_if_fail (snippets_group != NULL && 
+	                      ANJUTA_IS_SNIPPETS_GROUP (snippets_group), 
+	                      FALSE);
+
+	/* Add the new AnjutaSnippetsGroup to the database */
+	success = snippets_db_add_snippets_group (snippets_db, 
+	                                          snippets_group,
+	                                          overwrite_group,
+	                                          overwrite_snippets);
+	
+	return success;
 }
 
 /**
  * snippets_db_save_file:
  * @snippets_db: A #SnippetsDB object where the file is loaded.
- * @snippet_packet_loaded_id: The id returned by #snippets_db_load_file
+ * @snippet_group_name: The #AnjutaSnippetsGroup name for the group that should be saved.
+ * @snippet_packet_file_path: The name of the file where the #AnjutaSnippetsGroup should
+ *                            be saved. Can be NULL (read bellow).
  *
- * Saves the file loaded in the #SnippetsDB
+ * Saves the #AnjutaSnippetsGroup in a snippet-packet XML file. If snippet_packet_file_path
+ * is not NULL, then it will be saved in the user directory where all snippet-packet files
+ * are saved. If the #AnjutaSnippetsGroup was created on runtime and doesn't have a file name
+ * the file name will be computed based on the #AnjutaSnippetsGroup first 50 characters. 
  *
  * Returns: TRUE on success.
  **/
 gboolean	
 snippets_db_save_file (SnippetsDB* snippets_db,
-                       gint32 snippet_packet_loaded_id)
+                       const gchar* snippets_group_name,
+                       const gchar* snippet_packet_file_path)
 {
 
 	/* TODO */
@@ -391,6 +469,7 @@ snippets_db_search (SnippetsDB* snippets_db,
  * snippets_db_add_snippet:
  * @snippets_db: A #SnippetsDB object
  * @added_snippet: A #Snippet object
+ * @group_name: The name of the group where the snippet should be added.
  * @overwrite: If a snippet with the same key exists, it will overwrite it.
  * 
  * Adds the @added_snippet to the @snippets_db. With overwrite set to TRUE, this method can be used
@@ -401,6 +480,7 @@ snippets_db_search (SnippetsDB* snippets_db,
 gboolean	
 snippets_db_add_snippet (SnippetsDB* snippets_db,
                          AnjutaSnippet* added_snippet,
+                         const gchar* group_name,
                          gboolean overwrite)
 {
 	/* TODO */
@@ -416,7 +496,7 @@ snippets_db_add_snippet (SnippetsDB* snippets_db,
  *
  * Returns: The requested snippet (not a copy, should not be freed) or NULL if not found.
  **/
-AnjutaSnippet*	
+const AnjutaSnippet*	
 snippets_db_get_snippet (SnippetsDB* snippets_db,
                          const gchar* snippet_key)
 {
@@ -442,26 +522,29 @@ snippets_db_remove_snippet (SnippetsDB* snippets_db,
 }
 
 /**
- * snippets_db_add_snippet_group:
+ * snippets_db_add_snippets_group:
  * @snippets_db: A #SnippetsDB object
- * @group_name: The name of the added group.
- * @group_description: A short description of the added group.
+ * @snippets_group: A #AnjutaSnippetsGroup object
+ * @overwrite_group: If a #AnjutaSnippetsGroup with the same name exists it will 
+ *                   be overwriten.
+ * @overwrite_snippets: If there will be conflicting snippets, they will be overwriten.
  *
- * Adds an empty Snippet Group to the #SnippetsDB
+ * Adds an #AnjutaSnippetsGroup to the database, checking for conflicts.
  *
  * Returns: TRUE on success
  **/
 gboolean	
-snippets_db_add_snippet_group (SnippetsDB* snippets_db,
-                               const gchar* group_name,
-                               const gchar* group_description)
+snippets_db_add_snippets_group (SnippetsDB* snippets_db,
+                                AnjutaSnippetsGroup* snippets_group,
+                                gboolean overwrite_group,
+                                gboolean overwrite_snippets)
 {
 	/* TODO */
 	return FALSE;
 }
 
 /**
- * snippets_db_remove_snippet_group:
+ * snippets_db_remove_snippets_group:
  * @snippets_db: A #SnippetsDB object.
  * @group_name: The name of the group to be removed.
  * 
@@ -470,25 +553,23 @@ snippets_db_add_snippet_group (SnippetsDB* snippets_db,
  * Returns: TRUE on success.
  **/
 gboolean	
-snippets_db_remove_snippet_group (SnippetsDB* snippets_db,
-                                  const gchar* group_name)
+snippets_db_remove_snippets_group (SnippetsDB* snippets_db,
+                                   const gchar* group_name)
 {
 	/* TODO */
 	return FALSE;
 }
 
 /**
- * snippets_db_get_tree_model:
+ * snippets_db_get_snippets_group:
  * @snippets_db: A #SnippetsDB object.
- * @snippets_language: The language for which the GtkTreeModel is requested or NULL for all languages.
+ * @group_name: The name of the #AnjutaSnippetsGroup requested object.
  *
- * A #GtkTreeModel to be used for the Snippet Browser.
- *
- * Returns: The requested #GtkTreeModel or NULL on failure.
- **/
-GtkTreeModel*	
-snippets_db_get_tree_model (SnippetsDB* snippets_db,
-                            const gchar* snippets_language)
+ * Returns: The requested #AnjutaSnippetsGroup object or NULL on failure.
+ */
+const AnjutaSnippetsGroup*
+snippets_db_get_snippets_group (SnippetsDB* snippets_db,
+                                const gchar* group_name)
 {
 	/* TODO */
 	return NULL;
@@ -555,6 +636,37 @@ snippets_db_add_global_variable (SnippetsDB* snippets_db,
 	
 	return FALSE;
 }
+
+/**
+ * snippets_db_remove_global_variable:
+ * @snippets_db: A #SnippetsDB object
+ * @group_name: The name of the global variable to be removed.
+ *
+ * Removes a global variable from the database. Only works for static or command
+ * based variables.
+ *
+ * Returns: TRUE on success.
+ */
+gboolean
+snippets_db_remove_global_variable (SnippetsDB* snippets_db, 
+                                    const gchar* variable_name)
+{
+	/* TODO */
+	return FALSE;
+}
+
+/**
+ * snippets_db_get_global_vars_model:
+ * snippets_db: A #SnippetsDB object.
+ *
+ * The returned GtkTreeModel is basically a list with the global variables that
+ * should be used for displaying the variables. At the moment, it's used for
+ * displaying the variables in the preferences.
+ *
+ * Returns: The #GtkTreeModel of the global variables list.
+ */
+GtkTreeModel*
+snippets_db_get_global_vars_model (SnippetsDB* snippets_db);
 
 /* GtkTreeModel methods definition */
 static GtkTreeModelFlags 

@@ -42,27 +42,20 @@ snippets_group_dispose (GObject* snippets_group)
 	AnjutaSnippetsGroup *anjuta_snippets_group = ANJUTA_SNIPPETS_GROUP (snippets_group);
 	AnjutaSnippet *cur_snippet = NULL;
 	GList *iter = NULL;
-	
-	/* Delete the private field */
-	if (anjuta_snippets_group->priv)
-	{
-		/* Delete the name and description fields */
-		g_free (anjuta_snippets_group->priv->name);
-		anjuta_snippets_group->priv->name = NULL;
-		g_free (anjuta_snippets_group->priv->description);
-		anjuta_snippets_group->priv->description = NULL;
-		
-		/* Delete the snippets in the group */
-		for (iter = g_list_first (anjuta_snippets_group->priv->snippets); iter != NULL; iter = g_list_next (iter))
-		{
-			cur_snippet = (AnjutaSnippet *)cur_snippet;
-			g_object_unref (cur_snippet);
-		}
-		g_list_free (anjuta_snippets_group->priv->snippets);
 
-		g_free (anjuta_snippets_group->priv);
-		anjuta_snippets_group->priv = NULL;
+	/* Delete the name and description fields */
+	g_free (anjuta_snippets_group->priv->name);
+	anjuta_snippets_group->priv->name = NULL;
+	g_free (anjuta_snippets_group->priv->description);
+	anjuta_snippets_group->priv->description = NULL;
+	
+	/* Delete the snippets in the group */
+	for (iter = g_list_first (anjuta_snippets_group->priv->snippets); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_snippet = (AnjutaSnippet *)iter->data;
+		g_object_unref (cur_snippet);
 	}
+	g_list_free (anjuta_snippets_group->priv->snippets);
 
 	/* Delete the filename field */
 	g_free (anjuta_snippets_group->file_path);
@@ -94,6 +87,12 @@ snippets_group_init (AnjutaSnippetsGroup* snippets_group)
 	AnjutaSnippetsGroupPrivate* priv = ANJUTA_SNIPPETS_GROUP_GET_PRIVATE (snippets_group);
 	
 	snippets_group->priv = priv;
+	snippets_group->file_path = NULL;
+
+	/* Initialize the private field */
+	snippets_group->priv->name = NULL;
+	snippets_group->priv->description = NULL;
+	snippets_group->priv->snippets = NULL;
 }
 
 /**
@@ -115,8 +114,7 @@ snippets_group_new (const gchar* snippets_file_path,
 	
 	/* Assertions */
 	g_return_val_if_fail (snippets_group_name != NULL &&\
-	                      snippets_group_description != NULL &&\
-	                      snippets_file_path != NULL,
+	                      snippets_group_description != NULL,
 	                      NULL);
 	
 	/* Initialize the object */
@@ -152,6 +150,7 @@ snippets_group_add_snippet (AnjutaSnippetsGroup* snippets_group,
 	
 	/* Assertions */
 	g_return_val_if_fail (snippets_group != NULL &&\
+	                      ANJUTA_IS_SNIPPETS_GROUP (snippets_group) &&\
 	                      snippet != NULL,
 	                      FALSE);
 		
@@ -196,7 +195,9 @@ snippets_group_add_snippet (AnjutaSnippetsGroup* snippets_group,
 	/* If we didn't found a snippet with the same name we just append it to the end */
 	else
 	{
-		snippets_group->priv->snippets = g_list_append (snippets_group->priv->snippets, snippet);
+		snippets_group->priv->snippets = g_list_insert_sorted (snippets_group->priv->snippets,
+		                                                       snippet,
+		                                                       (GCompareFunc)g_ascii_strcasecmp);
 	}
 	
 	g_free (added_snippet_key);
@@ -219,7 +220,9 @@ snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
 	gchar* cur_snippet_key = NULL;
 	
 	/* Assertions */
-	g_return_if_fail (snippets_group != NULL && snippet_key != NULL);
+	g_return_if_fail (snippets_group != NULL && \
+	                  ANJUTA_IS_SNIPPETS_GROUP (snippets_group) &&\
+	                  snippet_key != NULL);
 	
 	/* Check if there is a snippet with the same key */
 	for (iter = g_list_first (snippets_group->priv->snippets); iter != NULL; iter = g_list_next (iter))
@@ -246,7 +249,7 @@ snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
 }
 
 /**
- * snippets_group_get_snippet_list:
+ * snippets_group_get_snippets_list:
  * @snippets_group: A #AnjutaSnippetsGroup object.
  *
  * Gets the snippets in this group.
@@ -255,7 +258,7 @@ snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
  * Returns: A #GList with entries of type #AnjutaSnippet.
  **/
 const GList* 
-snippets_group_get_snippet_list (AnjutaSnippetsGroup* snippets_group)
+snippets_group_get_snippets_list (AnjutaSnippetsGroup* snippets_group)
 {
 	return snippets_group->priv->snippets;
 }

@@ -41,6 +41,9 @@ typedef struct _AnjutaSnippetClass AnjutaSnippetClass;
 struct _AnjutaSnippet
 {
 	GObject parent_instance;
+
+	/* A pointer to an AnjutaSnippetsGroup object. */
+	GObject *parent_snippets_group;
 	
 	/*< private >*/
 	AnjutaSnippetPrivate *priv;

@@ -272,10 +272,13 @@ snippets_manager_parse_native_xml_file (const gchar *snippet_packet_path)
 
 				/* If we have a valid snippet, add it to the snippet group */
 				if (cur_snippet != NULL)
+				{
 					snippets_group_add_snippet (snippets_group, 
 					                            cur_snippet, 
 					                            TRUE);
-
+					cur_snippet->parent_snippets_group = G_OBJECT (snippets_group);
+				}
+				
 				cur_snippet_node = cur_snippet_node->next;
 			}
 			break;
@@ -289,7 +292,7 @@ snippets_manager_parse_native_xml_file (const gchar *snippet_packet_path)
 	/* Uncomment for debugging */
 	/* TODO - delete this when it will be stable */
 	/*
-	const GList* snippets = snippets_group_get_snippet_list (snippets_group);
+	const GList* snippets = snippets_group_get_snippets_list (snippets_group);
 	GList *var_names, *defaults, *globals;
 	gchar *crt_name, *crt_default;
 	int iter, iter2;
@@ -449,7 +452,7 @@ gboolean snippets_manager_parse_variables_xml_file (const gchar* global_vars_pat
 		cur_var_node = cur_var_node->next;
 	}
 	
-	return FALSE;
+	return TRUE;
 }
 
 /**

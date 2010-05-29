@@ -53,6 +53,14 @@ enum
 	SNIPPETS_DB_MODEL_COL_N
 };
 
+enum
+{
+	GLOBAL_VARS_MODEL_COL_NAME = 0,
+	GLOBAL_VARS_MODEL_COL_VALUE,
+	GLOBAL_VARS_MODEL_COL_IS_COMMAND,
+	GLOBAL_VARS_MODEL_COL_N
+};
+
 struct _SnippetsDB
 {
 	GObject object;
@@ -78,43 +86,59 @@ typedef enum
 } FormatType;
 
 
-GType           snippets_db_get_type                (void) G_GNUC_CONST;
-SnippetsDB*     snippets_db_new	                    (AnjutaShell* anjuta_shell);
-gint32          snippets_db_load_file               (SnippetsDB* snippets_db,
-                                                     const gchar* snippet_packet_file_path,
-                                                     gboolean overwrite,
-                                                     GList* conflicting_snippets,
-                                                     FormatType format_type);
-gboolean        snippets_db_save_file               (SnippetsDB* snippets_db,
-                                                     gint32 snippet_packet_loaded_id);
-gboolean        snippets_db_save_all                (SnippetsDB* snippets_db);
-GList*          snippets_db_search                  (SnippetsDB* snippets_db,
-                                                     const gchar* search_string,
-                                                     const gchar* snippet_language,
-                                                     guint16 maximum_results);
-gboolean        snippets_db_add_snippet             (SnippetsDB* snippets_db,
-                                                     AnjutaSnippet* added_snippet,
-                                                     gboolean overwrite);
-AnjutaSnippet*  snippets_db_get_snippet             (SnippetsDB* snippets_db,
-                                                     const gchar* snippet_key);
-gboolean        snippets_db_remove_snippet          (SnippetsDB* snippets_db,
-                                                     const gchar* snippet_key);
-gboolean        snippets_db_add_snippet_group       (SnippetsDB* snippets_db,
-                                                     const gchar* group_name,
-                                                     const gchar* group_description);
-gboolean        snippets_db_remove_snippet_group    (SnippetsDB* snippets_db,
-                                                     const gchar* group_name);	 
-GtkTreeModel*   snippets_db_get_tree_model          (SnippetsDB* snippets_db,
-                                                     const gchar* snippets_language);
-gchar*          snippets_db_get_global_variable     (SnippetsDB* snippets_db,
-                                                     const gchar* variable_name);
-gboolean        snippets_db_has_global_variable     (SnippetsDB* snippets_db,
-                                                     const gchar* variable_name);
-gboolean        snippets_db_add_global_variable     (SnippetsDB* snippets_db,
-                                                     const gchar* variable_name,
-                                                     const gchar* variable_value,
-                                                     gboolean variable_is_global);
+GType                      snippets_db_get_type               (void) G_GNUC_CONST;
+SnippetsDB*                snippets_db_new	                  (AnjutaShell* anjuta_shell);
 
+/* File handling methods */
+gboolean                   snippets_db_load_file              (SnippetsDB* snippets_db,
+                                                               const gchar* snippet_packet_file_path,
+                                                               gboolean overwrite_group,
+                                                               gboolean overwrite_snippets,
+                                                               FormatType format_type);
+gboolean                   snippets_db_save_file              (SnippetsDB* snippets_db,
+                                                               const gchar* snippets_group_name,
+                                                               const gchar* snippet_packet_file_path);
+gboolean                   snippets_db_save_all               (SnippetsDB* snippets_db);
+const GList*               snippets_db_get_unsaved_groups     (SnippetsDB* snippets_db);
+
+/* Searching method (mainly for auto-completion) */
+GList*                     snippets_db_search                 (SnippetsDB* snippets_db,
+                                                               const gchar* search_string,
+                                                               const gchar* snippet_language,
+                                                               guint16 maximum_results);
+
+/* Snippet handling methods */
+gboolean                   snippets_db_add_snippet            (SnippetsDB* snippets_db,
+                                                               AnjutaSnippet* added_snippet,
+                                                               const gchar* group_name,
+                                                               gboolean overwrite);
+const AnjutaSnippet*       snippets_db_get_snippet            (SnippetsDB* snippets_db,
+                                                               const gchar* snippet_key);
+gboolean                   snippets_db_remove_snippet         (SnippetsDB* snippets_db,
+                                                               const gchar* snippet_key);
+
+/* SnippetsGroup handling methods */
+gboolean                   snippets_db_add_snippets_group     (SnippetsDB* snippets_db,
+                                                               AnjutaSnippetsGroup* snippets_group,
+                                                               gboolean overwrite_group,
+                                                               gboolean overwrite_snippets);
+const AnjutaSnippetsGroup* snippets_db_get_snippets_group     (SnippetsDB* snippets_db,
+                                                               const gchar* group_name);
+gboolean                   snippets_db_remove_snippets_group  (SnippetsDB* snippets_db,
+                                                               const gchar* group_name);
+
+/* Global variables handling methods */
+gboolean                   snippets_db_add_global_variable    (SnippetsDB* snippets_db,
+                                                               const gchar* variable_name,
+                                                               const gchar* variable_value,
+                                                               gboolean variable_is_shell_command);
+gchar*                     snippets_db_get_global_variable    (SnippetsDB* snippets_db,
+                                                               const gchar* variable_name);
+gboolean                   snippets_db_remove_global_variable (SnippetsDB* snippets_db,
+                                                               const gchar* variable_name);
+gboolean                   snippets_db_has_global_variable    (SnippetsDB* snippets_db,
+                                                               const gchar* variable_name);
+GtkTreeModel*              snippets_db_get_global_vars_model  (SnippetsDB* snippes_db);
 
 G_END_DECLS
 

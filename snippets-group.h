@@ -63,7 +63,7 @@ gboolean              snippets_group_add_snippet       (AnjutaSnippetsGroup* sni
                                                         gboolean overwrite);
 void                  snippets_group_remove_snippet    (AnjutaSnippetsGroup* snippets_group,
                                                         const gchar* snippet_key);
-const GList*          snippets_group_get_snippet_list  (AnjutaSnippetsGroup* snippets_group);
+const GList*          snippets_group_get_snippets_list (AnjutaSnippetsGroup* snippets_group);
 
 G_END_DECLS
 
