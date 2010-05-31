@@ -128,6 +128,48 @@ snippets_group_new (const gchar* snippets_file_path,
 	return snippets_group;
 }
 
+
+const gchar*
+snippets_group_get_name (AnjutaSnippetsGroup* snippets_group)
+{
+	/* Assertions */
+	g_return_val_if_fail (snippets_group != NULL && ANJUTA_IS_SNIPPETS_GROUP (snippets_group),
+	                      NULL);
+
+	return snippets_group->priv->name;
+}
+
+void
+snippets_group_set_name (AnjutaSnippetsGroup* snippets_group,
+                         const gchar* new_group_name)
+{
+	/* Assertions */
+	g_return_if_fail (snippets_group != NULL && ANJUTA_IS_SNIPPETS_GROUP (snippets_group));
+
+	g_free (snippets_group->priv->name);
+	snippets_group->priv->name = g_strdup (new_group_name);
+}
+
+const gchar*
+snippets_group_get_description (AnjutaSnippetsGroup* snippets_group)
+{
+	/* Assertions */
+	g_return_val_if_fail (snippets_group != NULL && ANJUTA_IS_SNIPPETS_GROUP (snippets_group),
+	                      NULL);
+
+	return snippets_group->priv->description;
+}
+
+void snippets_group_set_description (AnjutaSnippetsGroup* snippets_group,
+                                     const gchar* new_group_description)
+{
+	/* Assertions */
+	g_return_if_fail (snippets_group != NULL && ANJUTA_IS_SNIPPETS_GROUP (snippets_group));
+
+	g_free (snippets_group->priv->description);
+	snippets_group->priv->description = g_strdup (new_group_description);
+}
+
 /**
  * snippets_group_add_snippet:
  * @snippets_group: A #AnjutaSnippetsGroup object.
@@ -199,8 +241,10 @@ snippets_group_add_snippet (AnjutaSnippetsGroup* snippets_group,
 		                                                       snippet,
 		                                                       (GCompareFunc)g_ascii_strcasecmp);
 	}
-	
 	g_free (added_snippet_key);
+
+	snippet->parent_snippets_group = G_OBJECT (snippets_group);
+	
 	return TRUE;
 }
 
@@ -230,7 +274,7 @@ snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
 		cur_snippet = (AnjutaSnippet *)iter->data;
 		cur_snippet_key = snippet_get_key (cur_snippet);
 		
-		if (g_strcmp0 (cur_snippet_key, snippet_key))
+		if (!g_strcmp0 (cur_snippet_key, snippet_key))
 		{
 			to_be_deleted_snippet = cur_snippet;
 			g_free (cur_snippet_key);

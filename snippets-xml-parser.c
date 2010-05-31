@@ -276,7 +276,6 @@ snippets_manager_parse_native_xml_file (const gchar *snippet_packet_path)
 					snippets_group_add_snippet (snippets_group, 
 					                            cur_snippet, 
 					                            TRUE);
-					cur_snippet->parent_snippets_group = G_OBJECT (snippets_group);
 				}
 				
 				cur_snippet_node = cur_snippet_node->next;

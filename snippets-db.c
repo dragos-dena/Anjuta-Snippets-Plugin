@@ -52,11 +52,6 @@
  *                 being a #GList with #AnjutaSnippet as entries for the list.
  *                 Important: One should not try to delete anything. The #GTree was constructed
  *                 with destroy functions passed to the #GTree that will free the memory.
- * @snippets_group_format_map: A #GHashTable with strings representing the group name as keys and
- *                             #FormatType entries as values.
- *                             Important: One should not try to delete anything. The #GHashTable was 
- *                             constructed with destroy functions passed to the #GHashTable that will 
- *                             free the memory.
  * @snippet_keys_map: A #GHashTable with strings representing the snippet-key as keys and pointers
  *                    to #AnjutaSnippet objects as values.
  *                    Important: One should not try to delete anything. The #GHashTable was 
@@ -78,7 +73,6 @@ struct _SnippetsDBPrivate
 	GTree* trigger_keys_tree;
 	GTree* keywords_tree;
 
-	GHashTable* snippets_group_format_map;
 	GHashTable* snippet_keys_map;
 	
 	GtkListStore* global_variables;
@@ -263,10 +257,6 @@ snippets_db_init (SnippetsDB *snippets_db)
 	                                                    NULL,
 	                                                    g_free,
 	                                                    (GDestroyNotify)g_list_free);
-	snippets_db->priv->snippets_group_format_map = g_hash_table_new_full (g_str_hash, 
-	                                                                      g_str_equal, 
-	                                                                      g_free, 
-	                                                                      NULL);
 	snippets_db->priv->snippet_keys_map = g_hash_table_new_full (g_str_hash, 
 	                                                             g_str_equal, 
 	                                                             g_free, 
@@ -369,7 +359,17 @@ snippets_db_new (AnjutaShell* anjuta_shell)
  * @overwrite_snippets: If conflicting snippets are found, the old ones will be overwriten.
  * @format_type: A #FormatType with the type of the snippet-packet XML file.
  *
- * Loads the given file in the #SnippetsDB 
+ * Loads the given file in the #SnippetsDB. 
+ * 
+ * If the snippet_packet_file_path doesn't point to a file in the user folder then it will be 
+ * considered as unsaved and the file_path property of the #AnjutaSnippetsGroup will be set to the given
+ * @snippet_packet_file_path. On calling snippets_db_save_file () with snippet_packet_file_path
+ * set to NULL for the resulting group it will first try to give the same file name as the 
+ * one indicated in the @snippet_packet_file_path and if a conflict occurs, it will add a 
+ * sufix to it.
+ *
+ * If the @format_type is not #NATIVE_FORMAT, the #AnjutaSnippetsGroup will be marked
+ * as unsaved, and it will follow the above procedure.
  *
  * Returns: TRUE on success.
  **/
@@ -382,6 +382,8 @@ snippets_db_load_file (SnippetsDB* snippets_db,
 {
 	AnjutaSnippetsGroup *snippets_group = NULL;
 	gboolean success = FALSE;
+	gchar *snippet_packet_file_path_dir = NULL, *user_snippets_folder_dir = NULL;
+	gboolean file_path_in_user_folder = FALSE;
 	
 	/* Assertions */
 	g_return_val_if_fail (snippets_db != NULL &&
@@ -392,8 +394,7 @@ snippets_db_load_file (SnippetsDB* snippets_db,
 	/* Get the AnjutaSnippetsGroup object from the file */
 	snippets_group = snippets_manager_parse_snippets_xml_file (snippet_packet_file_path,
 	                                                           format_type);
-	g_return_val_if_fail (snippets_group != NULL && 
-	                      ANJUTA_IS_SNIPPETS_GROUP (snippets_group), 
+	g_return_val_if_fail (snippets_group != NULL && ANJUTA_IS_SNIPPETS_GROUP (snippets_group), 
 	                      FALSE);
 
 	/* Add the new AnjutaSnippetsGroup to the database */
@@ -401,7 +402,27 @@ snippets_db_load_file (SnippetsDB* snippets_db,
 	                                          snippets_group,
 	                                          overwrite_group,
 	                                          overwrite_snippets);
-	
+	g_object_unref (snippets_group);
+
+	/* If success, we check to see if the new AnjutaSnippetsGroup should be marked as unsaved */
+	snippet_packet_file_path_dir = g_path_get_dirname (snippet_packet_file_path);
+	user_snippets_folder_dir = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DIR, "/", NULL);
+	file_path_in_user_folder = !g_ascii_strncasecmp (snippet_packet_file_path_dir, 
+	                                                 user_snippets_folder_dir, 
+	                                                 sizeof (snippet_packet_file_path_dir));
+	if (success)
+	{
+		/* If it's not the native format or it's not in the user snippets folder we will
+		   consider it unsaved. */
+		if (format_type != NATIVE_FORMAT || !file_path_in_user_folder)
+			snippets_db->priv->unsaved_snippets_groups = g_list_prepend (snippets_db->priv->unsaved_snippets_groups, 
+			                                                             snippets_group);
+
+		snippets_group->file_path = g_strdup (snippet_packet_file_path);
+	}
+	g_free (snippet_packet_file_path_dir);
+	g_free (user_snippets_folder_dir);
+
 	return success;
 }
 
@@ -416,6 +437,8 @@ snippets_db_load_file (SnippetsDB* snippets_db,
  * is not NULL, then it will be saved in the user directory where all snippet-packet files
  * are saved. If the #AnjutaSnippetsGroup was created on runtime and doesn't have a file name
  * the file name will be computed based on the #AnjutaSnippetsGroup first 50 characters. 
+ * The last case may also appear if the user loaded a snippet packet from other format
+ * than the native one.
  *
  * Returns: TRUE on success.
  **/
@@ -448,7 +471,8 @@ snippets_db_save_all (SnippetsDB* snippets_db)
  * snippets_db_search:
  * @snippets_db: A #SnippetsDB object
  * @search_string: A string with the searched content.
- * @snippet_language: The language for which the searching is requested. If NULL, it will search all languages.
+ * @snippet_language: The language for which the searching is requested. If NULL, 
+ *                    it will search all languages.
  * @maximum_results: The maximum results that are to be returned.
  *
  * Searches the #SnippetsDB from the @search_string given. 
@@ -463,6 +487,20 @@ snippets_db_search (SnippetsDB* snippets_db,
 {
 	/* TODO */
 	return NULL;
+}
+
+static void
+add_snippet_to_searching_trees (SnippetsDB *snippets_db,
+                                AnjutaSnippet *snippet)
+{
+	/* TODO */
+}
+
+static void
+remove_snippet_from_searching_trees (SnippetsDB *snippets_db,
+                                     AnjutaSnippet *snippet)
+{
+	/* TODO */
 }
 
 /**
@@ -483,7 +521,44 @@ snippets_db_add_snippet (SnippetsDB* snippets_db,
                          const gchar* group_name,
                          gboolean overwrite)
 {
-	/* TODO */
+	GList *iter = NULL;
+	AnjutaSnippetsGroup *cur_snippets_group = NULL;
+	const gchar *cur_snippets_group_name = NULL;
+	gboolean added_to_group = FALSE;
+		
+	/* Assertions */
+	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
+	                      added_snippet != NULL && ANJUTA_IS_SNIPPET (added_snippet),
+	                      FALSE);
+
+	/* Lookup the AnjutaSnippetsGroup with the given group_name */
+	for (iter = g_list_first (snippets_db->priv->snippets_groups); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_snippets_group = (AnjutaSnippetsGroup *)iter->data;
+		cur_snippets_group_name = snippets_group_get_name (cur_snippets_group);
+
+		/* We found the group */
+		if (!g_strcmp0 (cur_snippets_group_name, group_name))
+		{
+			/* Try to add the snippet to the group */
+			added_to_group = snippets_group_add_snippet (cur_snippets_group, added_snippet, overwrite);
+
+			/* If it was succesfully added, update the internal structures */
+			if (added_to_group)
+			{
+				/* Add to the two GTree's */
+				add_snippet_to_searching_trees (snippets_db, added_snippet);
+
+				/* Add to the Hashtable */
+				g_hash_table_insert (snippets_db->priv->snippet_keys_map,
+				                     snippet_get_key (added_snippet),
+				                     added_snippet);				
+			}
+
+			return added_to_group;
+		}
+	}
+	
 	return FALSE;
 }
 
@@ -500,8 +575,16 @@ const AnjutaSnippet*
 snippets_db_get_snippet (SnippetsDB* snippets_db,
                          const gchar* snippet_key)
 {
-	/* TODO */
-	return NULL;
+	AnjutaSnippet *snippet = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db),
+	                      NULL);
+
+	/* Look up the the snippet in the hashtable */
+	snippet = g_hash_table_lookup (snippets_db->priv->snippet_keys_map, snippet_key);
+
+	return snippet;
 }
 
 /**
@@ -517,8 +600,50 @@ gboolean
 snippets_db_remove_snippet (SnippetsDB* snippets_db,
                             const gchar* snippet_key)
 {
-	/* TODO */
-	return FALSE;
+	AnjutaSnippet *deleted_snippet = NULL;
+	AnjutaSnippetsGroup *deleted_snippet_group = NULL;
+		
+	/* Assertions */
+	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db),
+	                      FALSE);
+
+	/* Get the snippet to be deleted */
+	deleted_snippet = g_hash_table_lookup (snippets_db->priv->snippet_keys_map,
+	                                       snippet_key);
+	g_return_val_if_fail (deleted_snippet != NULL,
+	                      FALSE);
+
+	/* Remove it from the hashtable */
+	g_hash_table_remove (snippets_db->priv->snippet_keys_map,
+	                     snippet_key);
+
+	/* Remove it from the searching tree's */
+	remove_snippet_from_searching_trees (snippets_db, deleted_snippet);
+
+	/* Remove it from the snippets group */
+	deleted_snippet_group = ANJUTA_SNIPPETS_GROUP (deleted_snippet->parent_snippets_group);
+	g_return_val_if_fail (deleted_snippet_group != NULL &&
+	                      ANJUTA_IS_SNIPPETS_GROUP (deleted_snippet_group),
+	                      FALSE);
+	snippets_group_remove_snippet (deleted_snippet_group, snippet_key);
+
+	return TRUE;
+}
+
+static gint
+compare_snippets_groups_by_name (gconstpointer a,
+                                 gconstpointer b)
+{
+	AnjutaSnippetsGroup *group1 = (AnjutaSnippetsGroup *)a;
+	AnjutaSnippetsGroup *group2 = (AnjutaSnippetsGroup *)b;
+
+	/* Assertions */
+	g_return_val_if_fail (group1 != NULL && ANJUTA_IS_SNIPPETS_GROUP (group1) &&
+	                      group2 != NULL && ANJUTA_IS_SNIPPETS_GROUP (group2),
+	                      0);
+
+	return g_strcmp0 (snippets_group_get_name (group1),
+	                  snippets_group_get_name (group2));
 }
 
 /**
@@ -529,7 +654,9 @@ snippets_db_remove_snippet (SnippetsDB* snippets_db,
  *                   be overwriten.
  * @overwrite_snippets: If there will be conflicting snippets, they will be overwriten.
  *
- * Adds an #AnjutaSnippetsGroup to the database, checking for conflicts.
+ * Adds an #AnjutaSnippetsGroup to the database, checking for conflicts. The @snippets_group
+ * passed as argument will have it's reference increased by one. If it isn't needed anymore
+ * it should be unrefed after calling this function.
  *
  * Returns: TRUE on success
  **/
@@ -539,8 +666,100 @@ snippets_db_add_snippets_group (SnippetsDB* snippets_db,
                                 gboolean overwrite_group,
                                 gboolean overwrite_snippets)
 {
-	/* TODO */
-	return FALSE;
+	AnjutaSnippetsGroup *cur_group = NULL;
+	AnjutaSnippet *cur_snippet = NULL, *conflicting_snippet = NULL;
+	GList *iter = NULL, *replaced_node = NULL;
+	const GList *added_snippets = NULL, *c_iter = NULL;
+	const gchar *cur_group_name = NULL;
+	AnjutaSnippetsGroup *replaced_group = NULL;
+	SnippetsDBPrivate *priv = NULL;
+		
+	/* Assertions */
+	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
+	                      snippets_group != NULL && ANJUTA_IS_SNIPPETS_GROUP (snippets_group),
+	                      FALSE);
+
+	/* So lines won't get too big :-) */
+	priv = snippets_db->priv;
+
+	/* Look if there is a group with the same name */
+	cur_group_name = snippets_group_get_name (snippets_group);
+	for (iter = g_list_first (priv->snippets_groups); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_group = (AnjutaSnippetsGroup *)iter->data;
+		cur_group_name = snippets_group_get_name (cur_group);
+		if (!g_strcmp0 (cur_group_name, snippets_group_get_name (snippets_group)))
+		{
+			replaced_group = cur_group;
+			replaced_node = iter;
+			break;
+		} 
+	}
+
+	/* If we found a group with the same name */
+	if (replaced_group)
+	{
+		/* If we should replace the old group */
+		if (overwrite_group)
+		{
+			/* Delete the old group */
+			g_object_unref (cur_group);
+
+			/* Make the node point to the new group */
+			replaced_node->data = snippets_group;
+		}
+		else
+		{
+			g_return_val_if_reached (FALSE);
+		}
+	}
+	/* If we didn't found a group with the same name */
+	else
+	{
+		/* Add the snippets_group to the database keeping sorted the list by the
+		   group name. */
+		   priv->snippets_groups = g_list_insert_sorted (priv->snippets_groups,
+		                                                 snippets_group,
+		                                                 compare_snippets_groups_by_name);
+	}
+
+	/* Check for conflicting snippets */
+	added_snippets = snippets_group_get_snippets_list (snippets_group);
+	for (c_iter = g_list_first ((GList *)added_snippets); c_iter != NULL; c_iter = g_list_next (c_iter))
+	{
+		conflicting_snippet = NULL;
+		cur_snippet = (AnjutaSnippet *)c_iter->data;
+
+		/* Look to see if there is a snippet with the same key in the database */
+		conflicting_snippet = g_hash_table_lookup (priv->snippet_keys_map,
+		                                           snippet_get_key (cur_snippet));
+
+		/* If we found a conflicting snippet */
+		if (conflicting_snippet)
+		{
+			/* If we should replace the old snippet then we remove it from the database */
+			if (overwrite_snippets)
+			{
+				snippets_db_remove_snippet (snippets_db, 
+				                            snippet_get_key (conflicting_snippet));
+			}
+			/* If we should keep the old snippet we remove the current one from the group */
+			else
+			{
+				snippets_group_remove_snippet (snippets_group,
+				                               snippet_get_key (cur_snippet));
+			}
+		}
+
+		/* Add it to the hash-table */
+		g_hash_table_insert (priv->snippet_keys_map, 
+		                     snippet_get_key (cur_snippet),
+		                     cur_snippet);
+	}
+
+	g_object_ref (snippets_group);
+	
+	return TRUE;
 }
 
 /**
@@ -571,7 +790,25 @@ const AnjutaSnippetsGroup*
 snippets_db_get_snippets_group (SnippetsDB* snippets_db,
                                 const gchar* group_name)
 {
-	/* TODO */
+	AnjutaSnippetsGroup *snippets_group = NULL;
+	SnippetsDBPrivate *priv = NULL;
+	GList *iter = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db),
+	                      NULL);
+
+	/* Look up the AnjutaSnippetsGroup object with the name being group_name */
+	priv = snippets_db->priv;
+	for (iter = g_list_first (priv->snippets_groups); iter != NULL; iter = g_list_next (iter))
+	{
+		snippets_group = (AnjutaSnippetsGroup *)iter->data;
+		if (!g_strcmp0 (snippets_group_get_name (snippets_group), group_name))
+		{
+			return snippets_group;
+		}
+	}
+	
 	return NULL;
 }
 
@@ -666,26 +903,49 @@ snippets_db_remove_global_variable (SnippetsDB* snippets_db,
  * Returns: The #GtkTreeModel of the global variables list.
  */
 GtkTreeModel*
-snippets_db_get_global_vars_model (SnippetsDB* snippets_db);
+snippets_db_get_global_vars_model (SnippetsDB* snippets_db)
+{
+	/* Assertions */
+	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db),
+	                      NULL);
+	
+	return GTK_TREE_MODEL (snippets_db->priv->global_variables);
+}
 
 /* GtkTreeModel methods definition */
 static GtkTreeModelFlags 
 snippets_db_get_flags (GtkTreeModel *tree_model)
 {
-	return 0;
+	/* Assertions */
+	g_return_val_if_fail (tree_model != NULL && ANJUTA_IS_SNIPPETS_DB (tree_model),
+	                      (GtkTreeModelFlags)0);
+
+	return GTK_TREE_MODEL_ITERS_PERSIST;
 }
 
 static gint
 snippets_db_get_n_columns (GtkTreeModel *tree_model)
 {
-	return -1;
+	/* Assertions */
+	g_return_val_if_fail (tree_model != NULL && ANJUTA_IS_SNIPPETS_DB (tree_model),
+	                      0);
+
+	return SNIPPETS_DB_MODEL_COL_N;
 }
 
 static GType
 snippets_db_get_column_type (GtkTreeModel *tree_model,
                              gint index)
 {
-	return G_TYPE_NONE;
+	/* Assertions */
+	g_return_val_if_fail (tree_model != NULL && ANJUTA_IS_SNIPPETS_DB (tree_model) &&
+	                      index >= 0 && index < SNIPPETS_DB_MODEL_COL_N,
+	                      G_TYPE_INVALID);
+
+	if (index == 1)
+		return G_TYPE_BOOLEAN;
+	else
+		return G_TYPE_STRING;
 }
 
 static gboolean
@@ -693,14 +953,103 @@ snippets_db_get_iter (GtkTreeModel *tree_model,
                       GtkTreeIter *iter,
                       GtkTreePath *path)
 {
-	return FALSE;
+	SnippetsDB *snippets_db = NULL;
+	AnjutaSnippetsGroup *snippets_group = NULL;
+	GList *snippets_group_node = NULL, *snippet_node = NULL;
+	gint *indices = NULL, depth = 0, db_count = 0, group_count = 0;
+	gpointer parent = NULL, self = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (tree_model != NULL && ANJUTA_IS_SNIPPETS_DB (tree_model) &&
+	                      path != NULL,
+	                      FALSE);
+	snippets_db = ANJUTA_SNIPPETS_DB (snippets_db);
+	
+	/* Get the indices and depth of the path and assert the depth */
+	indices = gtk_tree_path_get_indices (path);
+	depth = gtk_tree_path_get_depth (path);
+	g_return_val_if_fail (depth > 2, FALSE);
+	db_count = indices[0];
+	if (depth == 2)
+		group_count = indices[1];
+
+	/* Get the snippets_group node for the given db_count */
+	snippets_group_node = g_list_nth (snippets_db->priv->snippets_groups, db_count);
+	g_return_val_if_fail (snippets_group_node != NULL,
+	                      FALSE);
+
+	/* If the path points to the SnippetsGroups level */
+	if (depth == 1)
+	{
+		parent = NULL;
+		self = snippets_group_node;
+	}
+	/* If the path points to the Snippets level */
+	else
+	{
+		/* Get the Snippet node */
+		snippets_group = (AnjutaSnippetsGroup *)snippets_group_node->data;
+		g_return_val_if_fail (snippets_group != NULL && ANJUTA_IS_SNIPPETS_GROUP (snippets_group),
+		                      FALSE);
+		snippet_node = g_list_nth ((GList *)snippets_group_get_snippets_list (snippets_group),
+		                           group_count);
+		g_return_val_if_fail (snippet_node != NULL,
+		                      FALSE);
+
+		parent = snippets_group_node;
+		self = snippet_node;
+	}
+	
+	/* Finally complete the iter fields */
+	iter->user_data  = parent;
+	iter->user_data2 = self;
+	iter->user_data3 = NULL;
+	iter->stamp = snippets_db->stamp;
+	
+	return TRUE;
 }
 
 static GtkTreePath*
 snippets_db_get_path (GtkTreeModel *tree_model,
                       GtkTreeIter *iter)
 {
-	return NULL;
+	GtkTreePath *path = NULL;
+	SnippetsDB *snippets_db = NULL;
+	gint count = 0;
+	GList *l_iter = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (tree_model != NULL && ANJUTA_IS_SNIPPETS_DB (tree_model) &&
+	                      iter != NULL && iter->user_data2 != NULL,
+	                      NULL);
+	snippets_db = ANJUTA_SNIPPETS_DB (tree_model);
+
+	/* Make a new GtkTreePath object */
+	path = gtk_tree_path_new ();
+
+	/* Get the first index */
+	l_iter = iter->user_data2;
+	while (l_iter != NULL)
+	{
+		count ++;
+		l_iter = g_list_previous (l_iter);
+	}
+	gtk_tree_path_append_index (path, count);
+	
+	/* If it's a snippet node, then it has a parent */
+	if (iter->user_data != NULL)
+	{
+		l_iter = iter->user_data;
+
+		while (l_iter != NULL)
+		{
+			count ++;
+			l_iter = g_list_previous (l_iter);
+		}
+		gtk_tree_path_append_index (path, count);
+	}
+
+	return path;
 }
 
 static void
@@ -709,14 +1058,98 @@ snippets_db_get_value (GtkTreeModel *tree_model,
                        gint column,
                        GValue *value)
 {
+	SnippetsDB *snippets_db = NULL;
+	AnjutaSnippet *snippet = NULL;
+	AnjutaSnippetsGroup *snippets_group = NULL;
+	GList *node = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (tree_model != NULL && ANJUTA_IS_SNIPPETS_DB (tree_model) &&
+	                  iter != NULL && iter->user_data2 != NULL &&
+	                  column >= 0 && column < SNIPPETS_DB_MODEL_COL_N);
 
+	/* Initializations */
+	g_value_init (value, snippets_db_get_column_type (tree_model, column));
+	snippets_db = ANJUTA_SNIPPETS_DB (tree_model);
+
+	/* Get the data in the node */
+	node = (GList *)iter->user_data2;
+	if (iter->user_data == NULL)
+		snippet = (AnjutaSnippet *)node->data;
+	else
+		snippets_group = (AnjutaSnippetsGroup *)node->data;
+
+	/* Fill value based on column */
+	switch (column)
+	{
+		case SNIPPETS_DB_MODEL_COL_NAME:
+			if (snippet)
+				g_value_set_static_string (value, snippet_get_name (snippet));
+			else
+				g_value_set_static_string (value, snippets_group_get_name (snippets_group));
+			break;
+
+		case SNIPPETS_DB_MODEL_COL_IS_SNIPPET:
+			if (snippet)
+				g_value_set_boolean (value, TRUE);
+			else
+				g_value_set_boolean (value, FALSE);
+			break;
+
+		case SNIPPETS_DB_MODEL_COL_DEFAULT_CONTENT:
+			if (snippet)
+				g_value_set_string (value, (gpointer)snippet_get_default_content (snippet));
+			else
+				g_value_set_string (value, NULL);
+			break;
+
+		case SNIPPETS_DB_MODEL_COL_LANG:
+			if (snippet)
+				g_value_set_static_string (value, snippet_get_language (snippet));
+			else
+				g_value_set_static_string (value, NULL);
+			break;
+
+		case SNIPPETS_DB_MODEL_COL_TRIGGER:
+			if (snippet)
+				g_value_set_static_string (value, snippet_get_trigger_key (snippet));
+			else
+				g_value_set_static_string (value, NULL);
+			break;
+
+		case SNIPPETS_DB_MODEL_COL_SNIPPET_KEY:
+			if (snippet)
+				g_value_set_string (value, snippet_get_key (snippet));
+			else
+				g_value_set_string (value, NULL);
+			break;
+	}
+	
 }
 
 static gboolean
 snippets_db_iter_next (GtkTreeModel *tree_model,
                        GtkTreeIter *iter)
 {
-	return FALSE;
+	GList *l_iter = NULL;
+	SnippetsDB* snippets_db = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (tree_model != NULL && ANJUTA_IS_SNIPPETS_DB (tree_model) &&
+	                      iter != NULL && iter->user_data2 != NULL,
+	                      FALSE);
+	snippets_db = ANJUTA_SNIPPETS_DB (tree_model);
+
+	/* Check if the stamp is correct */
+	g_return_val_if_fail (snippets_db->stamp == iter->stamp,
+	                      FALSE);
+
+	/* Update the iter */
+	l_iter = (GList *)iter->user_data2;
+	l_iter = g_list_next (l_iter);
+	iter->user_data2 = l_iter;
+
+	return TRUE;
 }
 
 static gboolean
@@ -724,21 +1157,97 @@ snippets_db_iter_children (GtkTreeModel *tree_model,
                            GtkTreeIter *iter,
                            GtkTreeIter *parent)
 {
-	return FALSE;
+	GList *node_parent = NULL, *node_self = NULL;
+	AnjutaSnippetsGroup *snippets_group = NULL;
+	SnippetsDB *snippets_db = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (tree_model != NULL && ANJUTA_IS_SNIPPETS_DB (tree_model),
+	                      FALSE);
+	snippets_db = ANJUTA_SNIPPETS_DB (tree_model);
+	
+	/* Get the first node of the SnippetsGroup list */
+	if (parent == NULL)
+	{
+		node_parent = NULL;
+		node_self = snippets_db->priv->snippets_groups;
+	}
+
+	/* If it's a Snippets Group node */
+	if (parent->user_data == NULL)
+	{
+		/* Get the snippets_group object and assert it */
+		snippets_group = (AnjutaSnippetsGroup *)parent->user_data2;
+		g_return_val_if_fail (snippets_group != NULL &&
+		                      ANJUTA_IS_SNIPPETS_GROUP (snippets_group) &&
+		                      snippets_db->stamp == parent->stamp,
+		                      FALSE);
+
+		/* Get the first snippet of the snippets_group object */
+		node_self = (GList *)snippets_group_get_snippets_list (snippets_group);		
+		node_parent = parent->user_data2;
+
+	}
+
+	/* If it's a Snippet node */
+	if (parent->user_data != NULL)
+		return FALSE;
+
+	/* Fill the iter structure */
+	iter->user_data  = node_parent;
+	iter->user_data2 = node_self;
+	iter->user_data3 = NULL;
+	iter->stamp      = snippets_db->stamp;
+
+	return TRUE;
 }
 
 static gboolean
 snippets_db_iter_has_child (GtkTreeModel *tree_model,
                             GtkTreeIter  *iter)
 {
-	return FALSE;
+	/* Assertions */
+	g_return_val_if_fail (tree_model != NULL && ANJUTA_IS_SNIPPETS_DB (tree_model) &&
+	                      iter != NULL && iter->user_data2 != NULL,
+	                      FALSE);
+
+	/* If the parent field is NULL then it's the 1st level so it has children */
+	return iter->user_data == NULL;
 }
 
 static gint
 snippets_db_iter_n_children (GtkTreeModel *tree_model,
                              GtkTreeIter *iter)
 {
-	return -1;
+	const GList* snippets_list = NULL;
+	SnippetsDB *snippets_db = NULL;
+	AnjutaSnippetsGroup *snippets_group = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (tree_model != NULL && ANJUTA_IS_SNIPPETS_DB (tree_model),
+	                      -1);
+	snippets_db = ANJUTA_SNIPPETS_DB (tree_model);
+	
+	/* If a top-level count is requested */
+	if (iter == NULL)
+	{
+		return (gint)g_list_length (snippets_db->priv->snippets_groups);
+	}
+
+	/* If iter points to a SnippetsGroup node */
+	if (iter->user_data == NULL)
+	{
+		/* Get the Snippets Group object and assert it */
+		snippets_group = ANJUTA_SNIPPETS_GROUP (iter->user_data2);
+		g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group),
+		                      -1);
+
+		snippets_list = snippets_group_get_snippets_list (snippets_group);
+		return (gint)g_list_length ((GList *)snippets_list);
+	}
+
+	/* If iter points to a Snippet node than it has no children. */
+	return 0;
 }
 
 static gboolean
@@ -747,6 +1256,52 @@ snippets_db_iter_nth_child (GtkTreeModel *tree_model,
                             GtkTreeIter *parent,
                             gint n)
 {
+	SnippetsDB *snippets_db = NULL;
+	AnjutaSnippetsGroup *snippets_group = NULL;
+	GList *node_parent = NULL, *node_self = NULL;
+	const GList *snippets_list = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (tree_model != NULL && ANJUTA_IS_SNIPPETS_DB (tree_model),
+	                      FALSE);
+	snippets_db = ANJUTA_SNIPPETS_DB (snippets_db);
+
+	/* If it's a top level request */
+	if (parent == NULL)
+	{
+		node_parent = NULL;
+		node_self = g_list_nth (snippets_db->priv->snippets_groups, n);
+		if (node_self == NULL)
+			return FALSE;
+	}
+
+	g_return_val_if_fail (parent != NULL && parent->user_data2 != NULL,
+	                      FALSE);
+	/* If it's a SnippetsGroup Node */
+	if (parent->user_data == NULL)
+	{
+		node_parent = (GList *)parent->user_data2;
+		snippets_group = (AnjutaSnippetsGroup *)node_parent->data;
+		g_return_val_if_fail (snippets_group != NULL && 
+		                      ANJUTA_IS_SNIPPETS_DB (snippets_group),
+		                      FALSE);
+		
+		snippets_list = snippets_group_get_snippets_list (snippets_group);
+		node_self = g_list_nth ((GList *)snippets_list, n);
+	}
+
+	/* If it's a Snippet node. No children. We could of skipped this check. */
+	if (parent->user_data != NULL)
+	{
+		return FALSE;
+	}
+
+	/* Fill the iter fields */
+	iter->user_data  = node_parent;
+	iter->user_data2 = node_self;
+	iter->user_data3 = NULL;
+	iter->stamp      = snippets_db->stamp;
+	
 	return FALSE;
 }
 
@@ -755,5 +1310,19 @@ snippets_db_iter_parent (GtkTreeModel *tree_model,
                          GtkTreeIter *iter,
                          GtkTreeIter *child)
 {
-	return FALSE;
+	SnippetsDB *snippets_db = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (tree_model != NULL && ANJUTA_IS_SNIPPETS_DB (tree_model) &&
+	                      child != NULL && child->user_data != NULL,
+	                      FALSE);
+	snippets_db = ANJUTA_SNIPPETS_DB (tree_model);
+	
+	/* Fill the iter fields */
+	iter->user_data  = NULL;
+	iter->user_data2 = child->user_data;
+	iter->user_data3 = NULL;
+	iter->stamp      = snippets_db->stamp;
+
+	return TRUE;
 }
