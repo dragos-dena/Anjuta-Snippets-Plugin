@@ -450,7 +450,7 @@ gboolean snippets_manager_parse_variables_xml_file (const gchar* global_vars_pat
 		
 		cur_var_node = cur_var_node->next;
 	}
-	
+
 	return TRUE;
 }
 

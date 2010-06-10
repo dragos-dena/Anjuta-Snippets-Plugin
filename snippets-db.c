@@ -23,6 +23,8 @@
 #include "snippets-xml-parser.h"
 #include <libanjuta/anjuta-utils.h>
 #include <libanjuta/anjuta-debug.h>
+#include <libanjuta/interfaces/ianjuta-document-manager.h>
+#include <libanjuta/interfaces/ianjuta-document.h>
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <gtk/gtk.h>
@@ -33,6 +35,13 @@
 #define DEFAULT_GLOBAL_VARS_INSTALL_PATH   PACKAGE_DATA_DIR"/"DEFAULT_GLOBAL_VARS_FILE
 #define USER_SNIPPETS_DB_DIR               "snippets-database"
 #define USER_SNIPPETS_DIR                  "snippets-database/snippet-packages"
+
+/* Internal global variables */
+#define GLOBAL_VAR_FILE_NAME       "filename"
+#define GLOBAL_VAR_USER_NAME       "username"
+#define GLOBAL_VAR_USER_FULL_NAME  "userfullname"
+#define GLOBAL_VAR_HOST_NAME       "hostname"
+
 
 #define ANJUTA_SNIPPETS_DB_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ANJUTA_TYPE_SNIPPETS_DB, SnippetsDBPrivate))
 
@@ -134,41 +143,145 @@ static gboolean          snippets_db_iter_parent     (GtkTreeModel *tree_model,
                                                       GtkTreeIter *child);
 
 
-static GObjectClass *snippets_db_parent_class = NULL;
+G_DEFINE_TYPE_WITH_CODE (SnippetsDB, snippets_db, G_TYPE_OBJECT,
+                         G_IMPLEMENT_INTERFACE (GTK_TYPE_TREE_MODEL,
+                                                snippets_db_tree_model_init));
 
-GType
-snippets_db_get_type (void)
+/* SnippetsDB private methods */
+
+static void
+snippets_db_load_internal_global_variables (SnippetsDB *snippets_db)
 {
-  static GType snippets_db_type = 0;
+	GtkTreeIter iter_added;
+	GtkListStore *global_vars_store = NULL;
 
-	if (snippets_db_type == 0)
+	/* Assertions */
+	g_return_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
+	                  snippets_db->priv != NULL && snippets_db->priv->global_variables != NULL &&
+	                  GTK_IS_LIST_STORE (snippets_db->priv->global_variables));
+	global_vars_store = snippets_db->priv->global_variables;
+
+	/* Add the filename global variable */
+	gtk_list_store_prepend (global_vars_store, &iter_added);
+	gtk_list_store_set (global_vars_store, &iter_added,
+	                    GLOBAL_VARS_MODEL_COL_NAME, GLOBAL_VAR_FILE_NAME,
+	                    GLOBAL_VARS_MODEL_COL_VALUE, "",
+	                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, FALSE,
+	                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, TRUE,
+	                    -1);
+
+	/* Add the username global variable */
+	gtk_list_store_prepend (global_vars_store, &iter_added);
+	gtk_list_store_set (global_vars_store, &iter_added,
+	                    GLOBAL_VARS_MODEL_COL_NAME, GLOBAL_VAR_USER_NAME,
+	                    GLOBAL_VARS_MODEL_COL_VALUE, "",
+	                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, FALSE,
+	                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, TRUE,
+	                    -1);
+
+	/* Add the userfullname global variable */
+	gtk_list_store_prepend (global_vars_store, &iter_added);
+	gtk_list_store_set (global_vars_store, &iter_added,
+	                    GLOBAL_VARS_MODEL_COL_NAME, GLOBAL_VAR_USER_FULL_NAME,
+	                    GLOBAL_VARS_MODEL_COL_VALUE, "",
+	                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, FALSE,
+	                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, TRUE,
+	                    -1);
+
+	/* Add the hostname global variable*/
+	gtk_list_store_prepend (global_vars_store, &iter_added);
+	gtk_list_store_set (global_vars_store, &iter_added,
+	                    GLOBAL_VARS_MODEL_COL_NAME, GLOBAL_VAR_HOST_NAME,
+	                    GLOBAL_VARS_MODEL_COL_VALUE, "",
+	                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, FALSE,
+	                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, TRUE,
+	                    -1);
+}
+
+static gchar*
+get_internal_global_variable_value (AnjutaShell *shell,
+                                    const gchar* variable_name)
+{
+	gchar* value = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (variable_name != NULL, NULL);
+
+	/* Check manually what variable is requested */
+	if (!g_strcmp0 (variable_name, GLOBAL_VAR_FILE_NAME))
 	{
-		static const GTypeInfo snippets_db_info =
-		{
-			sizeof (SnippetsDBClass),
-			NULL,                                         /* base_init */
-			NULL,                                         /* base_finalize */
-			(GClassInitFunc) snippets_db_class_init,
-			NULL,                                         /* class finalize */
-			NULL,                                         /* class_data */
-			sizeof (SnippetsDB),
-			0,                                            /* n_preallocs */
-			(GInstanceInitFunc) snippets_db_init
-		};
-		static const GInterfaceInfo tree_model_info =
-		{
-			(GInterfaceInitFunc) snippets_db_tree_model_init,
-			NULL,
-			NULL
-		};
+		IAnjutaDocumentManager *anjuta_docman = NULL;
+		IAnjutaDocument *anjuta_cur_doc = NULL;
 
-		snippets_db_type = g_type_register_static (G_TYPE_OBJECT, "SnippetsDB",
-		                                           &snippets_db_info, (GTypeFlags)0);
-
-		g_type_add_interface_static (snippets_db_type, GTK_TYPE_TREE_MODEL, &tree_model_info);
+		anjuta_docman = anjuta_shell_get_interface (shell,
+		                                            IAnjutaDocumentManager,
+		                                            NULL);
+		if (anjuta_docman)
+		{
+			anjuta_cur_doc = ianjuta_document_manager_get_current_document (anjuta_docman, NULL);
+			if (!anjuta_cur_doc)
+				return NULL;
+			value = g_strdup (ianjuta_document_get_filename (anjuta_cur_doc, NULL));
+			return value;
+		}
+		else
+			g_return_val_if_reached (NULL);
 	}
+	if (!g_strcmp0 (variable_name, GLOBAL_VAR_USER_NAME))
+	{
+		value = g_strdup (g_get_user_name ());
+		return value;
+	}
+	if (!g_strcmp0 (variable_name, GLOBAL_VAR_USER_FULL_NAME))
+	{
+		value = g_strdup (g_get_real_name ());
+		return value;
+	}
+	if (!g_strcmp0 (variable_name, GLOBAL_VAR_HOST_NAME))
+	{
+		value = g_strdup (g_get_host_name ());
+		return value;
+	}
+	
+	return NULL;
+}
 
-	return snippets_db_type;
+static gint
+trigger_keys_tree_compare_func (gconstpointer a,
+                                gconstpointer b,
+                                gpointer user_data)
+{
+	gchar* trigger_key1 = (gchar *)a;
+	gchar* trigger_key2 = (gchar *)b;
+
+	return g_ascii_strcasecmp (trigger_key1, trigger_key2);
+}
+
+static gint
+keywords_tree_compare_func (gconstpointer a,
+                            gconstpointer b,
+                            gpointer user_data)
+{
+	gchar* keyword1 = (gchar *)a;
+	gchar* keyword2 = (gchar *)b;
+
+	return g_ascii_strcasecmp (keyword1, keyword2);
+}
+
+static gint
+compare_snippets_groups_by_name (gconstpointer a,
+                                 gconstpointer b)
+{
+	AnjutaSnippetsGroup *group1 = (AnjutaSnippetsGroup *)a;
+	AnjutaSnippetsGroup *group2 = (AnjutaSnippetsGroup *)b;
+
+	/* Assertions */
+	g_return_val_if_fail (group1 != NULL && ANJUTA_IS_SNIPPETS_GROUP (group1) &&
+	                      group2 != NULL && ANJUTA_IS_SNIPPETS_GROUP (group2),
+	                      0);
+
+	return g_strcmp0 (snippets_group_get_name (group1),
+	                  snippets_group_get_name (group2));
 }
 
 static void
@@ -215,28 +328,6 @@ snippets_db_tree_model_init (GtkTreeModelIface *iface)
 	iface->iter_parent     = snippets_db_iter_parent;
 }
 
-static gint
-trigger_keys_tree_compare_func (gconstpointer a,
-                                gconstpointer b,
-                                gpointer user_data)
-{
-	gchar* trigger_key1 = (gchar *)a;
-	gchar* trigger_key2 = (gchar *)b;
-
-	return g_ascii_strcasecmp (trigger_key1, trigger_key2);
-}
-
-static gint
-keywords_tree_compare_func (gconstpointer a,
-                            gconstpointer b,
-                            gpointer user_data)
-{
-	gchar* keyword1 = (gchar *)a;
-	gchar* keyword2 = (gchar *)b;
-
-	return g_ascii_strcasecmp (keyword1, keyword2);
-}
-
 static void
 snippets_db_init (SnippetsDB *snippets_db)
 {
@@ -264,19 +355,21 @@ snippets_db_init (SnippetsDB *snippets_db)
 	snippets_db->priv->global_variables = gtk_list_store_new (GLOBAL_VARS_MODEL_COL_N,
 	                                                          G_TYPE_STRING,
 	                                                          G_TYPE_STRING,
+	                                                          G_TYPE_BOOLEAN,
 	                                                          G_TYPE_BOOLEAN);
 }
 
+/* SnippetsDB public methods */
+
 /**
  * snippets_db_new:
- * @anjuta_shell: A #AnjutaShell object.
  *
  * A new #SnippetDB with snippets loaded from the default folder.
  *
  * Returns: A new #SnippetsDB object.
  **/
 SnippetsDB*	
-snippets_db_new (AnjutaShell* anjuta_shell)
+snippets_db_new ()
 {
 	SnippetsDB* snippets_db = ANJUTA_SNIPPETS_DB (g_object_new (snippets_db_get_type (), NULL));
 	gboolean user_defaults_file_exists = FALSE, user_global_vars_exists = FALSE;
@@ -287,7 +380,7 @@ snippets_db_new (AnjutaShell* anjuta_shell)
 	GFile *installation_defaults_file = NULL, *user_defaults_file = NULL,
 	      *installation_global_vars_file = NULL, *user_global_vars_file = NULL;
 	GDir *user_snippets_dir = NULL;
-
+	
 	/* Check if there is a "snippets-database/snippets" directory */
 	user_snippets_dir_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DIR, "/", NULL);
 	g_mkdir_with_parents (user_snippets_dir_path, 0755);
@@ -314,6 +407,9 @@ snippets_db_new (AnjutaShell* anjuta_shell)
 	user_global_vars = g_strconcat (user_snippets_db_dir_path, "/", DEFAULT_GLOBAL_VARS_FILE, NULL);
 	user_global_vars_exists = g_file_test (user_global_vars, G_FILE_TEST_EXISTS);
 
+	/* Load the internal global variables */
+	snippets_db_load_internal_global_variables (snippets_db);
+	
 	/* If it's not in the user directory, copy from the installation path the default global 
 	   variables file */
 	if (!user_global_vars_exists)
@@ -630,22 +726,6 @@ snippets_db_remove_snippet (SnippetsDB* snippets_db,
 	return TRUE;
 }
 
-static gint
-compare_snippets_groups_by_name (gconstpointer a,
-                                 gconstpointer b)
-{
-	AnjutaSnippetsGroup *group1 = (AnjutaSnippetsGroup *)a;
-	AnjutaSnippetsGroup *group2 = (AnjutaSnippetsGroup *)b;
-
-	/* Assertions */
-	g_return_val_if_fail (group1 != NULL && ANJUTA_IS_SNIPPETS_GROUP (group1) &&
-	                      group2 != NULL && ANJUTA_IS_SNIPPETS_GROUP (group2),
-	                      0);
-
-	return g_strcmp0 (snippets_group_get_name (group1),
-	                  snippets_group_get_name (group2));
-}
-
 /**
  * snippets_db_add_snippets_group:
  * @snippets_db: A #SnippetsDB object
@@ -826,7 +906,74 @@ gchar*
 snippets_db_get_global_variable (SnippetsDB* snippets_db,
                                  const gchar* variable_name)
 {
+	GtkTreeIter iter;
+	GtkListStore *global_vars_store = NULL;
+	gboolean iter_is_set = FALSE, is_command = FALSE, is_internal = FALSE, 
+	         command_success = FALSE;
+	gchar *value = NULL, *command_line = NULL, *command_output = NULL, *command_error = NULL,
+	      *stored_name = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
+	                      snippets_db->priv != NULL && snippets_db->priv->global_variables != NULL &&
+                          GTK_IS_LIST_STORE (snippets_db->priv->global_variables),
+	                      NULL);
+	global_vars_store = snippets_db->priv->global_variables;
+
+	/* Search for the variable */
+	iter_is_set = gtk_tree_model_get_iter_first (GTK_TREE_MODEL (global_vars_store), &iter);
+	while (iter_is_set) 
+	{
+		gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), &iter,
+		                    GLOBAL_VARS_MODEL_COL_NAME, &stored_name, -1);
+
+		/* If we found the name in the database */
+		if (!g_strcmp0 (stored_name, variable_name))
+		{
+			/* Check if it's a command/internal or not */
+			gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), &iter,
+			                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, &is_command, -1);
+			gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), &iter,
+			                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, &is_internal, -1);
+
+			/* If it's internal we call a function defined above to compute the value */
+			if (is_internal)
+			{
+				return get_internal_global_variable_value (snippets_db->anjuta_shell,
+				                                           variable_name);
+			}
+			/* If it's a command we launch that command and return the output */
+			else if (is_command)
+			{
+				gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), &iter,
+				                    GLOBAL_VARS_MODEL_COL_VALUE, &command_line, -1);
+				command_success = g_spawn_command_line_sync (command_line,
+				                                             &command_output,
+				                                             &command_error,
+				                                             NULL,
+				                                             NULL);
+				g_free (command_line);
+				g_free (command_error);
+				if (command_success)
+					return command_output;
+				g_return_val_if_reached (NULL);
+			}
+			/* If it's static just return the value stored */
+			else
+			{
+				gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), &iter,
+				                    GLOBAL_VARS_MODEL_COL_VALUE, &value, -1);
+				return value;
+			
+			}
+			
+			g_free (stored_name);
+		}
+
+		iter_is_set = gtk_tree_model_iter_next (GTK_TREE_MODEL (global_vars_store), &iter);
+	}
 	/* TODO Here I should compute instant variables like the filename */
+
 	return NULL;
 }
 
@@ -843,7 +990,37 @@ gboolean
 snippets_db_has_global_variable (SnippetsDB* snippets_db,
                                  const gchar* variable_name)
 {
+	GtkListStore *global_vars_store = NULL;
+	GtkTreeIter iter;
+	gboolean iter_is_set = FALSE;
+	gchar *stored_name = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
+	                      snippets_db->priv != NULL && snippets_db->priv->global_variables != NULL &&
+	                      GTK_IS_LIST_STORE (snippets_db->priv->global_variables) &&
+	                      variable_name != NULL,
+	                      FALSE);
+	global_vars_store = snippets_db->priv->global_variables;
+	
+	/* Iterate over the GtkListStore */
+	iter_is_set = gtk_tree_model_get_iter_first (GTK_TREE_MODEL (global_vars_store), &iter);
+	while (iter_is_set) 
+	{
+		gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), &iter,
+		                    GLOBAL_VARS_MODEL_COL_NAME, &stored_name, -1);
 
+		/* If we found the name in the database */
+		if (!g_strcmp0 (stored_name, variable_name))
+		{
+			g_free (stored_name);
+			return TRUE;
+		}
+
+		iter_is_set = gtk_tree_model_iter_next (GTK_TREE_MODEL (global_vars_store), &iter);
+		g_free (stored_name);
+	}
+	
 	return FALSE;
 }
 
@@ -852,7 +1029,7 @@ snippets_db_has_global_variable (SnippetsDB* snippets_db,
  * @snippets_db: A #SnippetsDB object.
  * @variable_name: A variable name.
  * @variable_value: The global variable value.
- * @variable_is_shell_command: If the variable is the output of a shell command.
+ * @variable_is_command: If the variable is the output of a command.
  *
  * Adds a global variable to the Snippets Database.
  *
@@ -862,15 +1039,27 @@ gboolean
 snippets_db_add_global_variable (SnippetsDB* snippets_db,
                                  const gchar* variable_name,
                                  const gchar* variable_value,
-                                 gboolean variable_is_shell_command)
+                                 gboolean variable_is_command)
 {
-	/* Debugging TODO - delete this when stable */
-	/*printf ("\n+++ Debugging Global Variable +++\n");
-	printf ("Global Variable Name: %s\n", variable_name);
-	printf ("Global Variable Is Command (1 for true): %d\n", variable_is_shell_command);
-	printf ("Global Variable Value: %s\n", variable_value);
-	*//* Debugging end */
-	
+	GtkTreeIter iter_to_add;
+	GtkListStore *global_vars_store = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
+	                      snippets_db->priv != NULL && snippets_db->priv->global_variables != NULL &&
+	                      GTK_IS_LIST_STORE (snippets_db->priv->global_variables) &&
+	                      variable_name != NULL && variable_value != NULL,
+	                      FALSE);
+	global_vars_store = snippets_db->priv->global_variables;
+
+	/* Add the the global_vars_store */
+	gtk_list_store_prepend (global_vars_store, &iter_to_add);
+	gtk_list_store_set (global_vars_store, &iter_to_add,
+	                    GLOBAL_VARS_MODEL_COL_NAME, variable_name,
+	                    GLOBAL_VARS_MODEL_COL_VALUE, variable_value,
+	                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, variable_is_command,
+	                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, FALSE,
+	                    -1);
 	return FALSE;
 }
 
@@ -906,7 +1095,9 @@ GtkTreeModel*
 snippets_db_get_global_vars_model (SnippetsDB* snippets_db)
 {
 	/* Assertions */
-	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db),
+	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
+	                      snippets_db->priv != NULL && snippets_db->priv->global_variables != NULL &&
+	                      GTK_IS_LIST_STORE (snippets_db->priv->global_variables),
 	                      NULL);
 	
 	return GTK_TREE_MODEL (snippets_db->priv->global_variables);
@@ -957,7 +1148,7 @@ snippets_db_get_iter (GtkTreeModel *tree_model,
 	AnjutaSnippetsGroup *snippets_group = NULL;
 	GList *snippets_group_node = NULL, *snippet_node = NULL;
 	gint *indices = NULL, depth = 0, db_count = 0, group_count = 0;
-	gpointer parent = NULL, self = NULL;
+	gpointer parent_node = NULL, own_node = NULL;
 	
 	/* Assertions */
 	g_return_val_if_fail (tree_model != NULL && ANJUTA_IS_SNIPPETS_DB (tree_model) &&
@@ -981,8 +1172,8 @@ snippets_db_get_iter (GtkTreeModel *tree_model,
 	/* If the path points to the SnippetsGroups level */
 	if (depth == 1)
 	{
-		parent = NULL;
-		self = snippets_group_node;
+		parent_node = NULL;
+		own_node = snippets_group_node;
 	}
 	/* If the path points to the Snippets level */
 	else
@@ -996,13 +1187,13 @@ snippets_db_get_iter (GtkTreeModel *tree_model,
 		g_return_val_if_fail (snippet_node != NULL,
 		                      FALSE);
 
-		parent = snippets_group_node;
-		self = snippet_node;
+		parent_node = snippets_group_node;
+		own_node = snippet_node;
 	}
 	
 	/* Finally complete the iter fields */
-	iter->user_data  = parent;
-	iter->user_data2 = self;
+	iter->user_data  = parent_node;
+	iter->user_data2 = own_node;
 	iter->user_data3 = NULL;
 	iter->stamp = snippets_db->stamp;
 	
@@ -1157,7 +1348,7 @@ snippets_db_iter_children (GtkTreeModel *tree_model,
                            GtkTreeIter *iter,
                            GtkTreeIter *parent)
 {
-	GList *node_parent = NULL, *node_self = NULL;
+	GList *parent_node = NULL, *own_node = NULL;
 	AnjutaSnippetsGroup *snippets_group = NULL;
 	SnippetsDB *snippets_db = NULL;
 	
@@ -1169,8 +1360,8 @@ snippets_db_iter_children (GtkTreeModel *tree_model,
 	/* Get the first node of the SnippetsGroup list */
 	if (parent == NULL)
 	{
-		node_parent = NULL;
-		node_self = snippets_db->priv->snippets_groups;
+		parent_node = NULL;
+		own_node = snippets_db->priv->snippets_groups;
 	}
 
 	/* If it's a Snippets Group node */
@@ -1184,8 +1375,8 @@ snippets_db_iter_children (GtkTreeModel *tree_model,
 		                      FALSE);
 
 		/* Get the first snippet of the snippets_group object */
-		node_self = (GList *)snippets_group_get_snippets_list (snippets_group);		
-		node_parent = parent->user_data2;
+		own_node = (GList *)snippets_group_get_snippets_list (snippets_group);		
+		parent_node = parent->user_data2;
 
 	}
 
@@ -1194,8 +1385,8 @@ snippets_db_iter_children (GtkTreeModel *tree_model,
 		return FALSE;
 
 	/* Fill the iter structure */
-	iter->user_data  = node_parent;
-	iter->user_data2 = node_self;
+	iter->user_data  = parent_node;
+	iter->user_data2 = own_node;
 	iter->user_data3 = NULL;
 	iter->stamp      = snippets_db->stamp;
 
@@ -1258,7 +1449,7 @@ snippets_db_iter_nth_child (GtkTreeModel *tree_model,
 {
 	SnippetsDB *snippets_db = NULL;
 	AnjutaSnippetsGroup *snippets_group = NULL;
-	GList *node_parent = NULL, *node_self = NULL;
+	GList *parent_node = NULL, *own_node = NULL;
 	const GList *snippets_list = NULL;
 
 	/* Assertions */
@@ -1269,9 +1460,9 @@ snippets_db_iter_nth_child (GtkTreeModel *tree_model,
 	/* If it's a top level request */
 	if (parent == NULL)
 	{
-		node_parent = NULL;
-		node_self = g_list_nth (snippets_db->priv->snippets_groups, n);
-		if (node_self == NULL)
+		parent_node = NULL;
+		own_node = g_list_nth (snippets_db->priv->snippets_groups, n);
+		if (own_node == NULL)
 			return FALSE;
 	}
 
@@ -1280,14 +1471,14 @@ snippets_db_iter_nth_child (GtkTreeModel *tree_model,
 	/* If it's a SnippetsGroup Node */
 	if (parent->user_data == NULL)
 	{
-		node_parent = (GList *)parent->user_data2;
-		snippets_group = (AnjutaSnippetsGroup *)node_parent->data;
+		parent_node = (GList *)parent->user_data2;
+		snippets_group = (AnjutaSnippetsGroup *)parent_node->data;
 		g_return_val_if_fail (snippets_group != NULL && 
 		                      ANJUTA_IS_SNIPPETS_DB (snippets_group),
 		                      FALSE);
 		
 		snippets_list = snippets_group_get_snippets_list (snippets_group);
-		node_self = g_list_nth ((GList *)snippets_list, n);
+		own_node = g_list_nth ((GList *)snippets_list, n);
 	}
 
 	/* If it's a Snippet node. No children. We could of skipped this check. */
@@ -1297,8 +1488,8 @@ snippets_db_iter_nth_child (GtkTreeModel *tree_model,
 	}
 
 	/* Fill the iter fields */
-	iter->user_data  = node_parent;
-	iter->user_data2 = node_self;
+	iter->user_data  = parent_node;
+	iter->user_data2 = own_node;
 	iter->user_data3 = NULL;
 	iter->stamp      = snippets_db->stamp;
 	

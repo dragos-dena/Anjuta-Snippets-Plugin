@@ -1,10 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <anjuta-global-variables>
-	<global-variable name="username" is_command="true" ><![CDATA[whoami]]></global-variable>
-
-	<global-variable name="userfullname" is_command="true"><![CDATA[getent passwd $(whoami) | cut -d ':' -f 5 | cut -d ',' -f 1]]></global-variable>
-	
-	<global-variable name="hostname" is_command="true" ><![CDATA[hostname]]></global-variable>
 
 	<global-variable name="date" is_command="true" ><![CDATA[date +"%B %e, %Y"]]></global-variable>
 
@@ -14,6 +9,6 @@
 
 	<global-variable name="year" is_command="true" ><![CDATA[date +%Y]]></global-variable>
 
-	<global-variable name="email" is_command="true"><![CDATA[echo "$(whoami)@$(hostname)"]]></global-variable>
+	<global-variable name="email" is_command="false"><![CDATA[user@host]]></global-variable>
 
 </anjuta-global-variables>

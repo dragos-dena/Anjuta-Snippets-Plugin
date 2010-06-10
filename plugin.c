@@ -47,6 +47,15 @@ snippet_insert (SnippetsManagerPlugin * plugin, const gchar *keyword)
 static gboolean
 snippets_manager_activate (AnjutaPlugin * plugin)
 {
+	SnippetsManagerPlugin *snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
+
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (snippets_manager_plugin),
+	                      FALSE);
+
+	/* Link the AnjutaShell to the SnippetsDB */
+	snippets_manager_plugin->snippets_db->anjuta_shell = plugin->shell;
+
 	DEBUG_PRINT ("%s", "SnippetsManager: Activating SnippetsManager plugin ...");
 
 	return TRUE;
@@ -55,6 +64,8 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 static gboolean
 snippets_manager_deactivate (AnjutaPlugin * plugin)
 {
+	SnippetsManagerPlugin *snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
+
 	DEBUG_PRINT ("%s", "SnippetsManager: Deactivating SnippetsManager plugin ...");	
 	return TRUE;
 }
@@ -105,12 +116,13 @@ snippets_manager_plugin_instance_init (GObject * obj)
 	
 	snippets_manager->overwrite_on_conflict = FALSE;
 	snippets_manager->show_only_document_language_snippets = FALSE;
-	
+
 	/* TODO */
-	snippets_manager->snippets_db = snippets_db_new (ANJUTA_PLUGIN (snippets_manager)->shell);
+	snippets_manager->snippets_db = snippets_db_new ();
 	snippets_manager->snippet_interpreter = NULL;
 	snippets_manager->snippet_browser = NULL;
 	snippets_manager->snippet_editor = NULL;
+
 }
 
 static void

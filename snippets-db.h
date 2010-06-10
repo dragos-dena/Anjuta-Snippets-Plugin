@@ -58,6 +58,7 @@ enum
 	GLOBAL_VARS_MODEL_COL_NAME = 0,
 	GLOBAL_VARS_MODEL_COL_VALUE,
 	GLOBAL_VARS_MODEL_COL_IS_COMMAND,
+	GLOBAL_VARS_MODEL_COL_IS_INTERNAL,
 	GLOBAL_VARS_MODEL_COL_N
 };
 
@@ -87,7 +88,7 @@ typedef enum
 
 
 GType                      snippets_db_get_type               (void) G_GNUC_CONST;
-SnippetsDB*                snippets_db_new	                  (AnjutaShell* anjuta_shell);
+SnippetsDB*                snippets_db_new	                  (void);
 
 /* File handling methods */
 gboolean                   snippets_db_load_file              (SnippetsDB* snippets_db,
@@ -131,7 +132,7 @@ gboolean                   snippets_db_remove_snippets_group  (SnippetsDB* snipp
 gboolean                   snippets_db_add_global_variable    (SnippetsDB* snippets_db,
                                                                const gchar* variable_name,
                                                                const gchar* variable_value,
-                                                               gboolean variable_is_shell_command);
+                                                               gboolean variable_is_command);
 gchar*                     snippets_db_get_global_variable    (SnippetsDB* snippets_db,
                                                                const gchar* variable_name);
 gboolean                   snippets_db_remove_global_variable (SnippetsDB* snippets_db,
