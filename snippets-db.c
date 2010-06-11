@@ -246,6 +246,39 @@ get_internal_global_variable_value (AnjutaShell *shell,
 	return NULL;
 }
 
+static GtkTreeIter*
+get_iter_at_global_variable_name (GtkListStore *global_vars_store,
+                                  const gchar *variable_name)
+{
+	GtkTreeIter iter;
+	gchar *stored_name = NULL;
+	gboolean iter_is_set = FALSE;
+	
+	/* Assertions */
+	g_return_val_if_fail (GTK_IS_LIST_STORE (global_vars_store),
+	                      NULL);
+
+	iter_is_set = gtk_tree_model_get_iter_first (GTK_TREE_MODEL (global_vars_store), &iter);
+	while (iter_is_set) 
+	{
+		gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), &iter,
+		                    GLOBAL_VARS_MODEL_COL_NAME, &stored_name, 
+		                    -1);
+
+		/* If we found the name in the database */
+		if (!g_strcmp0 (stored_name, variable_name) )
+		{
+			g_free (stored_name);
+			return gtk_tree_iter_copy (&iter);
+		}
+
+		iter_is_set = gtk_tree_model_iter_next (GTK_TREE_MODEL (global_vars_store), &iter);
+		g_free (stored_name);
+	}
+	
+	return NULL;
+}
+
 static gint
 trigger_keys_tree_compare_func (gconstpointer a,
                                 gconstpointer b,
@@ -906,12 +939,10 @@ gchar*
 snippets_db_get_global_variable (SnippetsDB* snippets_db,
                                  const gchar* variable_name)
 {
-	GtkTreeIter iter;
+	GtkTreeIter *iter = NULL;
 	GtkListStore *global_vars_store = NULL;
-	gboolean iter_is_set = FALSE, is_command = FALSE, is_internal = FALSE, 
-	         command_success = FALSE;
-	gchar *value = NULL, *command_line = NULL, *command_output = NULL, *command_error = NULL,
-	      *stored_name = NULL;
+	gboolean is_command = FALSE, is_internal = FALSE, command_success = FALSE;
+	gchar *value = NULL, *command_line = NULL, *command_output = NULL, *command_error = NULL;
 	
 	/* Assertions */
 	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
@@ -921,58 +952,50 @@ snippets_db_get_global_variable (SnippetsDB* snippets_db,
 	global_vars_store = snippets_db->priv->global_variables;
 
 	/* Search for the variable */
-	iter_is_set = gtk_tree_model_get_iter_first (GTK_TREE_MODEL (global_vars_store), &iter);
-	while (iter_is_set) 
+	iter = get_iter_at_global_variable_name (global_vars_store, variable_name);
+	if (iter)
 	{
-		gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), &iter,
-		                    GLOBAL_VARS_MODEL_COL_NAME, &stored_name, -1);
+		/* Check if it's a command/internal or not */
+		gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), iter,
+		                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, &is_command, 
+		                    -1);
+		gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), iter,
+		                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, &is_internal, 
+		                    -1);
 
-		/* If we found the name in the database */
-		if (!g_strcmp0 (stored_name, variable_name))
+		/* If it's internal we call a function defined above to compute the value */
+		if (is_internal)
 		{
-			/* Check if it's a command/internal or not */
-			gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), &iter,
-			                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, &is_command, -1);
-			gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), &iter,
-			                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, &is_internal, -1);
-
-			/* If it's internal we call a function defined above to compute the value */
-			if (is_internal)
-			{
-				return get_internal_global_variable_value (snippets_db->anjuta_shell,
-				                                           variable_name);
-			}
-			/* If it's a command we launch that command and return the output */
-			else if (is_command)
-			{
-				gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), &iter,
-				                    GLOBAL_VARS_MODEL_COL_VALUE, &command_line, -1);
-				command_success = g_spawn_command_line_sync (command_line,
-				                                             &command_output,
-				                                             &command_error,
-				                                             NULL,
-				                                             NULL);
-				g_free (command_line);
-				g_free (command_error);
-				if (command_success)
-					return command_output;
-				g_return_val_if_reached (NULL);
-			}
-			/* If it's static just return the value stored */
-			else
-			{
-				gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), &iter,
-				                    GLOBAL_VARS_MODEL_COL_VALUE, &value, -1);
-				return value;
-			
-			}
-			
-			g_free (stored_name);
+			return get_internal_global_variable_value (snippets_db->anjuta_shell,
+			                                           variable_name);
 		}
-
-		iter_is_set = gtk_tree_model_iter_next (GTK_TREE_MODEL (global_vars_store), &iter);
+		/* If it's a command we launch that command and return the output */
+		else if (is_command)
+		{
+			gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), iter,
+			                    GLOBAL_VARS_MODEL_COL_VALUE, &command_line, 
+			                    -1);
+			command_success = g_spawn_command_line_sync (command_line,
+			                                             &command_output,
+			                                             &command_error,
+			                                             NULL,
+			                                             NULL);
+			g_free (command_line);
+			g_free (command_error);
+			if (command_success)
+				return command_output;
+			g_return_val_if_reached (NULL);
+		}
+		/* If it's static just return the value stored */
+		else
+		{
+			gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), iter,
+			                    GLOBAL_VARS_MODEL_COL_VALUE, &value, 
+			                    -1);
+			return value;
+		
+		}		
 	}
-	/* TODO Here I should compute instant variables like the filename */
 
 	return NULL;
 }
@@ -991,9 +1014,8 @@ snippets_db_has_global_variable (SnippetsDB* snippets_db,
                                  const gchar* variable_name)
 {
 	GtkListStore *global_vars_store = NULL;
-	GtkTreeIter iter;
-	gboolean iter_is_set = FALSE;
-	gchar *stored_name = NULL;
+	GtkTreeIter *iter = NULL;
+	gboolean found = FALSE;
 	
 	/* Assertions */
 	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
@@ -1003,25 +1025,13 @@ snippets_db_has_global_variable (SnippetsDB* snippets_db,
 	                      FALSE);
 	global_vars_store = snippets_db->priv->global_variables;
 	
-	/* Iterate over the GtkListStore */
-	iter_is_set = gtk_tree_model_get_iter_first (GTK_TREE_MODEL (global_vars_store), &iter);
-	while (iter_is_set) 
-	{
-		gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), &iter,
-		                    GLOBAL_VARS_MODEL_COL_NAME, &stored_name, -1);
+	/* Locate the variable in the GtkListStore */
+	iter = get_iter_at_global_variable_name (global_vars_store, variable_name);
+	found = (iter != NULL);
+	if (iter)
+		gtk_tree_iter_free (iter);
 
-		/* If we found the name in the database */
-		if (!g_strcmp0 (stored_name, variable_name))
-		{
-			g_free (stored_name);
-			return TRUE;
-		}
-
-		iter_is_set = gtk_tree_model_iter_next (GTK_TREE_MODEL (global_vars_store), &iter);
-		g_free (stored_name);
-	}
-	
-	return FALSE;
+	return found;
 }
 
 /**
@@ -1030,6 +1040,7 @@ snippets_db_has_global_variable (SnippetsDB* snippets_db,
  * @variable_name: A variable name.
  * @variable_value: The global variable value.
  * @variable_is_command: If the variable is the output of a command.
+ * @overwrite: If a global variable with the same name exists, it should be overwriten.
  *
  * Adds a global variable to the Snippets Database.
  *
@@ -1039,10 +1050,12 @@ gboolean
 snippets_db_add_global_variable (SnippetsDB* snippets_db,
                                  const gchar* variable_name,
                                  const gchar* variable_value,
-                                 gboolean variable_is_command)
+                                 gboolean variable_is_command,
+                                 gboolean overwrite)
 {
-	GtkTreeIter iter_to_add;
+	GtkTreeIter *iter = NULL, iter_to_add;
 	GtkListStore *global_vars_store = NULL;
+	gboolean is_internal = FALSE;
 
 	/* Assertions */
 	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
@@ -1052,6 +1065,32 @@ snippets_db_add_global_variable (SnippetsDB* snippets_db,
 	                      FALSE);
 	global_vars_store = snippets_db->priv->global_variables;
 
+	/* Check to see if there is a global variable with the same name in the database */
+	iter = get_iter_at_global_variable_name (global_vars_store, variable_name);
+	if (iter)
+	{
+		gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), iter,
+		                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, 
+		                    -1);
+		/* If it's internal it can't be overwriten */
+		if (overwrite && !is_internal)
+		{
+			gtk_list_store_set (global_vars_store, iter,
+			                    GLOBAL_VARS_MODEL_COL_NAME, variable_name,
+			                    GLOBAL_VARS_MODEL_COL_VALUE, variable_value,
+			                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, variable_is_command,
+			                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, FALSE,
+			                    -1);
+			gtk_tree_iter_free (iter);
+			return TRUE;	
+		}
+		else
+		{
+			gtk_tree_iter_free (iter);
+			return FALSE;
+		}
+	}
+
 	/* Add the the global_vars_store */
 	gtk_list_store_prepend (global_vars_store, &iter_to_add);
 	gtk_list_store_set (global_vars_store, &iter_to_add,
@@ -1060,6 +1099,117 @@ snippets_db_add_global_variable (SnippetsDB* snippets_db,
 	                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, variable_is_command,
 	                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, FALSE,
 	                    -1);
+	return FALSE;
+}
+
+/**
+ * snippets_db_set_global_variable_value:
+ * @snippets_db: A #SnippetsDB value.
+ * @variable_name: The name of the global variable to be updated.
+ * @variable_new_value: The new value to be set to the variable.
+ *
+ * Returns: TRUE on success.
+ */
+gboolean
+snippets_db_set_global_variable_value (SnippetsDB* snippets_db,
+                                       const gchar* variable_name,
+                                       const gchar* variable_new_value)
+{
+	GtkListStore *global_vars_store = NULL;
+	GtkTreeIter *iter = NULL;
+	gboolean is_internal = FALSE;
+	gchar *stored_value = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
+	                      snippets_db->priv != NULL && snippets_db->priv->global_variables != NULL &&
+	                      GTK_IS_LIST_STORE (snippets_db->priv->global_variables) &&
+	                      variable_name != NULL,
+	                      FALSE);
+	global_vars_store = snippets_db->priv->global_variables;
+	/* Get a GtkTreeIter pointing at the global variable to be updated */
+	iter = get_iter_at_global_variable_name (global_vars_store, variable_name);
+	if (iter)
+	{
+		gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), iter,
+		                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, &is_internal,
+		                    -1);
+		gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), iter,
+		                    GLOBAL_VARS_MODEL_COL_VALUE, &stored_value,
+		                    -1);
+		                    
+		if (!is_internal)
+		{
+			gtk_list_store_set (global_vars_store, iter,
+			                    GLOBAL_VARS_MODEL_COL_VALUE, variable_new_value,
+			                    -1);
+			                    
+			g_free (stored_value);
+			gtk_tree_iter_free (iter);
+
+			return TRUE;
+		}
+		else
+		{
+			g_free (stored_value);
+			gtk_tree_iter_free (iter);
+			
+			return FALSE;
+		}
+	}
+
+	return FALSE;
+}
+
+
+/**
+ * snippets_db_set_global_variable_type:
+ * @snippets_db: A #SnippetsDB value.
+ * @variable_name: The name of the global variable to be updated.
+ * @is_command: TRUE if after the update the global variable should be considered a command.
+ *
+ * Returns: TRUE on success.
+ */
+gboolean
+snippets_db_set_global_variable_type (SnippetsDB *snippets_db,
+                                      const gchar* variable_name,
+                                      gboolean is_command)
+{
+	GtkListStore *global_vars_store = NULL;
+	GtkTreeIter *iter = NULL;
+	gboolean is_internal = FALSE;
+
+	/* Assertions */
+	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
+	                      snippets_db->priv != NULL && snippets_db->priv->global_variables != NULL &&
+	                      GTK_IS_LIST_STORE (snippets_db->priv->global_variables) &&
+	                      variable_name != NULL,
+	                      FALSE);
+	global_vars_store = snippets_db->priv->global_variables;
+	
+	/* Get a GtkTreeIter pointing at the global variable to be updated */
+	iter = get_iter_at_global_variable_name (global_vars_store, variable_name);
+	if (iter)
+	{
+		gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), iter,
+		                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, &is_internal,
+		                    -1);
+
+		if (!is_internal)
+		{
+			gtk_list_store_set (global_vars_store, iter,
+			                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, is_command,
+			                    -1);
+			gtk_tree_iter_free (iter);
+			return TRUE;
+		}
+		else
+		{
+			gtk_tree_iter_free (iter);
+			return FALSE;
+		}
+	}
+
 	return FALSE;
 }
 
@@ -1077,7 +1227,39 @@ gboolean
 snippets_db_remove_global_variable (SnippetsDB* snippets_db, 
                                     const gchar* variable_name)
 {
-	/* TODO */
+	GtkListStore *global_vars_store = NULL;
+	GtkTreeIter *iter = NULL;
+	gboolean is_internal = FALSE;
+	
+	/* Assertions */
+	g_return_val_if_fail (snippets_db != NULL && ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
+	                      snippets_db->priv != NULL && snippets_db->priv->global_variables != NULL &&
+	                      GTK_IS_LIST_STORE (snippets_db->priv->global_variables) &&
+	                      variable_name != NULL,
+	                      FALSE);
+	global_vars_store = snippets_db->priv->global_variables;
+	
+	/* Get a GtkTreeIter pointing at the global variable to be removed */
+	iter = get_iter_at_global_variable_name (global_vars_store, variable_name);
+	if (iter)
+	{
+		gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), iter,
+		                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, &is_internal, 
+		                    -1);
+
+		if (!is_internal)
+		{
+			gtk_list_store_remove (global_vars_store, iter);
+			gtk_tree_iter_free (iter);
+			return TRUE;
+		}
+		else
+		{
+			gtk_tree_iter_free (iter);
+			return FALSE;
+		}
+	}
+		
 	return FALSE;
 }
 

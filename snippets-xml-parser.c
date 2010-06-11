@@ -441,7 +441,8 @@ gboolean snippets_manager_parse_variables_xml_file (const gchar* global_vars_pat
 			snippets_db_add_global_variable (snippets_db,
 			                                 cur_var_name,
 			                                 cur_var_content,
-			                                 cur_var_is_command_bool);
+			                                 cur_var_is_command_bool,
+			                                 TRUE);
 			
 		    g_free (cur_var_content);
 		    g_free (cur_var_name);
