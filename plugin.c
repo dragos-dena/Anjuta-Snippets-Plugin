@@ -32,8 +32,16 @@
 #define PREFERENCES_UI	PACKAGE_DATA_DIR"/glade/snippets-manager-preferences.ui"
 #define SNIPPETS_MANAGER_PREFERENCES_ROOT "snippets_preferences_root"
 
+#define GLOBAL_VAR_NEW_NAME   "new_global_var_name"
+#define GLOBAL_VAR_NEW_VALUE  "new_global_var_value"
+
 static gpointer parent_class;
 
+typedef struct _GlobalVariablesUpdateData
+{
+	SnippetsDB *snippets_db;
+	GtkTreeView *global_vars_view;
+} GlobalVariablesUpdateData;
 
 gboolean
 snippet_insert (SnippetsManagerPlugin * plugin, const gchar *keyword)
@@ -417,7 +425,7 @@ set_up_global_variables_view (SnippetsDB *snippets_db,
 	/* Set up the model */
 	gtk_tree_view_set_model (global_vars_view,
 	                         global_vars_model);
-
+	
 	/* Set up the name cell */
 	cell = gtk_cell_renderer_text_new ();
 	col = gtk_tree_view_column_new ();
@@ -482,6 +490,94 @@ set_up_global_variables_view (SnippetsDB *snippets_db,
 }
 
 static void
+on_add_variable_b_clicked (GtkButton *button,
+                           gpointer user_data)
+{
+	GlobalVariablesUpdateData *update_data = (GlobalVariablesUpdateData *)user_data;
+	GtkTreeView *global_vars_view = NULL;
+	GtkTreeModel *global_vars_model = NULL;
+	SnippetsDB *snippets_db = NULL;
+	GtkTreeIter iter;
+	gboolean iter_has_next = TRUE;
+	gchar *name = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (update_data->snippets_db) &&
+	                  GTK_IS_TREE_VIEW (update_data->global_vars_view));
+	snippets_db = ANJUTA_SNIPPETS_DB (update_data->snippets_db);
+	global_vars_view = GTK_TREE_VIEW (update_data->global_vars_view);
+	global_vars_model = snippets_db_get_global_vars_model (snippets_db);
+	
+	/* Insert it into the SnippetsDB */
+	snippets_db_add_global_variable (snippets_db,
+	                                 GLOBAL_VAR_NEW_NAME,
+	                                 GLOBAL_VAR_NEW_VALUE,
+	                                 FALSE, FALSE);
+
+	/* Get to the new inserted variable */
+	iter_has_next = gtk_tree_model_get_iter_first (global_vars_model, &iter);
+	while (iter_has_next)
+	{
+		gtk_tree_model_get (global_vars_model, &iter,
+		                    GLOBAL_VARS_MODEL_COL_NAME, &name,
+		                    -1);
+		if (!g_strcmp0 (name, GLOBAL_VAR_NEW_NAME))
+		{
+			GtkTreePath *path = gtk_tree_model_get_path (global_vars_model, &iter);
+
+			gtk_tree_view_set_cursor (global_vars_view,
+			                          path,
+			                          gtk_tree_view_get_column (global_vars_view, 0),
+			                          TRUE);
+
+			g_free (name);
+			return;
+		}
+
+		g_free (name);
+		iter_has_next = gtk_tree_model_iter_next (global_vars_model, &iter);
+	}
+}
+
+static void
+on_delete_variable_b_clicked (GtkButton *button,
+                              gpointer user_data)
+{
+	GlobalVariablesUpdateData *update_data = (GlobalVariablesUpdateData *)user_data;
+	GtkTreeView *global_vars_view = NULL;
+	GtkTreeModel *global_vars_model = NULL;
+	SnippetsDB *snippets_db = NULL;
+	GtkTreeSelection *global_vars_selection = NULL;
+	gchar *name = NULL;
+	gboolean has_selection = FALSE;
+	GtkTreeIter iter;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (update_data->snippets_db) &&
+	                  GTK_IS_TREE_VIEW (update_data->global_vars_view));
+	snippets_db = ANJUTA_SNIPPETS_DB (update_data->snippets_db);
+	global_vars_view = GTK_TREE_VIEW (update_data->global_vars_view);
+	global_vars_model = snippets_db_get_global_vars_model (snippets_db);
+	global_vars_selection = gtk_tree_view_get_selection (global_vars_view);
+
+	/* Get the selected iter */
+	has_selection = gtk_tree_selection_get_selected (global_vars_selection, 
+	                                                 &global_vars_model, 
+	                                                 &iter);
+	                                                 
+	/* If there is a selection delete the selected item */
+	if (has_selection)
+	{
+		gtk_tree_model_get (global_vars_model, &iter,
+		                    GLOBAL_VARS_MODEL_COL_NAME, &name,
+		                    -1);
+		snippets_db_remove_global_variable (snippets_db, name);
+		g_free (name);
+	
+	}
+}
+
+static void
 ipreferences_merge (IAnjutaPreferences* ipref,
 					AnjutaPreferences* prefs,
 					GError** e)
@@ -493,6 +589,7 @@ ipreferences_merge (IAnjutaPreferences* ipref,
 	GtkCheckButton *overwrite_cb = NULL, *show_only_lang_cb = NULL; 
 	GtkFileChooserButton *default_folder_b = NULL;
 	SnippetsManagerPlugin *snippets_manager_plugin = NULL;
+	GlobalVariablesUpdateData *global_vars_update_data = NULL;
 	
 	/* Assertions */
 	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (ipref);
@@ -531,6 +628,19 @@ ipreferences_merge (IAnjutaPreferences* ipref,
 	/* Set up the Global Variables GtkTreeView */
 	set_up_global_variables_view (snippets_manager_plugin->snippets_db, global_vars_view);
 
+	/* Connect the addition/deletion buttons */
+	global_vars_update_data = g_malloc (sizeof (GlobalVariablesUpdateData));
+	global_vars_update_data->snippets_db = snippets_manager_plugin->snippets_db;
+	global_vars_update_data->global_vars_view = global_vars_view;
+	g_signal_connect (GTK_OBJECT (add_variable_b),
+	                  "clicked",
+	                  GTK_SIGNAL_FUNC (on_add_variable_b_clicked),
+	                  global_vars_update_data);
+	g_signal_connect (GTK_OBJECT (delete_variable_b),
+	                  "clicked",
+	                  GTK_SIGNAL_FUNC (on_delete_variable_b_clicked),
+	                  global_vars_update_data);
+	
 	g_object_unref (bxml);
 }
 

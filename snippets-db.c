@@ -1124,8 +1124,9 @@ snippets_db_add_global_variable (SnippetsDB* snippets_db,
 	if (iter)
 	{
 		gtk_tree_model_get (GTK_TREE_MODEL (global_vars_store), iter,
-		                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, 
+		                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, &is_internal,
 		                    -1);
+
 		/* If it's internal it can't be overwriten */
 		if (overwrite && !is_internal)
 		{
@@ -1144,16 +1145,18 @@ snippets_db_add_global_variable (SnippetsDB* snippets_db,
 			return FALSE;
 		}
 	}
-
-	/* Add the the global_vars_store */
-	gtk_list_store_prepend (global_vars_store, &iter_to_add);
-	gtk_list_store_set (global_vars_store, &iter_to_add,
-	                    GLOBAL_VARS_MODEL_COL_NAME, variable_name,
-	                    GLOBAL_VARS_MODEL_COL_VALUE, variable_value,
-	                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, variable_is_command,
-	                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, FALSE,
-	                    -1);
-	return FALSE;
+	else
+	{
+		/* Add the the global_vars_store */
+		gtk_list_store_append (global_vars_store, &iter_to_add);
+		gtk_list_store_set (global_vars_store, &iter_to_add,
+		                    GLOBAL_VARS_MODEL_COL_NAME, variable_name,
+		                    GLOBAL_VARS_MODEL_COL_VALUE, variable_value,
+		                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, variable_is_command,
+		                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, FALSE,
+		                    -1);
+	}
+	return TRUE;
 }
 
 /**
