@@ -429,7 +429,7 @@ snippet_get_variable_globals_list (AnjutaSnippet* snippet)
  *
  * The content of the snippet without it being proccesed.
  *
- * Returns: The default content of the snippet or NULL if @snippet is invalid.
+ * Returns: The content of the snippet or NULL if @snippet is invalid.
  **/
 const gchar*
 snippet_get_content (AnjutaSnippet* snippet)

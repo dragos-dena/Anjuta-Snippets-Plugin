@@ -134,6 +134,9 @@ gboolean                   snippets_db_add_global_variable       (SnippetsDB* sn
                                                                   const gchar* variable_value,
                                                                   gboolean variable_is_command,
                                                                   gboolean overwrite);
+gboolean                   snippets_db_set_global_variable_name  (SnippetsDB* snippets_db,
+                                                                  const gchar* variable_old_name,
+                                                                  const gchar* variable_new_name);
 gboolean                   snippets_db_set_global_variable_value (SnippetsDB* snippets_db,
                                                                   const gchar* variable_name,
                                                                   const gchar* variable_new_value);
@@ -141,6 +144,8 @@ gboolean                   snippets_db_set_global_variable_type  (SnippetsDB *sn
                                                                   const gchar* variable_name,
                                                                   gboolean is_command);                                                             
 gchar*                     snippets_db_get_global_variable       (SnippetsDB* snippets_db,
+                                                                  const gchar* variable_name);
+gchar*                     snippets_db_get_global_variable_text  (SnippetsDB* snippets_db,
                                                                   const gchar* variable_name);
 gboolean                   snippets_db_remove_global_variable    (SnippetsDB* snippets_db,
                                                                   const gchar* variable_name);

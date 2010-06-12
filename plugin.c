@@ -161,21 +161,377 @@ isnippets_manager_iface_init (IAnjutaSnippetsManagerIface *iface)
 /* IAnjutaPreferences interface */
 
 static void
+on_global_vars_name_changed (GtkCellRendererText *cell,
+                             gchar *path_string,
+                             gchar *new_text,
+                             gpointer user_data)
+{
+	GtkTreeModel *global_vars_model = NULL;
+	SnippetsDB *snippets_db = NULL;
+	GtkTreePath *path = NULL;
+	GtkTreeIter iter;
+	gchar *name = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (user_data));
+	snippets_db = ANJUTA_SNIPPETS_DB (user_data);
+	global_vars_model = snippets_db_get_global_vars_model (snippets_db);
+	g_return_if_fail (GTK_IS_TREE_MODEL (global_vars_model));
+	
+	/* Get the iter */
+	path = gtk_tree_path_new_from_string (path_string);
+	gtk_tree_model_get_iter (global_vars_model, &iter, path);
+
+	/* Get the current type and change it */
+	gtk_tree_model_get (global_vars_model, &iter,
+	                    GLOBAL_VARS_MODEL_COL_NAME, &name,
+	                    -1);
+	snippets_db_set_global_variable_name (snippets_db, 
+	                                      name, 
+	                                      new_text);
+	g_free (name);
+}
+
+static void
+global_vars_view_name_data_func (GtkTreeViewColumn *col,
+                                 GtkCellRenderer *cell,
+                                 GtkTreeModel *global_vars_model,
+                                 GtkTreeIter *iter,
+                                 gpointer user_data)
+{
+	gchar *name = NULL;
+	gboolean is_internal = FALSE;
+
+	/* Assertions */
+	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (cell));
+	
+	/* Get the name */
+	gtk_tree_model_get (global_vars_model, iter,
+	                    GLOBAL_VARS_MODEL_COL_NAME, &name,
+	                    -1);
+
+	/* Check if it's internal */
+	gtk_tree_model_get (global_vars_model, iter,
+	                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, &is_internal,
+	                    -1);
+	if (is_internal)
+	{
+		gchar *temp = NULL;
+		temp = g_strconcat ("<b>", name, "</b> <i>(Internal)</i>", NULL);
+		g_free (name);
+		name = temp;
+		g_object_set (cell, "sensitive", FALSE, NULL);
+		g_object_set (cell, "editable", FALSE, NULL);
+	}
+	else
+	{
+		gchar *temp = NULL;
+		temp = g_strconcat ("<b>", name, "</b>", NULL);
+		g_free (name);
+		name = temp;
+		g_object_set (cell, "sensitive", TRUE, NULL);
+		g_object_set (cell, "editable", TRUE, NULL);
+	}
+	
+	g_object_set (cell, "markup", name, NULL);
+	g_free (name);
+}
+
+static void
+on_global_vars_type_toggled (GtkCellRendererToggle *cell,
+                             gchar *path_string,
+                             gpointer user_data)
+{
+	GtkTreeModel *global_vars_model = NULL;
+	SnippetsDB *snippets_db = NULL;
+	GtkTreePath *path = NULL;
+	GtkTreeIter iter;
+	gboolean is_command = FALSE;
+	gchar *name = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (user_data));
+	snippets_db = ANJUTA_SNIPPETS_DB (user_data);
+	global_vars_model = snippets_db_get_global_vars_model (snippets_db);
+	g_return_if_fail (GTK_IS_TREE_MODEL (global_vars_model));
+	
+	/* Get the iter */
+	path = gtk_tree_path_new_from_string (path_string);
+	gtk_tree_model_get_iter (global_vars_model, &iter, path);
+
+	/* Get the current type and change it */
+	gtk_tree_model_get (global_vars_model, &iter,
+	                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, &is_command,
+	                    GLOBAL_VARS_MODEL_COL_NAME, &name,
+	                    -1);
+	snippets_db_set_global_variable_type (snippets_db, 
+	                                      name, 
+	                                      (is_command) ? FALSE : TRUE);
+	g_free (name);
+	
+}
+
+static void
+global_vars_view_type_data_func (GtkTreeViewColumn *col,
+                                 GtkCellRenderer *cell,
+                                 GtkTreeModel *global_vars_model,
+                                 GtkTreeIter *iter,
+                                 gpointer user_data)
+{
+	gboolean is_command = FALSE, is_internal = TRUE;
+
+	/* Assertions */
+	g_return_if_fail (GTK_IS_CELL_RENDERER_TOGGLE (cell));
+
+
+	/* Check if it's internal */
+	gtk_tree_model_get (global_vars_model, iter,
+	                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, &is_internal,
+	                    -1);
+	if (is_internal)
+	{
+		g_object_set (cell, "sensitive", FALSE, NULL);
+		gtk_cell_renderer_toggle_set_activatable (GTK_CELL_RENDERER_TOGGLE (cell), FALSE);
+		gtk_cell_renderer_toggle_set_active (GTK_CELL_RENDERER_TOGGLE (cell), FALSE);
+	}
+	else
+	{
+		gtk_tree_model_get (global_vars_model, iter,
+		                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, &is_command,
+		                    -1);
+		g_object_set (cell, "sensitive", TRUE, NULL);
+		gtk_cell_renderer_toggle_set_activatable (GTK_CELL_RENDERER_TOGGLE (cell), TRUE);
+		gtk_cell_renderer_toggle_set_active (GTK_CELL_RENDERER_TOGGLE (cell), is_command);
+	}
+}
+
+static void
+on_global_vars_text_changed (GtkCellRendererText *cell,
+                             gchar *path_string,
+                             gchar *new_text,
+                             gpointer user_data)
+{
+	GtkTreeModel *global_vars_model = NULL;
+	SnippetsDB *snippets_db = NULL;
+	GtkTreePath *path = NULL;
+	GtkTreeIter iter;
+	gchar *name = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (user_data));
+	snippets_db = ANJUTA_SNIPPETS_DB (user_data);
+	global_vars_model = snippets_db_get_global_vars_model (snippets_db);
+	g_return_if_fail (GTK_IS_TREE_MODEL (global_vars_model));
+	
+	/* Get the iter */
+	path = gtk_tree_path_new_from_string (path_string);
+	gtk_tree_model_get_iter (global_vars_model, &iter, path);
+
+	/* Get the current type and change it */
+	gtk_tree_model_get (global_vars_model, &iter,
+	                    GLOBAL_VARS_MODEL_COL_NAME, &name,
+	                    -1);
+	snippets_db_set_global_variable_value (snippets_db, 
+	                                       name, 
+	                                       new_text);
+	g_free (name);
+}
+
+static void
+global_vars_view_text_data_func (GtkTreeViewColumn *col,
+                                 GtkCellRenderer *cell,
+                                 GtkTreeModel *global_vars_model,
+                                 GtkTreeIter *iter,
+                                 gpointer user_data)
+{
+	gchar *name = NULL, *text = NULL;
+	SnippetsDB *snippets_db = NULL;
+	gboolean is_internal = FALSE;
+	
+	/* Assertions */
+	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (cell) &&
+	                  ANJUTA_IS_SNIPPETS_DB (user_data));
+	snippets_db = ANJUTA_SNIPPETS_DB (user_data);
+	
+	/* Get the name */
+	gtk_tree_model_get (global_vars_model, iter,
+	                    GLOBAL_VARS_MODEL_COL_NAME, &name,
+	                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, &is_internal,
+	                    -1);
+
+	if (is_internal)
+	{
+		g_object_set (cell, "editable", FALSE, NULL);
+	}
+	else
+	{
+		g_object_set (cell, "editable", TRUE, NULL);
+	}
+
+	text = snippets_db_get_global_variable_text (snippets_db, name);
+	
+	g_object_set (cell, "text", text, NULL);
+	g_free (name);
+	g_free (text);	
+}
+
+static void
+global_vars_view_value_data_func (GtkTreeViewColumn *col,
+                                 GtkCellRenderer *cell,
+                                 GtkTreeModel *global_vars_model,
+                                 GtkTreeIter *iter,
+                                 gpointer user_data)
+{
+	gchar *name = NULL, *value = NULL;
+	SnippetsDB *snippets_db = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (cell) &&
+	                  ANJUTA_IS_SNIPPETS_DB (user_data));
+	snippets_db = ANJUTA_SNIPPETS_DB (user_data);
+	
+	/* Get the name */
+	gtk_tree_model_get (global_vars_model, iter,
+	                    GLOBAL_VARS_MODEL_COL_NAME, &name,
+	                    -1);
+
+	value = snippets_db_get_global_variable (snippets_db, name);
+	
+	g_object_set (cell, "text", value, NULL);
+	g_free (name);	
+}
+
+static void
+set_up_global_variables_view (SnippetsDB *snippets_db, 
+                              GtkTreeView *global_vars_view)
+{
+	GtkCellRenderer *cell = NULL;
+	GtkTreeViewColumn *col = NULL;
+	GtkTreeModel *global_vars_model = NULL;
+
+	/* Assertions */
+	global_vars_model = snippets_db_get_global_vars_model (snippets_db);
+	g_return_if_fail (GTK_IS_TREE_MODEL (global_vars_model) &&
+	                  GTK_IS_TREE_VIEW (global_vars_view));
+
+	/* Set up the model */
+	gtk_tree_view_set_model (global_vars_view,
+	                         global_vars_model);
+
+	/* Set up the name cell */
+	cell = gtk_cell_renderer_text_new ();
+	col = gtk_tree_view_column_new ();
+	gtk_tree_view_column_set_title (col, "Name");
+	gtk_tree_view_column_set_sizing (col, GTK_TREE_VIEW_COLUMN_AUTOSIZE);
+	gtk_tree_view_column_set_resizable (col, TRUE);
+	gtk_tree_view_column_pack_start (col, cell, FALSE);
+	gtk_tree_view_column_set_cell_data_func (col, cell,
+	                                         global_vars_view_name_data_func,
+	                                         NULL, NULL);
+	gtk_tree_view_append_column (global_vars_view, col);
+	g_signal_connect (GTK_OBJECT (cell), 
+	                  "edited",
+	                  GTK_SIGNAL_FUNC (on_global_vars_name_changed),
+	                  snippets_db);
+	
+	/* Set up the type cell */
+	cell = gtk_cell_renderer_toggle_new ();
+	col = gtk_tree_view_column_new ();
+	gtk_tree_view_column_set_title (col, "Command?");
+	gtk_tree_view_column_set_sizing (col, GTK_TREE_VIEW_COLUMN_AUTOSIZE);
+	gtk_tree_view_column_set_resizable (col, TRUE);
+	gtk_tree_view_column_pack_start (col, cell, FALSE);
+	gtk_tree_view_column_set_cell_data_func (col, cell,
+	                                         global_vars_view_type_data_func,
+	                                         NULL, NULL);
+	gtk_tree_view_append_column (global_vars_view, col);
+	g_signal_connect (GTK_OBJECT (cell), 
+	                  "toggled", 
+	                  GTK_SIGNAL_FUNC (on_global_vars_type_toggled), 
+	                  snippets_db);
+
+	/* Set up the text cell */
+	cell = gtk_cell_renderer_text_new ();
+	col = gtk_tree_view_column_new ();
+	gtk_tree_view_column_set_title (col, "Variable text");
+	gtk_tree_view_column_set_sizing (col, GTK_TREE_VIEW_COLUMN_AUTOSIZE);
+	gtk_tree_view_column_set_resizable (col, TRUE);
+	gtk_tree_view_column_pack_start (col, cell, FALSE);
+	gtk_tree_view_column_set_cell_data_func (col, cell,
+	                                         global_vars_view_text_data_func,
+	                                         snippets_db, NULL);
+	gtk_tree_view_append_column (global_vars_view, col);
+	g_signal_connect (GTK_OBJECT (cell), 
+	                  "edited",
+	                  GTK_SIGNAL_FUNC (on_global_vars_text_changed),
+	                  snippets_db);
+
+	/* Set up the instant value cell */
+	cell = gtk_cell_renderer_text_new ();
+	g_object_set (cell, "editable", FALSE, NULL);
+	col = gtk_tree_view_column_new ();
+	gtk_tree_view_column_set_title (col, "Instant value");
+	gtk_tree_view_column_set_sizing (col, GTK_TREE_VIEW_COLUMN_AUTOSIZE);
+	gtk_tree_view_column_set_resizable (col, TRUE);
+	gtk_tree_view_column_pack_start (col, cell, FALSE);
+	gtk_tree_view_column_set_cell_data_func (col, cell,
+	                                         global_vars_view_value_data_func,
+	                                         snippets_db, NULL);
+	gtk_tree_view_append_column (global_vars_view, col);
+
+}
+
+static void
 ipreferences_merge (IAnjutaPreferences* ipref,
 					AnjutaPreferences* prefs,
 					GError** e)
 {
 	GError* error = NULL;
 	GtkBuilder* bxml = gtk_builder_new ();
+	GtkTreeView *global_vars_view = NULL;
+	GtkButton *add_variable_b = NULL, *delete_variable_b = NULL, *reset_default_b = NULL;
+	GtkCheckButton *overwrite_cb = NULL, *show_only_lang_cb = NULL; 
+	GtkFileChooserButton *default_folder_b = NULL;
+	SnippetsManagerPlugin *snippets_manager_plugin = NULL;
+	
+	/* Assertions */
+	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (ipref);
+	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (snippets_manager_plugin));
 	
 	if (!gtk_builder_add_from_file (bxml, PREFERENCES_UI, &error))
 	{
 		g_warning ("Couldn't load preferences ui file: %s", error->message);
 		g_error_free (error);
 	}
-
 	anjuta_preferences_add_from_builder (prefs, bxml, SNIPPETS_MANAGER_PREFERENCES_ROOT, _("Snippets Manager"),
 								 ICON_FILE);
+
+	/* Get the Gtk objects */
+	global_vars_view = GTK_TREE_VIEW (gtk_builder_get_object (bxml, "global_vars_view"));
+	g_return_if_fail (GTK_IS_TREE_VIEW (global_vars_view));
+
+	add_variable_b = GTK_BUTTON (gtk_builder_get_object (bxml, "add_var_button"));
+	g_return_if_fail (GTK_IS_BUTTON (add_variable_b));
+
+	delete_variable_b = GTK_BUTTON (gtk_builder_get_object (bxml, "delete_var_button"));
+	g_return_if_fail (GTK_IS_BUTTON (delete_variable_b));
+
+	overwrite_cb = GTK_CHECK_BUTTON (gtk_builder_get_object (bxml, "overwrite_cb"));
+	g_return_if_fail (GTK_IS_CHECK_BUTTON (overwrite_cb));
+
+	show_only_lang_cb = GTK_CHECK_BUTTON (gtk_builder_get_object (bxml, "show_only_lang_cb"));
+	g_return_if_fail (GTK_IS_CHECK_BUTTON (show_only_lang_cb));
+
+	reset_default_b = GTK_BUTTON (gtk_builder_get_object (bxml, "reset_default_b"));
+	g_return_if_fail (GTK_IS_BUTTON (reset_default_b));
+
+	default_folder_b = GTK_FILE_CHOOSER_BUTTON (gtk_builder_get_object (bxml, "default_folder_b"));
+	g_return_if_fail (GTK_IS_FILE_CHOOSER_BUTTON (default_folder_b));
+
+	/* Set up the Global Variables GtkTreeView */
+	set_up_global_variables_view (snippets_manager_plugin->snippets_db, global_vars_view);
+
+	g_object_unref (bxml);
 }
 
 static void
