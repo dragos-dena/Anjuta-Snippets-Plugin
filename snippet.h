@@ -73,7 +73,9 @@ GList*          snippet_get_variable_names_list         (AnjutaSnippet* snippet)
 GList*          snippet_get_variable_defaults_list      (AnjutaSnippet* snippet);
 GList*          snippet_get_variable_globals_list       (AnjutaSnippet* snippet);
 const gchar*    snippet_get_content                     (AnjutaSnippet* snippet);
-gchar*          snippet_get_default_content             (AnjutaSnippet* snippet);
+gchar*          snippet_get_default_content             (AnjutaSnippet* snippet,
+                                                         GObject *snippets_db_obj,
+                                                         const gchar *indent);
 void            snippet_set_editing_mode                (AnjutaSnippet* snippet);
 GList*          snippet_get_variable_relative_positions (AnjutaSnippet* snippet,
                                                          const gchar* variable_name);

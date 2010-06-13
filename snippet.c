@@ -20,6 +20,7 @@
 */
 
 #include "snippet.h"
+#include "snippets-db.h"
 #include <gio/gio.h>
 
 /**
@@ -442,24 +443,216 @@ snippet_get_content (AnjutaSnippet* snippet)
 	return snippet->priv->snippet_content;
 }
 
+static void
+double_allocated_memory (gchar **text, gint *allocated)
+{
+	gint i = 0;
+	
+	*allocated *= 2;
+	*text = g_realloc (*text, *allocated);
+
+	for (i = *allocated/2; i < *allocated; i ++)
+		(*text)[i] = 0;
+}
+
+static gchar *
+expand_global_and_default_variables (AnjutaSnippet *snippet,
+                                     SnippetsDB *snippets_db)
+{
+	gchar *buffer = NULL, *snippet_text = NULL;
+	gint allocated = 0, snippet_text_size = 0, i = 0, j = 0, k = 0;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
+	                      ANJUTA_IS_SNIPPET (snippet),
+	                      NULL);
+	snippet_text = snippet->priv->snippet_content;
+	
+	/* Calculate the snippet_text size */
+	while (snippet_text[snippet_text_size] != 0)
+		snippet_text_size ++;
+
+	/* We initially allocate buffer the same amount of memory as snippet_text. Each
+	   time more memory will be needed the allocated amount will be doubled */
+	allocated = snippet_text_size*5;
+	buffer = g_malloc0 (allocated * sizeof (gchar));
+
+	/* We expand the variables to the default value or if they are global variables
+	   we query the database for their value. If the database can't answer to our
+	   request, we fill them also with their default values */
+	for (i = 0; i < snippet_text_size; i ++)
+	{
+		/* If it's the start of a variable name, we look up the end, get the name
+		   and evaluate it. */
+		if (snippet_text[i] == '$' && snippet_text[i + 1] == '{')
+		{
+			gchar *cur_var_name = NULL, *cur_var_value = NULL;
+			gint cur_var_size = 0, cur_var_value_size = 0;
+			AnjutaSnippetVariable *cur_var = NULL;
+			GList *iter = NULL;
+			
+			/* We search for the "}" */
+			for (k = i + 2; k < snippet_text_size; k ++)
+			{
+				/* This isn't needed, but for the code to be clearer */
+				cur_var_size ++;
+				
+				if (snippet_text[k + 1] == '}')
+					break;
+			}
+			cur_var_name = g_malloc0 ((cur_var_size + 1) * sizeof (gchar));
+			g_strlcpy (cur_var_name, snippet_text + i + 2, cur_var_size + 1);
+			i = k + 1;
+			
+			/* Look up the variable */
+			for (iter = g_list_first (snippet->priv->variables); iter != NULL; iter = g_list_next (iter))
+			{
+				cur_var = (AnjutaSnippetVariable *)iter->data;
+				if (!g_strcmp0 (cur_var->variable_name, cur_var_name))
+					break;
+			}
+
+			/* If iter is NULL, then we reached the end so the snippet is corrupt */
+			if (!iter)
+			{
+				g_return_val_if_reached (NULL);
+			}
+			else
+			{
+				/* If it's a global variable, we query the database */
+				if (cur_var->is_global)
+					cur_var_value = snippets_db_get_global_variable (snippets_db, cur_var_name);
+
+				/* If we didn't got an answer from the database or if the variable is not
+				   global, we get the default value. */
+				if (cur_var_value == NULL)
+					cur_var_value = g_strdup (cur_var->default_value);
+			}
+
+			/* Get the value string size */
+			while (cur_var_value[cur_var_value_size] != 0)
+				cur_var_value_size ++;
+
+			for (k = 0; k < cur_var_value_size; k ++, j ++)
+			{
+				buffer[j] = cur_var_value[k];
+				
+				if (allocated - 1 == j)
+					double_allocated_memory (&buffer, &allocated);
+			}
+
+			g_free (cur_var_value);
+			g_free (cur_var_name);
+		}
+		else
+		{
+			buffer[j] = snippet_text[i];
+			j ++;
+
+			if (allocated - 1 == j)
+				double_allocated_memory (&buffer, &allocated);	
+		}
+	}
+
+	return buffer;
+}
+
+static gchar *
+get_text_with_indentation (const gchar *text,
+                           const gchar *indent)
+{
+	/* TODO this may require re-writing */
+	gint newline_no = 0, indent_size = 0, text_size = 0, i = 0, j = 0, k = 0,
+	     text_with_indentation_size = 0;
+	gchar *text_with_indentation = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (text != NULL && indent != NULL,
+	                      NULL);
+
+	/* Calculate the string sizes */
+	while (indent[indent_size] != 0)
+		indent_size ++;
+	while (text[text_size] != 0)
+		text_size ++;
+
+	/* Calculate the number of newlines in text */
+	for (i = 0; i < text_size; i ++)
+		if (text[i] == '\n')
+			newline_no ++;
+
+	/* Since each newline will be replace with newline+indent, we calculate the
+	   size of the new string */	
+	text_with_indentation_size = (newline_no * indent_size + text_size + 1) * sizeof (gchar);
+
+	/* Allocate memory for the new string */
+	text_with_indentation = g_malloc0 (text_with_indentation_size);
+
+	/* Compute the new string */
+	for (i = 0, j = 0; i < text_size; i ++)
+	{
+		text_with_indentation[j] = text[i];
+		j ++;
+		
+		if (text[i] == '\n')
+		{
+			for (k = 0; k < indent_size; k ++, j ++)
+			{
+				text_with_indentation[j] = indent[k];
+			}
+		}
+	}
+		
+	return text_with_indentation;
+}
+
 /**
  * snippet_get_default_content:
  * @snippet: A #AnjutaSnippet object.
+ * @snippets_db: A #SnippetsDB object. This is required for filling the global variables.
+ *               This can be NULL if the snippet is independent of a #SnippetsDB or if
+ *               it doesn't have global variables.
+ * @indent: The indentation of the line where the snippet will be inserted.
  *
  * The content of the snippet filled with the default values of the variables.
+ * Every '\n' character will be replaced with a string obtained by concatanating
+ * "\n" with indent.
  *
  * Returns: The default content of the snippet or NULL if @snippet is invalid.
  **/
 gchar*
-snippet_get_default_content (AnjutaSnippet* snippet)
+snippet_get_default_content (AnjutaSnippet *snippet,
+                             GObject *snippets_db_obj,
+                             const gchar *indent)
 {
+	gchar* buffer = NULL, *temp = NULL;
+	
 	/* Assertions */
-	g_return_val_if_fail (snippet != NULL &&
-	                      ANJUTA_IS_SNIPPET (snippet),
+	g_return_val_if_fail (snippet != NULL && ANJUTA_IS_SNIPPET (snippet),
 	                      NULL);
 
-	/* TODO */
-	return NULL;
+	temp = snippet->priv->snippet_content;
+
+	/* If we should expand the global variables */
+	if (snippets_db_obj && ANJUTA_IS_SNIPPETS_DB (snippets_db_obj))
+	{
+		/* Expand the global variables */
+		temp = expand_global_and_default_variables (snippet, 
+		                                            ANJUTA_SNIPPETS_DB (snippets_db_obj));
+	}
+	
+	/* Get the text with indentation */
+	if (temp)
+	{
+		buffer = get_text_with_indentation (temp, indent);
+		g_free (temp);
+	}
+	else
+	{
+		buffer = get_text_with_indentation (snippet->priv->snippet_content, indent);
+	}
+	
+	return buffer;
 }
 
 /**

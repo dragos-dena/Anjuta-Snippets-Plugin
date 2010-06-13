@@ -30,16 +30,14 @@
 				<variable name="if_case" default="/* If case */" is_global="false" />
 				<variable name="else_case" default="/* Else case */" is_global="false" />
 			</variables>
-			<snippet-content>
-<![CDATA[if (${cond})
+			<snippet-content><![CDATA[if (${cond})
 {
 	${if_case}
 }
 else
 {
 	${else_case}
-}]]>
-			</snippet-content>
+}]]></snippet-content>
 			<keywords>if else condition C++ case switch C</keywords>
 		</anjuta-snippet>
 	</anjuta-snippets>

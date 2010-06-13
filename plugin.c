@@ -20,6 +20,7 @@
 */
 
 #include "plugin.h"
+#include "snippet.h"
 #include <libanjuta/interfaces/ianjuta-snippets-manager.h>
 #include <libanjuta/interfaces/ianjuta-document-manager.h>
 #include <libanjuta/interfaces/ianjuta-preferences.h>
@@ -43,14 +44,93 @@ typedef struct _GlobalVariablesUpdateData
 	GtkTreeView *global_vars_view;
 } GlobalVariablesUpdateData;
 
-gboolean
-snippet_insert (SnippetsManagerPlugin * plugin, const gchar *keyword)
-{
 
-/*	TODO*/
+gboolean
+snippet_insert (SnippetsManagerPlugin * plugin, 
+                const gchar *keyword)
+{
+	AnjutaSnippet *requested_snippet = NULL;
+	SnippetsManagerPlugin *snippets_manager_plugin = NULL;
+	gchar *indent = NULL, *cur_line = NULL, *snippet_default_content = NULL;
+	IAnjutaIterable *line_begin = NULL, *cur_pos = NULL;
+	gint cur_line_no = -1, i = 0;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin),
+	                      FALSE);
+	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
+	g_return_val_if_fail (IANJUTA_IS_EDITOR (snippets_manager_plugin->cur_editor),
+	                      FALSE);
+
+	/* Get the current line */
+	cur_line_no = ianjuta_editor_get_lineno (snippets_manager_plugin->cur_editor,
+	                                         NULL);
+	line_begin = ianjuta_editor_get_line_begin_position (snippets_manager_plugin->cur_editor,
+	                                                     cur_line_no, NULL);
+	cur_pos = ianjuta_editor_get_position (snippets_manager_plugin->cur_editor, NULL);
+	cur_line = ianjuta_editor_get_text (snippets_manager_plugin->cur_editor,
+	                                    line_begin, cur_pos, NULL);
+
+	/* Calculate the current indentation */
+	indent = g_strdup (cur_line);
+	while (cur_line[i] == ' ' || cur_line[i] == '\t')
+		i ++;
+	indent[i] = 0;
+
+	/* Get the snippet default content */
+	requested_snippet = (AnjutaSnippet *)snippets_db_get_snippet (snippets_manager_plugin->snippets_db,\
+	                                                              "headercom.C");
+	snippet_default_content = snippet_get_default_content (requested_snippet,
+	                                                       G_OBJECT (snippets_manager_plugin->snippets_db), 
+	                                                       indent);
+
+	/* Insert the default content into the editor */
+	ianjuta_editor_insert (snippets_manager_plugin->cur_editor, 
+	                       cur_pos, 
+	                       snippet_default_content, 
+	                       -1,
+	                       NULL);
+
+	g_free (indent);
+	g_free (snippet_default_content);
+
 	return TRUE;
 }
 
+static void
+on_added_current_document (AnjutaPlugin *plugin, 
+                           const gchar *name,
+                           const GValue *value, 
+                           gpointer data)
+{
+	GObject *cur_editor = NULL;
+	SnippetsManagerPlugin *snippets_manager_plugin = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin));
+	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
+
+	/* Get the current document and test if it's an IAnjutaEditor */
+	cur_editor = g_value_get_object (value);
+	if (!IANJUTA_IS_EDITOR (cur_editor))
+		return;
+	snippets_manager_plugin->cur_editor = IANJUTA_EDITOR (cur_editor);
+
+}
+
+static void
+on_removed_current_document (AnjutaPlugin *plugin,
+                             const char *name, 
+                             gpointer data)
+{
+	SnippetsManagerPlugin *snippets_manager_plugin = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin));
+	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
+
+	snippets_manager_plugin->cur_editor = NULL;
+}
 
 static gboolean
 snippets_manager_activate (AnjutaPlugin * plugin)
@@ -64,6 +144,14 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	/* Link the AnjutaShell to the SnippetsDB */
 	snippets_manager_plugin->snippets_db->anjuta_shell = plugin->shell;
 
+	/* Add a watch for the current document */
+	snippets_manager_plugin->cur_editor_watch_id = 
+	                         anjuta_plugin_add_watch (plugin,
+	                                                  IANJUTA_DOCUMENT_MANAGER_CURRENT_DOCUMENT,
+	                                                  on_added_current_document,
+	                                                  on_removed_current_document,
+	                                                  NULL);
+
 	DEBUG_PRINT ("%s", "SnippetsManager: Activating SnippetsManager plugin ...");
 
 	return TRUE;
@@ -74,7 +162,9 @@ snippets_manager_deactivate (AnjutaPlugin * plugin)
 {
 	SnippetsManagerPlugin *snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
 
-	DEBUG_PRINT ("%s", "SnippetsManager: Deactivating SnippetsManager plugin ...");	
+	DEBUG_PRINT ("%s", "SnippetsManager: Deactivating SnippetsManager plugin ...");
+
+	snippet_insert (snippets_manager_plugin, "w/e");
 	return TRUE;
 }
 
@@ -124,6 +214,9 @@ snippets_manager_plugin_instance_init (GObject * obj)
 	
 	snippets_manager->overwrite_on_conflict = FALSE;
 	snippets_manager->show_only_document_language_snippets = FALSE;
+
+	snippets_manager->cur_editor = NULL;
+	snippets_manager->cur_editor_watch_id = -1;
 
 	/* TODO */
 	snippets_manager->snippets_db = snippets_db_new ();
@@ -604,26 +697,20 @@ ipreferences_merge (IAnjutaPreferences* ipref,
 								 ICON_FILE);
 
 	/* Get the Gtk objects */
-	global_vars_view = GTK_TREE_VIEW (gtk_builder_get_object (bxml, "global_vars_view"));
-	g_return_if_fail (GTK_IS_TREE_VIEW (global_vars_view));
-
-	add_variable_b = GTK_BUTTON (gtk_builder_get_object (bxml, "add_var_button"));
-	g_return_if_fail (GTK_IS_BUTTON (add_variable_b));
-
+	global_vars_view  = GTK_TREE_VIEW (gtk_builder_get_object (bxml, "global_vars_view"));
+	add_variable_b    = GTK_BUTTON (gtk_builder_get_object (bxml, "add_var_button"));
 	delete_variable_b = GTK_BUTTON (gtk_builder_get_object (bxml, "delete_var_button"));
-	g_return_if_fail (GTK_IS_BUTTON (delete_variable_b));
-
-	overwrite_cb = GTK_CHECK_BUTTON (gtk_builder_get_object (bxml, "overwrite_cb"));
-	g_return_if_fail (GTK_IS_CHECK_BUTTON (overwrite_cb));
-
+	overwrite_cb      = GTK_CHECK_BUTTON (gtk_builder_get_object (bxml, "overwrite_cb"));
 	show_only_lang_cb = GTK_CHECK_BUTTON (gtk_builder_get_object (bxml, "show_only_lang_cb"));
-	g_return_if_fail (GTK_IS_CHECK_BUTTON (show_only_lang_cb));
-
-	reset_default_b = GTK_BUTTON (gtk_builder_get_object (bxml, "reset_default_b"));
-	g_return_if_fail (GTK_IS_BUTTON (reset_default_b));
-
-	default_folder_b = GTK_FILE_CHOOSER_BUTTON (gtk_builder_get_object (bxml, "default_folder_b"));
-	g_return_if_fail (GTK_IS_FILE_CHOOSER_BUTTON (default_folder_b));
+	reset_default_b   = GTK_BUTTON (gtk_builder_get_object (bxml, "reset_default_b"));
+	default_folder_b  = GTK_FILE_CHOOSER_BUTTON (gtk_builder_get_object (bxml, "default_folder_b"));
+	g_return_if_fail (GTK_IS_TREE_VIEW (global_vars_view) &&
+	                  GTK_IS_BUTTON (add_variable_b) &&
+	                  GTK_IS_BUTTON (delete_variable_b) &&
+	                  GTK_IS_CHECK_BUTTON (overwrite_cb) &&
+	                  GTK_IS_CHECK_BUTTON (show_only_lang_cb) &&
+	                  GTK_IS_BUTTON (reset_default_b) &&
+	                  GTK_IS_FILE_CHOOSER_BUTTON (default_folder_b));
 
 	/* Set up the Global Variables GtkTreeView */
 	set_up_global_variables_view (snippets_manager_plugin->snippets_db, global_vars_view);

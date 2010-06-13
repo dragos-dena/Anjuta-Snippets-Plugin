@@ -1037,7 +1037,16 @@ snippets_db_get_global_variable (SnippetsDB* snippets_db,
 			g_free (command_line);
 			g_free (command_error);
 			if (command_success)
+			{
+				/* If the last character is a newline we eliminate it */
+				gint command_output_size = 0;
+				while (command_output[command_output_size] != 0)
+					command_output_size ++;
+				if (command_output[command_output_size - 1] == '\n')
+					command_output[command_output_size - 1] = 0;
+					
 				return command_output;
+			}
 			g_return_val_if_reached (NULL);
 		}
 		/* If it's static just return the value stored */
@@ -1089,7 +1098,7 @@ snippets_db_has_global_variable (SnippetsDB* snippets_db,
 }
 
 /**
- * snippets_db_has_global_variable:
+ * snippets_db_add_global_variable:
  * @snippets_db: A #SnippetsDB object.
  * @variable_name: A variable name.
  * @variable_value: The global variable value.
@@ -1185,6 +1194,14 @@ snippets_db_set_global_variable_name (SnippetsDB* snippets_db,
 	                      variable_old_name != NULL,
 	                      FALSE);
 	global_vars_store = snippets_db->priv->global_variables;
+
+	/* Test if the variable_new_name is already in the database */
+	iter = get_iter_at_global_variable_name (global_vars_store, variable_new_name);
+	if (iter)
+	{
+		gtk_tree_iter_free (iter);
+		return FALSE;
+	}
 
 	/* Get a GtkTreeIter pointing at the global variable to be updated */
 	iter = get_iter_at_global_variable_name (global_vars_store, variable_old_name);
@@ -1581,7 +1598,10 @@ snippets_db_get_value (GtkTreeModel *tree_model,
 
 		case SNIPPETS_DB_MODEL_COL_DEFAULT_CONTENT:
 			if (snippet)
-				g_value_set_string (value, (gpointer)snippet_get_default_content (snippet));
+				g_value_set_string (value, 
+				                    (gpointer)snippet_get_default_content (snippet,
+				                                                           G_OBJECT (snippets_db),
+				                                                           ""));
 			else
 				g_value_set_string (value, NULL);
 			break;
