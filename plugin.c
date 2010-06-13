@@ -19,6 +19,7 @@
 	Boston, MA  02110-1301  USA
 */
 
+#include <string.h>
 #include "plugin.h"
 #include "snippet.h"
 #include <libanjuta/interfaces/ianjuta-snippets-manager.h>
@@ -72,10 +73,9 @@ snippet_insert (SnippetsManagerPlugin * plugin,
 	                                    line_begin, cur_pos, NULL);
 
 	/* Calculate the current indentation */
-	indent = g_strdup (cur_line);
+	indent = g_malloc0 ((strlen (cur_line) + 1) * sizeof (gchar));
 	while (cur_line[i] == ' ' || cur_line[i] == '\t')
 		i ++;
-	indent[i] = 0;
 
 	/* Get the snippet default content */
 	requested_snippet = (AnjutaSnippet *)snippets_db_get_snippet (snippets_manager_plugin->snippets_db,\

@@ -19,6 +19,7 @@
 	Boston, MA  02110-1301  USA
 */
 
+#include <string.h>
 #include "snippet.h"
 #include "snippets-db.h"
 #include <gio/gio.h>
@@ -467,14 +468,11 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 	                      ANJUTA_IS_SNIPPET (snippet),
 	                      NULL);
 	snippet_text = snippet->priv->snippet_content;
-	
-	/* Calculate the snippet_text size */
-	while (snippet_text[snippet_text_size] != 0)
-		snippet_text_size ++;
 
 	/* We initially allocate buffer the same amount of memory as snippet_text. Each
 	   time more memory will be needed the allocated amount will be doubled */
-	allocated = snippet_text_size*5;
+	snippet_text_size = strlen (snippet_text);
+	allocated = snippet_text_size;
 	buffer = g_malloc0 (allocated * sizeof (gchar));
 
 	/* We expand the variables to the default value or if they are global variables
@@ -529,10 +527,7 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 					cur_var_value = g_strdup (cur_var->default_value);
 			}
 
-			/* Get the value string size */
-			while (cur_var_value[cur_var_value_size] != 0)
-				cur_var_value_size ++;
-
+			cur_var_value_size = strlen (cur_var_value);
 			for (k = 0; k < cur_var_value_size; k ++, j ++)
 			{
 				buffer[j] = cur_var_value[k];
@@ -561,7 +556,6 @@ static gchar *
 get_text_with_indentation (const gchar *text,
                            const gchar *indent)
 {
-	/* TODO this may require re-writing */
 	gint newline_no = 0, indent_size = 0, text_size = 0, i = 0, j = 0, k = 0,
 	     text_with_indentation_size = 0;
 	gchar *text_with_indentation = NULL;
@@ -571,10 +565,8 @@ get_text_with_indentation (const gchar *text,
 	                      NULL);
 
 	/* Calculate the string sizes */
-	while (indent[indent_size] != 0)
-		indent_size ++;
-	while (text[text_size] != 0)
-		text_size ++;
+	indent_size = strlen (indent);
+	text_size = strlen (text);
 
 	/* Calculate the number of newlines in text */
 	for (i = 0; i < text_size; i ++)
