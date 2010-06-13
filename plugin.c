@@ -79,7 +79,7 @@ snippet_insert (SnippetsManagerPlugin * plugin,
 
 	/* Get the snippet default content */
 	requested_snippet = (AnjutaSnippet *)snippets_db_get_snippet (snippets_manager_plugin->snippets_db,\
-	                                                              "headercom.C");
+	                                                              keyword);
 	snippet_default_content = snippet_get_default_content (requested_snippet,
 	                                                       G_OBJECT (snippets_manager_plugin->snippets_db), 
 	                                                       indent);
@@ -164,7 +164,7 @@ snippets_manager_deactivate (AnjutaPlugin * plugin)
 
 	DEBUG_PRINT ("%s", "SnippetsManager: Deactivating SnippetsManager plugin ...");
 
-	snippet_insert (snippets_manager_plugin, "w/e");
+	//snippet_insert (snippets_manager_plugin, "w/e");
 	return TRUE;
 }
 
