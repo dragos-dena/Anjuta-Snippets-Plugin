@@ -450,8 +450,8 @@ global_vars_view_text_data_func (GtkTreeViewColumn *col,
 	gboolean is_internal = FALSE;
 	
 	/* Assertions */
-	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (cell) &&
-	                  ANJUTA_IS_SNIPPETS_DB (user_data));
+	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (cell));
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (user_data));
 	snippets_db = ANJUTA_SNIPPETS_DB (user_data);
 	
 	/* Get the name */
@@ -487,8 +487,8 @@ global_vars_view_value_data_func (GtkTreeViewColumn *col,
 	SnippetsDB *snippets_db = NULL;
 	
 	/* Assertions */
-	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (cell) &&
-	                  ANJUTA_IS_SNIPPETS_DB (user_data));
+	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (cell));
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (user_data));
 	snippets_db = ANJUTA_SNIPPETS_DB (user_data);
 	
 	/* Get the name */
@@ -512,8 +512,8 @@ set_up_global_variables_view (SnippetsDB *snippets_db,
 
 	/* Assertions */
 	global_vars_model = snippets_db_get_global_vars_model (snippets_db);
-	g_return_if_fail (GTK_IS_TREE_MODEL (global_vars_model) &&
-	                  GTK_IS_TREE_VIEW (global_vars_view));
+	g_return_if_fail (GTK_IS_TREE_MODEL (global_vars_model));
+	g_return_if_fail (GTK_IS_TREE_VIEW (global_vars_view));
 
 	/* Set up the model */
 	gtk_tree_view_set_model (global_vars_view,
@@ -595,8 +595,8 @@ on_add_variable_b_clicked (GtkButton *button,
 	gchar *name = NULL;
 	
 	/* Assertions */
-	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (update_data->snippets_db) &&
-	                  GTK_IS_TREE_VIEW (update_data->global_vars_view));
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (update_data->snippets_db));
+	g_return_if_fail (GTK_IS_TREE_VIEW (update_data->global_vars_view));
 	snippets_db = ANJUTA_SNIPPETS_DB (update_data->snippets_db);
 	global_vars_view = GTK_TREE_VIEW (update_data->global_vars_view);
 	global_vars_model = snippets_db_get_global_vars_model (snippets_db);
@@ -646,8 +646,8 @@ on_delete_variable_b_clicked (GtkButton *button,
 	GtkTreeIter iter;
 	
 	/* Assertions */
-	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (update_data->snippets_db) &&
-	                  GTK_IS_TREE_VIEW (update_data->global_vars_view));
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (update_data->snippets_db));
+	g_return_if_fail (GTK_IS_TREE_VIEW (update_data->global_vars_view));
 	snippets_db = ANJUTA_SNIPPETS_DB (update_data->snippets_db);
 	global_vars_view = GTK_TREE_VIEW (update_data->global_vars_view);
 	global_vars_model = snippets_db_get_global_vars_model (snippets_db);
@@ -704,13 +704,13 @@ ipreferences_merge (IAnjutaPreferences* ipref,
 	show_only_lang_cb = GTK_CHECK_BUTTON (gtk_builder_get_object (bxml, "show_only_lang_cb"));
 	reset_default_b   = GTK_BUTTON (gtk_builder_get_object (bxml, "reset_default_b"));
 	default_folder_b  = GTK_FILE_CHOOSER_BUTTON (gtk_builder_get_object (bxml, "default_folder_b"));
-	g_return_if_fail (GTK_IS_TREE_VIEW (global_vars_view) &&
-	                  GTK_IS_BUTTON (add_variable_b) &&
-	                  GTK_IS_BUTTON (delete_variable_b) &&
-	                  GTK_IS_CHECK_BUTTON (overwrite_cb) &&
-	                  GTK_IS_CHECK_BUTTON (show_only_lang_cb) &&
-	                  GTK_IS_BUTTON (reset_default_b) &&
-	                  GTK_IS_FILE_CHOOSER_BUTTON (default_folder_b));
+	g_return_if_fail (GTK_IS_TREE_VIEW (global_vars_view));
+	g_return_if_fail (GTK_IS_BUTTON (add_variable_b));
+	g_return_if_fail (GTK_IS_BUTTON (delete_variable_b));
+	g_return_if_fail (GTK_IS_CHECK_BUTTON (overwrite_cb));
+	g_return_if_fail (GTK_IS_CHECK_BUTTON (show_only_lang_cb));
+	g_return_if_fail (GTK_IS_BUTTON (reset_default_b));
+	g_return_if_fail (GTK_IS_FILE_CHOOSER_BUTTON (default_folder_b));
 
 	/* Set up the Global Variables GtkTreeView */
 	set_up_global_variables_view (snippets_manager_plugin->snippets_db, global_vars_view);

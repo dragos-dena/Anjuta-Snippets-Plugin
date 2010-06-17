@@ -401,10 +401,8 @@ gboolean snippets_manager_parse_variables_xml_file (const gchar* global_vars_pat
 	gboolean cur_var_is_command_bool = FALSE;
 	
 	/* Assertions */
-	g_return_val_if_fail (global_vars_path != NULL &&\
-	                      g_file_test (global_vars_path, G_FILE_TEST_EXISTS) &&\
-	                      snippets_db != NULL,
-	                      FALSE);
+	g_return_val_if_fail (global_vars_path != NULL, FALSE);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), FALSE);
 
 	/* Parse the XML file */
 	global_vars_doc = xmlParseFile (global_vars_path);

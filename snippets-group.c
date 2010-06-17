@@ -113,9 +113,8 @@ snippets_group_new (const gchar* snippets_file_path,
 	AnjutaSnippetsGroup* snippets_group = NULL;
 	
 	/* Assertions */
-	g_return_val_if_fail (snippets_group_name != NULL &&\
-	                      snippets_group_description != NULL,
-	                      NULL);
+	g_return_val_if_fail (snippets_group_name != NULL, NULL);
+	g_return_val_if_fail (snippets_group_description != NULL, NULL);
 	
 	/* Initialize the object */
 	snippets_group = ANJUTA_SNIPPETS_GROUP (g_object_new (snippets_group_get_type (), NULL));
@@ -133,8 +132,7 @@ const gchar*
 snippets_group_get_name (AnjutaSnippetsGroup* snippets_group)
 {
 	/* Assertions */
-	g_return_val_if_fail (snippets_group != NULL && ANJUTA_IS_SNIPPETS_GROUP (snippets_group),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group), NULL);
 
 	return snippets_group->priv->name;
 }
@@ -144,7 +142,7 @@ snippets_group_set_name (AnjutaSnippetsGroup* snippets_group,
                          const gchar* new_group_name)
 {
 	/* Assertions */
-	g_return_if_fail (snippets_group != NULL && ANJUTA_IS_SNIPPETS_GROUP (snippets_group));
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group));
 
 	g_free (snippets_group->priv->name);
 	snippets_group->priv->name = g_strdup (new_group_name);
@@ -154,8 +152,7 @@ const gchar*
 snippets_group_get_description (AnjutaSnippetsGroup* snippets_group)
 {
 	/* Assertions */
-	g_return_val_if_fail (snippets_group != NULL && ANJUTA_IS_SNIPPETS_GROUP (snippets_group),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group), NULL);
 
 	return snippets_group->priv->description;
 }
@@ -164,7 +161,7 @@ void snippets_group_set_description (AnjutaSnippetsGroup* snippets_group,
                                      const gchar* new_group_description)
 {
 	/* Assertions */
-	g_return_if_fail (snippets_group != NULL && ANJUTA_IS_SNIPPETS_GROUP (snippets_group));
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group));
 
 	g_free (snippets_group->priv->description);
 	snippets_group->priv->description = g_strdup (new_group_description);
@@ -191,10 +188,8 @@ snippets_group_add_snippet (AnjutaSnippetsGroup* snippets_group,
 	gchar* added_snippet_key = NULL;
 	
 	/* Assertions */
-	g_return_val_if_fail (snippets_group != NULL &&\
-	                      ANJUTA_IS_SNIPPETS_GROUP (snippets_group) &&\
-	                      snippet != NULL,
-	                      FALSE);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group), FALSE);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
 		
 	/* Get the key of the snippet */
 	added_snippet_key = snippet_get_key (snippet);
@@ -264,9 +259,8 @@ snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
 	gchar* cur_snippet_key = NULL;
 	
 	/* Assertions */
-	g_return_if_fail (snippets_group != NULL && \
-	                  ANJUTA_IS_SNIPPETS_GROUP (snippets_group) &&\
-	                  snippet_key != NULL);
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group));
+	g_return_if_fail (snippet_key != NULL);
 	
 	/* Check if there is a snippet with the same key */
 	for (iter = g_list_first (snippets_group->priv->snippets); iter != NULL; iter = g_list_next (iter))

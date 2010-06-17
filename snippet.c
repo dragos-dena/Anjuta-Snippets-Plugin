@@ -174,13 +174,13 @@ snippet_new (const gchar* trigger_key,
 	AnjutaSnippetVariable* cur_snippet_var = NULL;
 	
 	/* Assertions */
-	g_return_val_if_fail (trigger_key != NULL &&\
-	                      snippet_language != NULL &&\
-	                      snippet_name != NULL &&\
-	                      snippet_content != NULL,\
+	g_return_val_if_fail (trigger_key != NULL, NULL);
+	g_return_val_if_fail (snippet_language != NULL, NULL);
+	g_return_val_if_fail (snippet_name != NULL, NULL);
+	g_return_val_if_fail (snippet_content != NULL, NULL);
+	g_return_val_if_fail (g_list_length (variable_names) == g_list_length (variable_default_values),
 	                      NULL);
-	g_return_val_if_fail (g_list_length (variable_names) == g_list_length (variable_default_values) &&\
-	                      g_list_length (variable_names) == g_list_length (variable_globals),\
+	g_return_val_if_fail (g_list_length (variable_names) == g_list_length (variable_globals),
 	                      NULL);
 	
 	/* Initialize the object */
@@ -238,9 +238,7 @@ gchar*
 snippet_get_key (AnjutaSnippet* snippet)
 {
 	/* Assertions */
-	g_return_val_if_fail (snippet != NULL &&
-	                      ANJUTA_IS_SNIPPET (snippet),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 	
 	return g_strconcat(snippet->priv->trigger_key, ".", snippet->priv->snippet_language, NULL);
 }
@@ -257,9 +255,7 @@ const gchar*
 snippet_get_trigger_key (AnjutaSnippet* snippet)
 {
 	/* Assertions */
-	g_return_val_if_fail (snippet != NULL &&
-	                      ANJUTA_IS_SNIPPET (snippet),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 
 	return snippet->priv->trigger_key;
 }
@@ -276,9 +272,7 @@ const gchar*
 snippet_get_language (AnjutaSnippet* snippet)
 {
 	/* Assertions */
-	g_return_val_if_fail (snippet != NULL &&
-	                      ANJUTA_IS_SNIPPET (snippet),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 
 	return snippet->priv->snippet_language;
 }
@@ -295,9 +289,7 @@ const gchar*
 snippet_get_name (AnjutaSnippet* snippet)
 {
 	/* Assertions */
-	g_return_val_if_fail (snippet != NULL &&
-	                      ANJUTA_IS_SNIPPET (snippet),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 
 	return snippet->priv->snippet_name;
 }
@@ -320,9 +312,7 @@ snippet_get_keywords_list (AnjutaSnippet* snippet)
 	gchar *cur_keyword;
 
 	/* Assertions */
-	g_return_val_if_fail (snippet != NULL &&
-	                      ANJUTA_IS_SNIPPET (snippet),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 
 	for (iter = g_list_first (snippet->priv->keywords); iter != NULL; iter = g_list_next (iter))
 	{
@@ -350,9 +340,7 @@ snippet_get_variable_names_list (AnjutaSnippet* snippet)
 	AnjutaSnippetVariable *cur_snippet_var = NULL;
 
 	/* Assertions */
-	g_return_val_if_fail (snippet != NULL &&
-	                      ANJUTA_IS_SNIPPET (snippet),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 
 	for (iter = g_list_first (snippet->priv->variables); iter != NULL; iter = g_list_next (iter))
 	{
@@ -380,9 +368,7 @@ snippet_get_variable_defaults_list (AnjutaSnippet* snippet)
 	AnjutaSnippetVariable *cur_snippet_var = NULL;
 
 	/* Assertions */
-	g_return_val_if_fail (snippet != NULL &&
-	                      ANJUTA_IS_SNIPPET (snippet),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 
 	for (iter = g_list_first (snippet->priv->variables); iter != NULL; iter = g_list_next (iter))
 	{
@@ -411,9 +397,7 @@ snippet_get_variable_globals_list (AnjutaSnippet* snippet)
 	AnjutaSnippetVariable *cur_snippet_var = NULL;
 
 	/* Assertions */
-	g_return_val_if_fail (snippet != NULL &&
-	                      ANJUTA_IS_SNIPPET (snippet),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 
 	for (iter = g_list_first (snippet->priv->variables); iter != NULL; iter = g_list_next (iter))
 	{
@@ -437,9 +421,7 @@ const gchar*
 snippet_get_content (AnjutaSnippet* snippet)
 {
 	/* Assertions */
-	g_return_val_if_fail (snippet != NULL &&
-	                      ANJUTA_IS_SNIPPET (snippet),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 
 	return snippet->priv->snippet_content;
 }
@@ -464,9 +446,8 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 	gint allocated = 0, snippet_text_size = 0, i = 0, j = 0, k = 0;
 	
 	/* Assertions */
-	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db) &&
-	                      ANJUTA_IS_SNIPPET (snippet),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 	snippet_text = snippet->priv->snippet_content;
 
 	/* We initially allocate buffer the same amount of memory as snippet_text. Each
@@ -561,8 +542,8 @@ get_text_with_indentation (const gchar *text,
 	gchar *text_with_indentation = NULL;
 	
 	/* Assertions */
-	g_return_val_if_fail (text != NULL && indent != NULL,
-	                      NULL);
+	g_return_val_if_fail (text != NULL, NULL);
+	g_return_val_if_fail (indent != NULL, NULL);
 
 	/* Calculate the string sizes */
 	indent_size = strlen (indent);
@@ -620,8 +601,7 @@ snippet_get_default_content (AnjutaSnippet *snippet,
 	gchar* buffer = NULL, *temp = NULL;
 	
 	/* Assertions */
-	g_return_val_if_fail (snippet != NULL && ANJUTA_IS_SNIPPET (snippet),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 
 	temp = snippet->priv->snippet_content;
 
@@ -658,7 +638,7 @@ void
 snippet_set_editing_mode (AnjutaSnippet* snippet)
 {
 	/* Assertions */
-	g_return_if_fail (snippet != NULL && ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
 
 	/* TODO Compute the relative positions (may be changed after a previous editing mode) */
 	snippet->priv->chars_inserted = 0;
@@ -679,9 +659,7 @@ snippet_get_variable_relative_positions	(AnjutaSnippet* snippet,
                                          const gchar* variable_name)
 {
 	/* Assertions */
-	g_return_val_if_fail (snippet != NULL &&
-	                      ANJUTA_IS_SNIPPET (snippet),
-	                      NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 
 	/* TODO */
 	return NULL;
@@ -701,7 +679,7 @@ snippet_update_chars_inserted (AnjutaSnippet* snippet,
                                gint32 inserted_chars)
 {
 	/* Assertions */
-	g_return_if_fail (snippet != NULL && ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
 
 	snippet->priv->chars_inserted += inserted_chars;
 }
