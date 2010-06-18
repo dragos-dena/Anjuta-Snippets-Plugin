@@ -188,7 +188,7 @@ snippet_new (const gchar* trigger_key,
 	
 	/* Make a copy of the given strings */
 	snippet->priv->trigger_key      = g_strdup (trigger_key);
-	snippet->priv->snippet_language = g_strdup (snippet_language);
+	snippet->priv->snippet_language = g_utf8_strdown (snippet_language, -1);
 	snippet->priv->snippet_name     = g_strdup (snippet_name);
 	snippet->priv->snippet_content  = g_strdup (snippet_content);
 	
@@ -224,23 +224,6 @@ snippet_new (const gchar* trigger_key,
 	}
 	
 	return snippet;
-}
-														 
-/**
- * snippet_get_key:
- * @snippet: A #AnjutaSnippet object.
- *
- * Gets the snippet-key of the snippet which is unique at runtime. Should be freed.
- *
- * Returns: The snippet-key or NULL if @snippet is invalid.
- **/
-gchar*	
-snippet_get_key (AnjutaSnippet* snippet)
-{
-	/* Assertions */
-	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
-	
-	return g_strconcat(snippet->priv->trigger_key, ".", snippet->priv->snippet_language, NULL);
 }
 
 /**
@@ -426,35 +409,22 @@ snippet_get_content (AnjutaSnippet* snippet)
 	return snippet->priv->snippet_content;
 }
 
-static void
-double_allocated_memory (gchar **text, gint *allocated)
-{
-	gint i = 0;
-	
-	*allocated *= 2;
-	*text = g_realloc (*text, *allocated);
-
-	for (i = *allocated/2; i < *allocated; i ++)
-		(*text)[i] = 0;
-}
-
 static gchar *
 expand_global_and_default_variables (AnjutaSnippet *snippet,
                                      SnippetsDB *snippets_db)
 {
-	gchar *buffer = NULL, *snippet_text = NULL;
-	gint allocated = 0, snippet_text_size = 0, i = 0, j = 0, k = 0;
+	gchar *snippet_text = NULL;
+	gint snippet_text_size = 0, i = 0, j = 0;
+	GString *buffer = NULL;
 	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), NULL);
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 	snippet_text = snippet->priv->snippet_content;
 
-	/* We initially allocate buffer the same amount of memory as snippet_text. Each
-	   time more memory will be needed the allocated amount will be doubled */
+	/* We get the snippet_text_size (for iterating) and init the buffer */
 	snippet_text_size = strlen (snippet_text);
-	allocated = snippet_text_size;
-	buffer = g_malloc0 (allocated * sizeof (gchar));
+	buffer = g_string_new ("");
 
 	/* We expand the variables to the default value or if they are global variables
 	   we query the database for their value. If the database can't answer to our
@@ -465,29 +435,23 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 		   and evaluate it. */
 		if (snippet_text[i] == '$' && snippet_text[i + 1] == '{')
 		{
-			gchar *cur_var_name = NULL, *cur_var_value = NULL;
-			gint cur_var_size = 0, cur_var_value_size = 0;
+			GString *cur_var_name = NULL;
+			gchar *cur_var_value = NULL;
+			gint cur_var_value_size = 0;
 			AnjutaSnippetVariable *cur_var = NULL;
 			GList *iter = NULL;
 			
 			/* We search for the "}" */
-			for (k = i + 2; k < snippet_text_size; k ++)
-			{
-				/* This isn't needed, but for the code to be clearer */
-				cur_var_size ++;
-				
-				if (snippet_text[k + 1] == '}')
-					break;
-			}
-			cur_var_name = g_malloc0 ((cur_var_size + 1) * sizeof (gchar));
-			g_strlcpy (cur_var_name, snippet_text + i + 2, cur_var_size + 1);
-			i = k + 1;
-			
+			cur_var_name = g_string_new ("");
+			for (j = i + 2; j < snippet_text_size && snippet_text[j] != '}'; j ++)
+				cur_var_name = g_string_append_c (cur_var_name, snippet_text[j]);
+			i = j;
+
 			/* Look up the variable */
 			for (iter = g_list_first (snippet->priv->variables); iter != NULL; iter = g_list_next (iter))
 			{
 				cur_var = (AnjutaSnippetVariable *)iter->data;
-				if (!g_strcmp0 (cur_var->variable_name, cur_var_name))
+				if (!g_strcmp0 (cur_var->variable_name, cur_var_name->str))
 					break;
 			}
 
@@ -500,7 +464,8 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 			{
 				/* If it's a global variable, we query the database */
 				if (cur_var->is_global)
-					cur_var_value = snippets_db_get_global_variable (snippets_db, cur_var_name);
+					cur_var_value = snippets_db_get_global_variable (snippets_db, 
+					                                                 cur_var_name->str);
 
 				/* If we didn't got an answer from the database or if the variable is not
 				   global, we get the default value. */
@@ -508,75 +473,47 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 					cur_var_value = g_strdup (cur_var->default_value);
 			}
 
+			/* Append the variable value to the buffer */
 			cur_var_value_size = strlen (cur_var_value);
-			for (k = 0; k < cur_var_value_size; k ++, j ++)
-			{
-				buffer[j] = cur_var_value[k];
-				
-				if (allocated - 1 == j)
-					double_allocated_memory (&buffer, &allocated);
-			}
+			buffer = g_string_append (buffer, cur_var_value);
 
 			g_free (cur_var_value);
-			g_free (cur_var_name);
+			g_string_free (cur_var_name, TRUE);
 		}
 		else
 		{
-			buffer[j] = snippet_text[i];
-			j ++;
-
-			if (allocated - 1 == j)
-				double_allocated_memory (&buffer, &allocated);	
+			buffer = g_string_append_c (buffer, snippet_text[i]);
 		}
 	}
 
-	return buffer;
+	return g_string_free (buffer, FALSE);
 }
 
 static gchar *
 get_text_with_indentation (const gchar *text,
                            const gchar *indent)
 {
-	gint newline_no = 0, indent_size = 0, text_size = 0, i = 0, j = 0, k = 0,
-	     text_with_indentation_size = 0;
-	gchar *text_with_indentation = NULL;
+	gint text_size = 0, i = 0;
+	GString *text_with_indentation = NULL;
 	
 	/* Assertions */
 	g_return_val_if_fail (text != NULL, NULL);
 	g_return_val_if_fail (indent != NULL, NULL);
 
-	/* Calculate the string sizes */
-	indent_size = strlen (indent);
+	/* Init the text_with_indentation string */
+	text_with_indentation = g_string_new ("");
+
 	text_size = strlen (text);
-
-	/* Calculate the number of newlines in text */
 	for (i = 0; i < text_size; i ++)
-		if (text[i] == '\n')
-			newline_no ++;
-
-	/* Since each newline will be replace with newline+indent, we calculate the
-	   size of the new string */	
-	text_with_indentation_size = (newline_no * indent_size + text_size + 1) * sizeof (gchar);
-
-	/* Allocate memory for the new string */
-	text_with_indentation = g_malloc0 (text_with_indentation_size);
-
-	/* Compute the new string */
-	for (i = 0, j = 0; i < text_size; i ++)
 	{
-		text_with_indentation[j] = text[i];
-		j ++;
-		
+		text_with_indentation = g_string_append_c (text_with_indentation, text[i]);
+
+		/* If we go to a new line, we also add the indentation */
 		if (text[i] == '\n')
-		{
-			for (k = 0; k < indent_size; k ++, j ++)
-			{
-				text_with_indentation[j] = indent[k];
-			}
-		}
+			text_with_indentation = g_string_append (text_with_indentation, indent);
 	}
-		
-	return text_with_indentation;
+
+	return g_string_free (text_with_indentation, FALSE);
 }
 
 /**

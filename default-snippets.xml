@@ -24,7 +24,7 @@
 			<keywords>comment header copyright C email date time</keywords>
 		</anjuta-snippet>
 
-		<anjuta-snippet language="C++" trigger="ifelse" name="If Else statement">
+		<anjuta-snippet language="CPP" trigger="ifelse" name="If Else statement">
 			<variables>
 				<variable name="cond" default="/*condition*/" is_global="false" />
 				<variable name="if_case" default="/* If case */" is_global="false" />

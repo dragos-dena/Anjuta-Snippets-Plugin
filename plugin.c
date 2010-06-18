@@ -25,6 +25,7 @@
 #include <libanjuta/interfaces/ianjuta-snippets-manager.h>
 #include <libanjuta/interfaces/ianjuta-document-manager.h>
 #include <libanjuta/interfaces/ianjuta-preferences.h>
+#include <libanjuta/interfaces/ianjuta-editor-language.h>
 #include <gio/gio.h>
 #include <libanjuta/anjuta-shell.h>
 #include <libanjuta/anjuta-debug.h>
@@ -48,7 +49,7 @@ typedef struct _GlobalVariablesUpdateData
 
 gboolean
 snippet_insert (SnippetsManagerPlugin * plugin, 
-                const gchar *keyword)
+                const gchar *trigger)
 {
 	AnjutaSnippet *requested_snippet = NULL;
 	SnippetsManagerPlugin *snippets_manager_plugin = NULL;
@@ -73,17 +74,23 @@ snippet_insert (SnippetsManagerPlugin * plugin,
 	                                    line_begin, cur_pos, NULL);
 
 	/* Calculate the current indentation */
-	indent = g_malloc0 ((strlen (cur_line) + 1) * sizeof (gchar));
+	indent = g_strdup (cur_line);
 	while (cur_line[i] == ' ' || cur_line[i] == '\t')
 		i ++;
-
-	/* Get the snippet default content */
+	indent[i] = 0;
+	
+	/* Get the snippet from the database and check if it's not found */
 	requested_snippet = (AnjutaSnippet *)snippets_db_get_snippet (snippets_manager_plugin->snippets_db,\
-	                                                              keyword);
+	                                                              trigger,
+	                                                              NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (requested_snippet), FALSE);
+
+	/* Get the default content of the snippet */
 	snippet_default_content = snippet_get_default_content (requested_snippet,
 	                                                       G_OBJECT (snippets_manager_plugin->snippets_db), 
 	                                                       indent);
-
+	g_return_val_if_fail (snippet_default_content != NULL, FALSE);
+	
 	/* Insert the default content into the editor */
 	ianjuta_editor_insert (snippets_manager_plugin->cur_editor, 
 	                       cur_pos, 
@@ -152,7 +159,7 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	                                                  on_removed_current_document,
 	                                                  NULL);
 
-	DEBUG_PRINT ("%s", "SnippetsManager: Activating SnippetsManager plugin ...");
+	DEBUG_PRINT ("%s", "SnippetsManager: Activating SnippetsManager plugin …");
 
 	return TRUE;
 }
@@ -162,9 +169,9 @@ snippets_manager_deactivate (AnjutaPlugin * plugin)
 {
 	SnippetsManagerPlugin *snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
 
-	DEBUG_PRINT ("%s", "SnippetsManager: Deactivating SnippetsManager plugin ...");
+	DEBUG_PRINT ("%s", "SnippetsManager: Deactivating SnippetsManager plugin …");
 
-	//snippet_insert (snippets_manager_plugin, "w/e");
+	snippet_insert (snippets_manager_plugin, "ifelse");
 	return TRUE;
 }
 

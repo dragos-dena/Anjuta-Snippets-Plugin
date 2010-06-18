@@ -114,9 +114,11 @@ gboolean                   snippets_db_add_snippet            (SnippetsDB* snipp
                                                                const gchar* group_name,
                                                                gboolean overwrite);
 const AnjutaSnippet*       snippets_db_get_snippet            (SnippetsDB* snippets_db,
-                                                               const gchar* snippet_key);
+                                                               const gchar* trigger_key,
+                                                               const gchar* language);
 gboolean                   snippets_db_remove_snippet         (SnippetsDB* snippets_db,
-                                                               const gchar* snippet_key);
+                                                               const gchar* trigger_key,
+                                                               const gchar* language);
 
 /* SnippetsGroup handling methods */
 gboolean                   snippets_db_add_snippets_group     (SnippetsDB* snippets_db,
