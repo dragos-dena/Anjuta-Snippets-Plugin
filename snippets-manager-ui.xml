@@ -1,0 +1,12 @@
+<!--*- xml -*-->
+<ui>
+	<menubar name="MenuMain">
+		<menu name="MenuEdit" action="ActionMenuEdit">
+			<placeholder name="PlaceholderInsertMenus">
+				<menu name="SnippetsManagerMenu" action="ActionMenuEditSnippetsManager">
+					<menuitem name="InsertSnippetMenuItem" action="ActionEditInsertSnippet" />
+				</menu>
+			</placeholder>
+		</menu>
+	</menubar>
+</ui>
