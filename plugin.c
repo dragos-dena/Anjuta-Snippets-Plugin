@@ -39,6 +39,8 @@
 #define GLOBAL_VAR_NEW_NAME   "new_global_var_name"
 #define GLOBAL_VAR_NEW_VALUE  "new_global_var_value"
 
+#define IN_WORD(c)    (g_ascii_isalnum (c) || c == '_')
+
 static gpointer parent_class;
 
 static void on_menu_insert_snippet (GtkAction *action, SnippetsManagerPlugin *plugin);
@@ -122,32 +124,99 @@ snippet_insert (SnippetsManagerPlugin * plugin,
 
 	g_free (indent);
 	g_free (snippet_default_content);
+	g_object_unref (line_begin);
+	g_object_unref (cur_pos);
 
 	return TRUE;
+}
+
+static gchar
+char_at_iterator (IAnjutaEditor *editor,
+                  IAnjutaIterable *iter)
+{
+	IAnjutaIterable *next = NULL;
+	gchar *text = NULL, returned_char = 0;
+	
+	/* Assertions */
+	g_return_val_if_fail (IANJUTA_IS_EDITOR (editor), 0);
+	g_return_val_if_fail (IANJUTA_IS_ITERABLE (iter), 0);
+
+	next = ianjuta_iterable_clone (iter, NULL);
+	ianjuta_iterable_next (next, NULL);
+	
+	text = ianjuta_editor_get_text (editor, iter, next, NULL);
+	if (text == NULL)
+		return 0;
+
+	returned_char = text[0];
+	g_free (text);
+	g_object_unref (next);
+
+	return returned_char;	
 }
 
 static void 
 on_menu_insert_snippet (GtkAction *action, 
                         SnippetsManagerPlugin *plugin)
 {
-	gchar *current_word = NULL;
-	IAnjutaIterable *cur_pos = NULL;
+	IAnjutaIterable *rewind_iter = NULL, *cur_pos = NULL;
+	gchar *trigger = NULL, cur_char = 0;
+	gboolean reached_start = FALSE;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin));
+	g_return_if_fail (IANJUTA_IS_EDITOR (plugin->cur_editor));
 
 	/* If the current document isn't an editor, return */
 	if (plugin->cur_editor == NULL)
 		return;
 
-	/* Get the current word and request an insert */
-	current_word = ianjuta_editor_get_current_word (plugin->cur_editor, NULL);
-	cur_pos = ianjuta_editor_get_position (plugin->cur_editor, NULL);
-	
-	if (snippet_insert (plugin, current_word))
-	{
-		/* TODO - delete the current_word from the editor */
+	/* Initialize the iterators */
+	cur_pos     = ianjuta_editor_get_position (plugin->cur_editor, NULL);
+	rewind_iter = ianjuta_iterable_clone (cur_pos, NULL);
+
+	/* If we are inside a word we can't insert a snippet */
+	cur_char = char_at_iterator (plugin->cur_editor, cur_pos);
+	if (IN_WORD (cur_char))
+		return;
+
+	/* If we can't decrement the cur_pos iterator, then we are at the start of the document,
+	   so the trigger key is NULL */
+	if (!ianjuta_iterable_previous (rewind_iter, NULL))
+		return;
+	cur_char = char_at_iterator (plugin->cur_editor, rewind_iter);
+
+	/* We iterate until we get to the start of the word or the start of the document */
+	while (IN_WORD (cur_char))
+	{	
+		if (!ianjuta_iterable_previous (rewind_iter, NULL))
+		{
+			reached_start = TRUE;
+			break;
+		}
+
+		cur_char = char_at_iterator (plugin->cur_editor, rewind_iter);
 	}
+
+	/* If we didn't reached the start of the document, we move the iterator forward one
+	   step so we don't delete one extra char. */
+	if (!reached_start)
+		ianjuta_iterable_next (rewind_iter, NULL);
+
+	/* We compute the trigger-key */
+	trigger = ianjuta_editor_get_text (plugin->cur_editor, rewind_iter, cur_pos, NULL);
+
+	/* If there is a snippet for our trigger-key we delete the trigger from the editor
+	   and insert the snippet. */
+	if (snippets_db_get_snippet (plugin->snippets_db, trigger, NULL))
+	{
+		ianjuta_editor_erase (plugin->cur_editor, rewind_iter, cur_pos, NULL);
+		snippet_insert (plugin, trigger);
+	}
+
+	g_free (trigger);
+	g_object_unref (rewind_iter);
+	g_object_unref (cur_pos);
 }
 
 static void
@@ -266,6 +335,9 @@ snippets_manager_dispose (GObject * obj)
 {
 	SnippetsManagerPlugin *snippets_manager = ANJUTA_PLUGIN_SNIPPETS_MANAGER (obj);
 
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (snippets_manager));
+
 	if (snippets_manager->snippets_db != NULL)
 	{
 		g_object_unref (snippets_manager->snippets_db);
@@ -278,13 +350,13 @@ snippets_manager_dispose (GObject * obj)
 		snippets_manager->snippet_interpreter = NULL;
 	}
 	
-	if(snippets_manager->snippet_browser != NULL)
+	if (snippets_manager->snippet_browser != NULL)
 	{
 		g_object_unref (snippets_manager->snippet_browser);
 		snippets_manager->snippet_browser = NULL;
 	}
 	
-	if(snippets_manager->snippet_editor != NULL)
+	if (snippets_manager->snippet_editor != NULL)
 	{
 		g_object_unref (snippets_manager->snippet_editor);
 		snippets_manager->snippet_editor = NULL;
@@ -337,7 +409,7 @@ static gboolean
 isnippets_manager_iface_insert (IAnjutaSnippetsManager* snippets_manager, const gchar* key, GError** err)
 {
 	SnippetsManagerPlugin* plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (snippets_manager);
-	snippet_insert(plugin, key);
+	snippet_insert (plugin, key);
 	return TRUE;
 }
 
