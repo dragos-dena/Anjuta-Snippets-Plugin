@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<anjuta-snippet-packet>
+	<name>General purpose snippets</name>
+	<description>Provides snippets for general purpose operations (like conditional statements, loops)</description>
+
+	<anjuta-snippets>
+
+		<anjuta-snippet trigger="for" name="For loop">
+			<languages>c</languages>
+			<variables>
+				<variable name="iter" default="i" is_global="false" />
+				<variable name="init" default="0" is_global="false" />
+				<variable name="max" default="n" is_global="false" />
+				<variable name="count" default="1" is_global="false" />
+			</variables>
+			<snippet-content><![CDATA[for (${iter} = ${init}; ${iter} < ${max}; ${iter} += ${count})
+{
+	${END_CURSOR_POSITION}
+}
+]]></snippet-content>
+			<keywords>for C loop statement iter</keywords>
+		</anjuta-snippet>
+
+		<anjuta-snippet trigger="for" name="For loop">
+			<languages>cpp java c-sharp</languages>
+			<variables>
+				<variable name="type" default="int" is_global="false" />
+				<variable name="iter" default="i" is_global="false" />
+				<variable name="init" default="0" is_global="false" />
+				<variable name="max" default="n" is_global="false" />
+				<variable name="count" default="1" is_global="false" />
+			</variables>
+			<snippet-content><![CDATA[for (${type} ${iter} = ${init}; ${iter} < ${max}; ${iter} += ${count})
+{
+	${END_CURSOR_POSITION}
+}
+]]></snippet-content>
+			<keywords>for C loop statement iter</keywords>
+		</anjuta-snippet>
+
+	</anjuta-snippets>
+</anjuta-snippet-packet>

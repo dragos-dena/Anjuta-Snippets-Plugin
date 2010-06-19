@@ -89,6 +89,9 @@ typedef enum
 GType                      snippets_db_get_type               (void) G_GNUC_CONST;
 SnippetsDB*                snippets_db_new	                  (void);
 
+void                       snippets_db_load                   (SnippetsDB *snippets_db);
+void                       snippets_db_close                  (SnippetsDB *snippets_db);
+
 /* File handling methods */
 gboolean                   snippets_db_load_file              (SnippetsDB* snippets_db,
                                                                const gchar* snippet_packet_file_path,

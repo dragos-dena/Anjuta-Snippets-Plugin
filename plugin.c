@@ -57,7 +57,8 @@ static GtkActionEntry actions_snippets[] = {
 		"ActionEditInsertSnippet",
 		NULL,
 		N_("_Insert Snippet"),
-		"<control><alt>e",
+		//"<control><alt>e",
+		"<control>e",
 		N_("Insert a macro using the trigger-key"),
 		G_CALLBACK (on_menu_insert_snippet)}
 };
@@ -67,7 +68,6 @@ typedef struct _GlobalVariablesUpdateData
 	SnippetsDB *snippets_db;
 	GtkTreeView *global_vars_view;
 } GlobalVariablesUpdateData;
-
 
 gboolean
 snippet_insert (SnippetsManagerPlugin * plugin, 
@@ -182,13 +182,6 @@ on_removed_current_document (AnjutaPlugin *plugin,
 	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin));
 	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
 
-	/* Disconnect the handler if needed */
-//	if (IANJUTA_IS_EDITOR (snippets_manager_plugin->cur_editor))
-//	{
-//		g_signal_handler_disconnect (G_OBJECT (snippets_manager_plugin->cur_editor),
-//		                             snippets_manager_plugin->cur_editor_handler_id);
-//	}
-
 	snippets_manager_plugin->cur_editor = NULL;
 }
 
@@ -202,9 +195,10 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	g_return_val_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (snippets_manager_plugin),
 	                      FALSE);
 
-	/* Link the AnjutaShell to the SnippetsDB */
+	/* Link the AnjutaShell to the SnippetsDB and load the SnippetsDB*/
 	snippets_manager_plugin->snippets_db->anjuta_shell = plugin->shell;
-
+	snippets_db_load (snippets_manager_plugin->snippets_db);
+	
 	/* Add a watch for the current document */
 	snippets_manager_plugin->cur_editor_watch_id = 
 		anjuta_plugin_add_watch (plugin,
@@ -253,6 +247,9 @@ snippets_manager_deactivate (AnjutaPlugin *plugin)
 	anjuta_ui = anjuta_shell_get_ui (plugin->shell, NULL);
 	anjuta_ui_unmerge (anjuta_ui, snippets_manager_plugin->uiid);
 	anjuta_ui_remove_action_group (anjuta_ui, snippets_manager_plugin->action_group);
+
+	/* Destroy the SnippetsDB */
+	snippets_db_close (snippets_manager_plugin->snippets_db);
 	
 	return TRUE;
 }
@@ -268,7 +265,7 @@ static void
 snippets_manager_dispose (GObject * obj)
 {
 	SnippetsManagerPlugin *snippets_manager = ANJUTA_PLUGIN_SNIPPETS_MANAGER (obj);
-	
+
 	if (snippets_manager->snippets_db != NULL)
 	{
 		g_object_unref (snippets_manager->snippets_db);

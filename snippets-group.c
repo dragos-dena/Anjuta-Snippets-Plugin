@@ -167,6 +167,21 @@ void snippets_group_set_description (AnjutaSnippetsGroup* snippets_group,
 	snippets_group->priv->description = g_strdup (new_group_description);
 }
 
+static gint
+compare_snippets_by_name (gconstpointer a,
+                          gconstpointer b)
+{
+	AnjutaSnippet *snippet_a = (AnjutaSnippet *)a,
+	              *snippet_b = (AnjutaSnippet *)b;
+
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet_a), 0);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet_b), 0);
+
+	return g_utf8_collate (snippet_get_name (snippet_a),
+	                       snippet_get_name (snippet_b));
+}
+
 /**
  * snippets_group_add_snippet:
  * @snippets_group: A #AnjutaSnippetsGroup object.
@@ -241,7 +256,7 @@ snippets_group_add_snippet (AnjutaSnippetsGroup* snippets_group,
 	{
 		snippets_group->priv->snippets = g_list_insert_sorted (snippets_group->priv->snippets,
 		                                                       snippet,
-		                                                       (GCompareFunc)g_ascii_strcasecmp);
+		                                                       compare_snippets_by_name);
 	}
 	
 	snippet->parent_snippets_group = G_OBJECT (snippets_group);

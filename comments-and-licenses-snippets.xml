@@ -54,7 +54,7 @@ G_END_DECLS
 				<variable name="userfullname" default="User Name" is_global="true" />
 				<variable name="email" default="user@domain.org" is_global="true" />
 			</variables>
-		<snippet-content><![CDATA[//           ${file_name}
+		<snippet-content><![CDATA[//           ${filename}
 //  ${date_time}
 //  Copyright  ${year}  ${userfullname}
 //  <${email}>

@@ -31,12 +31,12 @@
 #include <glib/gstdio.h>
 #include <gtk/gtk.h>
 
-#define DEFAULT_GLOBAL_VARS_FILE           "snippets-global-variables.xml"
-#define DEFAULT_SNIPPETS_FILE              "default-snippets.xml"
-#define DEFAULT_SNIPPETS_FILE_INSTALL_PATH PACKAGE_DATA_DIR"/"DEFAULT_SNIPPETS_FILE
-#define DEFAULT_GLOBAL_VARS_INSTALL_PATH   PACKAGE_DATA_DIR"/"DEFAULT_GLOBAL_VARS_FILE
-#define USER_SNIPPETS_DB_DIR               "snippets-database"
-#define USER_SNIPPETS_DIR                  "snippets-database/snippet-packages"
+#define DEFAULT_GLOBAL_VARS_FILE            "snippets-global-variables.xml"
+#define COMMENTS_LICENSES_INSTALL_PATH      PACKAGE_DATA_DIR"/"COMMENTS_LICENSES_SNIPPETS_FILE
+#define GENERAL_PURPOSE_INSTALL_PATH        PACKAGE_DATA_DIR"/"GENERAL_PURPOSE_SNIPPETS_FILE
+#define DEFAULT_GLOBAL_VARS_INSTALL_PATH    PACKAGE_DATA_DIR"/"DEFAULT_GLOBAL_VARS_FILE
+#define USER_SNIPPETS_DB_DIR                "snippets-database"
+#define USER_SNIPPETS_DIR                   "snippets-database/snippet-packages"
 
 /* Internal global variables */
 #define GLOBAL_VAR_FILE_NAME       "filename"
@@ -44,9 +44,12 @@
 #define GLOBAL_VAR_USER_FULL_NAME  "userfullname"
 #define GLOBAL_VAR_HOST_NAME       "hostname"
 
-
 #define ANJUTA_SNIPPETS_DB_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ANJUTA_TYPE_SNIPPETS_DB, SnippetsDBPrivate))
 
+static gchar* default_snippet_files[] = {
+	"general-purpose-snippets.xml",
+	"comments-and-licenses-snippets.xml"
+};
 
 /**
  * SnippetsDBPrivate:
@@ -91,9 +94,9 @@ struct _SnippetsDBPrivate
 
 
 /* GObject methods declaration */
-static void              snippets_db_dispose         (GObject* snippets_db);
+static void              snippets_db_dispose         (GObject* obj);
 
-static void              snippets_db_finalize        (GObject* snippets_db);
+static void              snippets_db_finalize        (GObject* obj);
 
 static void              snippets_db_class_init      (SnippetsDBClass* klass);
 
@@ -306,7 +309,80 @@ get_conflicting_snippet (SnippetsDB *snippets_db,
 }
 
 static void
-snippets_db_load_internal_global_variables (SnippetsDB *snippets_db)
+copy_default_files_to_user_folder (SnippetsDB *snippets_db)
+{
+	/* In this function we should copy the default snippet files and the global variables
+	   files in the user folder if there aren't already files with the same name in that
+	   folder */
+	gchar *user_snippets_path = NULL, *user_snippets_db_path = NULL, *cur_file_user_path = NULL,
+	      *cur_file_installation_path = NULL, *global_vars_user_path = NULL,
+	      *global_vars_installation_path = NULL;
+	gint i = 0;
+	gboolean cur_file_exists = FALSE, copy_success = FALSE;
+	GFile *cur_installation_file = NULL, *cur_user_file = NULL,
+	      *global_vars_installation_file = NULL, *global_vars_user_file = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
+
+	/* Compute the user_snippets and user_snippets_db file paths */
+	user_snippets_path    = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DIR, "/", NULL);
+	user_snippets_db_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DB_DIR, "/", NULL);
+
+	/* Copy the snippet-package files if they don't exist in the user_folder */
+	for (i = 0; i < G_N_ELEMENTS (default_snippet_files); i ++)
+	{
+		cur_file_user_path         = g_strconcat (user_snippets_path, "/", default_snippet_files[i], NULL);
+		cur_file_installation_path = g_strconcat (PACKAGE_DATA_DIR, "/", default_snippet_files[i], NULL);
+
+		/* We test if the current file is in the user folder. If it isn't we copy it from the installation
+		   folder. */
+		cur_file_exists = g_file_test (cur_file_user_path, G_FILE_TEST_EXISTS);
+		if (!cur_file_exists)
+		{
+			cur_installation_file = g_file_new_for_path (cur_file_installation_path);
+			cur_user_file         = g_file_new_for_path (cur_file_user_path);
+
+			copy_success = g_file_copy (cur_installation_file,
+			                            cur_user_file,
+			                            G_FILE_COPY_NONE,
+			                            NULL, NULL, NULL, NULL);
+
+			if (!copy_success)
+				DEBUG_PRINT ("Copying of %s failed", default_snippet_files[i]);
+		}
+
+		g_free (cur_file_user_path);
+		g_free (cur_file_installation_path);
+	}
+
+	/* Copy the global variables file */
+	global_vars_user_path  = g_strconcat (user_snippets_db_path, "/", DEFAULT_GLOBAL_VARS_FILE, NULL);
+	global_vars_installation_path = g_strconcat (PACKAGE_DATA_DIR, "/", DEFAULT_GLOBAL_VARS_FILE, NULL);
+
+	cur_file_exists = g_file_test (global_vars_user_path, G_FILE_TEST_EXISTS);
+	if (!cur_file_exists)
+	{
+		global_vars_installation_file = g_file_new_for_path (global_vars_installation_path);
+		global_vars_user_file         = g_file_new_for_path (global_vars_user_path);
+
+		copy_success = g_file_copy (global_vars_installation_file,
+		                            global_vars_user_file,
+		                            G_FILE_COPY_NONE,
+		                            NULL, NULL, NULL, NULL);
+
+		if (!copy_success)
+			DEBUG_PRINT ("Copying of %s failed", DEFAULT_GLOBAL_VARS_FILE);
+	}
+	g_free (global_vars_user_path);
+	g_free (global_vars_installation_path);
+
+	g_free (user_snippets_path);
+	g_free (user_snippets_db_path);
+}
+
+static void
+load_internal_global_variables (SnippetsDB *snippets_db)
 {
 	GtkTreeIter iter_added;
 	GtkListStore *global_vars_store = NULL;
@@ -352,6 +428,54 @@ snippets_db_load_internal_global_variables (SnippetsDB *snippets_db)
 	                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, FALSE,
 	                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, TRUE,
 	                    -1);
+}
+
+static void
+load_global_variables (SnippetsDB *snippets_db)
+{
+	gchar *global_vars_user_path = NULL, *snippets_db_user_path = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
+
+	/* Load the internal global variables */
+	load_internal_global_variables (snippets_db);
+
+	snippets_db_user_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DB_DIR, "/", NULL);
+	global_vars_user_path = g_strconcat (snippets_db_user_path, "/", DEFAULT_GLOBAL_VARS_FILE, NULL);
+
+	snippets_manager_parse_variables_xml_file (global_vars_user_path, snippets_db);
+
+	g_free (snippets_db_user_path);
+	g_free (global_vars_user_path);	
+}
+
+static void
+load_default_snippets (SnippetsDB *snippets_db)
+{
+	GDir *user_snippets_dir = NULL;
+	gchar *user_snippets_path = NULL, *cur_file_path = NULL;
+	const gchar *cur_file_name = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
+
+	user_snippets_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DIR, "/", NULL);
+	user_snippets_dir  = g_dir_open (user_snippets_path, 0, NULL);
+	
+	cur_file_name = g_dir_read_name (user_snippets_dir);
+	while (cur_file_name)
+	{
+		cur_file_path = g_strconcat (user_snippets_path, "/", cur_file_name, NULL);
+
+		snippets_db_load_file (snippets_db, cur_file_path, TRUE, TRUE, NATIVE_FORMAT);
+
+		g_free (cur_file_path);
+		cur_file_name = g_dir_read_name (user_snippets_dir);
+	}
+	g_dir_close (user_snippets_dir);
+
+	g_free (user_snippets_path);
 }
 
 static gchar*
@@ -472,19 +596,38 @@ compare_snippets_groups_by_name (gconstpointer a,
 }
 
 static void
-snippets_db_dispose (GObject* snippets_db)
+snippets_db_dispose (GObject* obj)
 {
+	/* Important: This does not free the memory in the internal structures. You first
+	   must use snippets_db_close before disposing the snippets-database. */
+	SnippetsDB *snippets_db = NULL;
+	
 	DEBUG_PRINT ("%s", "Disposing SnippetsDB …");
-	/* TODO Save the snippets */
-	G_OBJECT_CLASS (snippets_db_parent_class)->dispose (snippets_db);
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
+	snippets_db = ANJUTA_SNIPPETS_DB (snippets_db);
+	g_return_if_fail (snippets_db->priv != NULL);
+	
+	g_list_free (snippets_db->priv->snippets_groups);
+	g_hash_table_destroy (snippets_db->priv->snippet_keys_map);
+	g_tree_unref (snippets_db->priv->keywords_tree);
+	g_tree_unref (snippets_db->priv->trigger_keys_tree);
+
+	snippets_db->priv->snippets_groups   = NULL;
+	snippets_db->priv->snippet_keys_map  = NULL;
+	snippets_db->priv->keywords_tree     = NULL;
+	snippets_db->priv->trigger_keys_tree = NULL;
+	
+	G_OBJECT_CLASS (snippets_db_parent_class)->dispose (obj);
 }
 
 static void
-snippets_db_finalize (GObject* snippets_db)
+snippets_db_finalize (GObject* obj)
 {
 	DEBUG_PRINT ("%s", "Finalizing SnippetsDB …");
 	
-	G_OBJECT_CLASS (snippets_db_parent_class)->finalize (snippets_db);
+	G_OBJECT_CLASS (snippets_db_parent_class)->finalize (obj);
 }
 
 static void
@@ -550,87 +693,85 @@ snippets_db_init (SnippetsDB *snippets_db)
 /**
  * snippets_db_new:
  *
- * A new #SnippetDB with snippets loaded from the default folder.
+ * A new #SnippetDB object.
  *
  * Returns: A new #SnippetsDB object.
  **/
 SnippetsDB*	
 snippets_db_new ()
 {
-	SnippetsDB* snippets_db = ANJUTA_SNIPPETS_DB (g_object_new (snippets_db_get_type (), NULL));
-	gboolean user_defaults_file_exists = FALSE, user_global_vars_exists = FALSE;
-	gchar *user_snippets_dir_path = NULL, *user_snippets_default = NULL, 
-	      *user_snippets_db_dir_path = NULL, *user_global_vars = NULL,
-	      *cur_file_path = NULL;
-	const gchar *cur_file_name = NULL;
-	GFile *installation_defaults_file = NULL, *user_defaults_file = NULL,
-	      *installation_global_vars_file = NULL, *user_global_vars_file = NULL;
-	GDir *user_snippets_dir = NULL;
+	return ANJUTA_SNIPPETS_DB (g_object_new (snippets_db_get_type (), NULL));
+}
+
+/**
+ * snippets_db_load:
+ * @snippets_db: A #SnippetsDB object
+ *
+ * Loads the given @snippets_db with snippets/global-variables loaded from the default
+ * folder.
+ */
+void                       
+snippets_db_load (SnippetsDB *snippets_db)
+{
+	gchar *user_snippets_path = NULL;
 	
-	/* Check if there is a "snippets-database/snippets" directory */
-	user_snippets_dir_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DIR, "/", NULL);
-	g_mkdir_with_parents (user_snippets_dir_path, 0755);
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
 
-	/* Check if the default snippets file is in the user directory */
-	user_snippets_default = g_strconcat (user_snippets_dir_path, "/", DEFAULT_SNIPPETS_FILE, NULL);
-	user_defaults_file_exists = g_file_test (user_snippets_default, G_FILE_TEST_EXISTS);
+	/* Make sure we have the user folder */
+	user_snippets_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DIR, "/", NULL);
+	g_mkdir_with_parents (user_snippets_path, 0755);
 
-	/* If it's not in the user directory, copy from the installation path the default snippets */
-	if (!user_defaults_file_exists)
-	{
-		installation_defaults_file = g_file_new_for_path (DEFAULT_SNIPPETS_FILE_INSTALL_PATH);
-		user_defaults_file = g_file_new_for_path (user_snippets_default);
+	/* Check if the default snippets file is in the user directory and copy them
+	   over from the installation folder if they aren't*/
+	copy_default_files_to_user_folder (snippets_db);
 
-		g_file_copy (installation_defaults_file,
-		             user_defaults_file,
-		             G_FILE_COPY_NONE,
-		             NULL, NULL, NULL, NULL);
-	}
-	g_free (user_snippets_default);
+	/* Load the snippets and global variables */
+	load_global_variables (snippets_db);
+	load_default_snippets (snippets_db);
+}
+
+/**
+ * snippets_db_close:
+ * @snippets_db: A #SnippetsDB object.
+ *
+ * Saves the snippets and free's the loaded data from the internal structures (not the 
+ * internal structures themselvs, so after calling snippets_db_load, the snippets_db
+ * will be functional).
+ */
+void                       
+snippets_db_close (SnippetsDB *snippets_db)
+{
+	GList *iter = NULL;
+	AnjutaSnippetsGroup *cur_snippets_group = NULL;
 	
-	/* Check if there is the default-snippets-global-variables.xml file in the user directory */
-	user_snippets_db_dir_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DB_DIR, "/", NULL);
-	user_global_vars = g_strconcat (user_snippets_db_dir_path, "/", DEFAULT_GLOBAL_VARS_FILE, NULL);
-	user_global_vars_exists = g_file_test (user_global_vars, G_FILE_TEST_EXISTS);
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
+	g_return_if_fail (snippets_db->priv != NULL);
 
-	/* Load the internal global variables */
-	snippets_db_load_internal_global_variables (snippets_db);
+	/* Save all the files */
+	snippets_db_save_all (snippets_db);
+
+	/* Free the memory for the snippets-groups in the SnippetsDB */
+	for (iter = g_list_first (snippets_db->priv->snippets_groups); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_snippets_group = (AnjutaSnippetsGroup *)iter->data;
+		g_return_if_fail (ANJUTA_IS_SNIPPETS_GROUP (cur_snippets_group));
+
+		g_object_unref (cur_snippets_group);
+	}
+	g_list_free (snippets_db->priv->snippets_groups);
+	snippets_db->priv->snippets_groups = NULL;
+
+	/* Free the hash-table memory */
+	g_hash_table_ref (snippets_db->priv->snippet_keys_map);
+	g_hash_table_destroy (snippets_db->priv->snippet_keys_map);
 	
-	/* If it's not in the user directory, copy from the installation path the default global 
-	   variables file */
-	if (!user_global_vars_exists)
-	{
-		installation_global_vars_file = g_file_new_for_path (DEFAULT_GLOBAL_VARS_INSTALL_PATH);
-		user_global_vars_file = g_file_new_for_path (user_global_vars);
-
-		g_file_copy (installation_global_vars_file,
-		             user_global_vars_file,
-		             G_FILE_COPY_NONE,
-		             NULL, NULL, NULL, NULL);
-	}
-
-	/* Parse the global variables file */
-	snippets_manager_parse_variables_xml_file (user_global_vars, snippets_db);
-	g_free (user_global_vars);
-	g_free (user_snippets_db_dir_path);
-
-	/* Parse all the files in the user snippet-packages directory*/
-	user_snippets_dir = g_dir_open (user_snippets_dir_path, 0, NULL);
-	cur_file_name = g_dir_read_name (user_snippets_dir);
-	while (cur_file_name)
-	{
-		cur_file_path = g_strconcat (user_snippets_dir_path, "/", cur_file_name, NULL);
-
-		/* Parse the current file and make a new SnippetGroup object */
-		snippets_db_load_file (snippets_db, cur_file_path, TRUE, TRUE, NATIVE_FORMAT);
-
-		g_free (cur_file_path);
-		cur_file_name = g_dir_read_name (user_snippets_dir);
-	}
-	g_dir_close (user_snippets_dir);
-	g_free (user_snippets_dir_path);
-
-	return snippets_db;
+	/* Destroy the searching trees */
+	g_tree_ref (snippets_db->priv->keywords_tree);
+	g_tree_ref (snippets_db->priv->trigger_keys_tree);
+	g_tree_destroy (snippets_db->priv->keywords_tree);
+	g_tree_destroy (snippets_db->priv->trigger_keys_tree);
 }
 
 /**
