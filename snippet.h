@@ -56,29 +56,37 @@ struct _AnjutaSnippetClass
 };
 
 GType           snippet_get_type                        (void) G_GNUC_CONST;
-AnjutaSnippet*  snippet_new                             (const gchar* trigger_key,
-                                                         const gchar* snippet_language,
-                                                         const gchar* snippet_name,
-                                                         const gchar* snippet_content,
-                                                         GList* variable_names,
-                                                         GList* variable_default_values,
-                                                         GList* variable_globals,
-                                                         GList* keywords);
-const gchar*    snippet_get_trigger_key                 (AnjutaSnippet* snippet);
-const gchar*    snippet_get_language                    (AnjutaSnippet* snippet);
-const gchar*    snippet_get_name                        (AnjutaSnippet* snippet);
-GList*          snippet_get_keywords_list               (AnjutaSnippet* snippet);
-GList*          snippet_get_variable_names_list         (AnjutaSnippet* snippet);
-GList*          snippet_get_variable_defaults_list      (AnjutaSnippet* snippet);
-GList*          snippet_get_variable_globals_list       (AnjutaSnippet* snippet);
-const gchar*    snippet_get_content                     (AnjutaSnippet* snippet);
-gchar*          snippet_get_default_content             (AnjutaSnippet* snippet,
+AnjutaSnippet*  snippet_new                             (const gchar *trigger_key,
+                                                         GList *snippet_language,
+                                                         const gchar *snippet_name,
+                                                         const gchar *snippet_content,
+                                                         GList *variable_names,
+                                                         GList *variable_default_values,
+                                                         GList *variable_globals,
+                                                         GList *keywords);
+const gchar*    snippet_get_trigger_key                 (AnjutaSnippet *snippet);
+const GList*    snippet_get_languages                   (AnjutaSnippet *snippet);
+gchar*          snippet_get_languages_string            (AnjutaSnippet *snippet);
+const gchar*    snippet_get_any_language                (AnjutaSnippet *snippet);
+gboolean        snippet_has_language                    (AnjutaSnippet *snippet,
+                                                         const gchar *language);
+void            snippet_add_language                    (AnjutaSnippet *snippet,
+                                                         const gchar *language);
+void            snippet_remove_language                 (AnjutaSnippet *snippet,
+                                                         const gchar *language);
+const gchar*    snippet_get_name                        (AnjutaSnippet *snippet);
+GList*          snippet_get_keywords_list               (AnjutaSnippet *snippet);
+GList*          snippet_get_variable_names_list         (AnjutaSnippet *snippet);
+GList*          snippet_get_variable_defaults_list      (AnjutaSnippet *snippet);
+GList*          snippet_get_variable_globals_list       (AnjutaSnippet *snippet);
+const gchar*    snippet_get_content                     (AnjutaSnippet *snippet);
+gchar*          snippet_get_default_content             (AnjutaSnippet *snippet,
                                                          GObject *snippets_db_obj,
                                                          const gchar *indent);
-void            snippet_set_editing_mode                (AnjutaSnippet* snippet);
-GList*          snippet_get_variable_relative_positions (AnjutaSnippet* snippet,
-                                                         const gchar* variable_name);
-void            snippet_update_chars_inserted           (AnjutaSnippet* snippet,
+void            snippet_set_editing_mode                (AnjutaSnippet *snippet);
+GList*          snippet_get_variable_relative_positions (AnjutaSnippet *snippet,
+                                                         const gchar *variable_name);
+void            snippet_update_chars_inserted           (AnjutaSnippet *snippet,
                                                          gint32 inserted_chars);
 
 G_END_DECLS

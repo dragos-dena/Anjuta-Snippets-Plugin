@@ -29,6 +29,7 @@
 #define NATIVE_XML_DESCRIPTION_TAG  "description"
 #define NATIVE_XML_GROUP_TAG        "anjuta-snippets"
 #define NATIVE_XML_SNIPPET_TAG      "anjuta-snippet"
+#define NATIVE_XML_LANGUAGES_TAG    "languages"
 #define NATIVE_XML_VARIABLES_TAG    "variables"
 #define NATIVE_XML_VARIABLE_TAG     "variable"
 #define NATIVE_XML_CONTENT_TAG      "snippet-content"
@@ -37,7 +38,6 @@
 #define NATIVE_XML_GLOBAL_PROP      "is_global"
 #define NATIVE_XML_DEFAULT_PROP     "default"
 #define NATIVE_XML_TRIGGER_PROP     "trigger"
-#define NATIVE_XML_LANG_PROP        "language"
 #define NATIVE_XML_TRUE             "true"
 #define NATIVE_XML_FALSE            "false"
 
@@ -69,12 +69,13 @@ static AnjutaSnippet*
 snippets_manager_parse_native_snippet_node (xmlNodePtr snippet_node)
 {
 	AnjutaSnippet* snippet = NULL;
-	gchar *trigger_key = NULL, *snippet_language = NULL, *snippet_name = NULL,
-	      *snippet_content = NULL, *cur_var_name = NULL, 
+	gchar *trigger_key = NULL, *snippet_name = NULL, *snippet_content = NULL, *cur_var_name = NULL, 
 	      *cur_var_default = NULL, *cur_var_global = NULL, *keywords_temp = NULL,
-	      **keywords_temp_array = NULL, *keyword_temp = NULL;
+	      **keywords_temp_array = NULL, *keyword_temp = NULL, *languages_temp = NULL,
+	      **languages_temp_array = NULL, *language_temp = NULL;
 	GList *variable_names = NULL, *variable_default_values = NULL,
-	      *variable_globals = NULL, *keywords = NULL, *iter = NULL;
+	      *variable_globals = NULL, *keywords = NULL, *iter = NULL, 
+	      *snippet_languages = NULL;
 	xmlNodePtr cur_field_node = NULL, cur_variable_node = NULL;
 	gboolean cur_var_is_global = FALSE;
 	gint i = 0;
@@ -84,14 +85,12 @@ snippets_manager_parse_native_snippet_node (xmlNodePtr snippet_node)
 	
 	/* Get the snippet name, trigger-key and language properties */
 	trigger_key = (gchar *)xmlGetProp (snippet_node, (const xmlChar *)NATIVE_XML_TRIGGER_PROP);
-	snippet_language = (gchar *)xmlGetProp (snippet_node, (const xmlChar *)NATIVE_XML_LANG_PROP);
 	snippet_name = (gchar *)xmlGetProp (snippet_node, (const xmlChar *)NATIVE_XML_NAME_PROP);
 
 	/* Make sure we got all the above properties */
-	if (trigger_key == NULL || snippet_language == NULL || snippet_name == NULL)
+	if (trigger_key == NULL || snippet_name == NULL)
 	{
 		g_free (trigger_key);
-		g_free (snippet_language);
 		g_free (snippet_name);
 		return NULL;
 	}
@@ -161,13 +160,34 @@ snippets_manager_parse_native_snippet_node (xmlNodePtr snippet_node)
 			g_free (keywords_temp);
 			g_strfreev (keywords_temp_array);
 		}
+
+		/* Parse the languages of the snippet */
+		if (!g_strcmp0 ((gchar *)cur_field_node->name, NATIVE_XML_LANGUAGES_TAG))
+		{
+			languages_temp = (gchar *)xmlNodeGetContent (cur_field_node);
+			languages_temp_array = g_strsplit (languages_temp, " ", -1);
+
+			i = 0;
+			while (languages_temp_array[i])
+			{
+				if (g_strcmp0 (languages_temp_array[i], ""))
+				{
+					language_temp = g_utf8_strdown (languages_temp_array[i], -1);
+					snippet_languages = g_list_append (snippet_languages, language_temp); 
+				}
+				i ++;
+			}
+
+			g_free (languages_temp);
+			g_strfreev (languages_temp_array);
+		}
 		
 		cur_field_node = cur_field_node->next;
 	}
 	
 	/* Make a new AnjutaSnippet object */
 	snippet = snippet_new (trigger_key, 
-	                       snippet_language, 
+	                       snippet_languages, 
 	                       snippet_name, 
 	                       snippet_content, 
 	                       variable_names, 
@@ -177,7 +197,6 @@ snippets_manager_parse_native_snippet_node (xmlNodePtr snippet_node)
 
 	/* Free the memory (the data is copied on the snippet constructor) */
 	g_free (trigger_key);
-	g_free (snippet_language);
 	g_free (snippet_name);
 	g_free (snippet_content);
 	for (iter = g_list_first (variable_names); iter != NULL; iter = g_list_next (iter))
@@ -191,6 +210,11 @@ snippets_manager_parse_native_snippet_node (xmlNodePtr snippet_node)
 	g_list_free (variable_names);
 	g_list_free (variable_default_values);
 	g_list_free (variable_globals);
+	for (iter = g_list_first (snippet_languages); iter != NULL; iter = g_list_next (iter))
+	{
+		g_free (iter->data);
+	}
+	g_list_free (snippet_languages);
 	for (iter = g_list_first (keywords); iter != NULL; iter = g_list_next (iter))
 	{
 		g_free (iter->data);

@@ -49,7 +49,6 @@ enum
 	SNIPPETS_DB_MODEL_COL_DEFAULT_CONTENT,
 	SNIPPETS_DB_MODEL_COL_LANG,
 	SNIPPETS_DB_MODEL_COL_TRIGGER,
-	SNIPPETS_DB_MODEL_COL_SNIPPET_KEY,
 	SNIPPETS_DB_MODEL_COL_N
 };
 
@@ -118,7 +117,8 @@ const AnjutaSnippet*       snippets_db_get_snippet            (SnippetsDB* snipp
                                                                const gchar* language);
 gboolean                   snippets_db_remove_snippet         (SnippetsDB* snippets_db,
                                                                const gchar* trigger_key,
-                                                               const gchar* language);
+                                                               const gchar* language,
+                                                               gboolean remove_all_languages_support);
 
 /* SnippetsGroup handling methods */
 gboolean                   snippets_db_add_snippets_group     (SnippetsDB* snippets_db,

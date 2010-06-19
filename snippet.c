@@ -24,6 +24,9 @@
 #include "snippets-db.h"
 #include <gio/gio.h>
 
+#define SNIPPET_VARIABLE_START(text, index)  (text[index] == '$' && text[index + 1] == '{')
+#define SNIPPET_VARIABLE_END(text, index)    (text[index] == '}')
+
 /**
  * SnippetVariable:
  * @variable_name: the name of the variable.
@@ -51,7 +54,7 @@ typedef struct _AnjutaSnippetVariable
 struct _AnjutaSnippetPrivate
 {
 	gchar* trigger_key;
-	gchar* snippet_language;
+	GList* snippet_languages;
 	gchar* snippet_name;
 	
 	gchar* snippet_content;
@@ -76,12 +79,19 @@ snippet_dispose (GObject* snippet)
 	/* Delete the trigger_key, snippet_language, snippet_name and snippet_content fields */
 	g_free (anjuta_snippet->priv->trigger_key);
 	anjuta_snippet->priv->trigger_key = NULL;
-	g_free (anjuta_snippet->priv->snippet_language);
-	anjuta_snippet->priv->snippet_language = NULL;
 	g_free (anjuta_snippet->priv->snippet_name);
 	anjuta_snippet->priv->snippet_name = NULL;
 	g_free (anjuta_snippet->priv->snippet_content);
 	anjuta_snippet->priv->snippet_content = NULL;
+
+	/* Delete the languages */
+	for (iter = g_list_first (anjuta_snippet->priv->snippet_languages); iter != NULL; iter = g_list_next (iter))
+	{
+		p = iter->data;
+		g_free (p);
+	}
+	g_list_free (anjuta_snippet->priv->snippet_languages);
+	anjuta_snippet->priv->snippet_languages = NULL;
 	
 	/* Delete the keywords */
 	for (iter = g_list_first (anjuta_snippet->priv->keywords); iter != NULL; iter = g_list_next (iter))
@@ -135,7 +145,7 @@ snippet_init (AnjutaSnippet* snippet)
 
 	/* Initialize the private field */
 	snippet->priv->trigger_key = NULL;
-	snippet->priv->snippet_language = NULL;
+	snippet->priv->snippet_languages = NULL;
 	snippet->priv->snippet_name = NULL;
 	snippet->priv->snippet_content = NULL;
 	snippet->priv->variables = NULL;
@@ -146,7 +156,7 @@ snippet_init (AnjutaSnippet* snippet)
 /**
  * snippet_new:
  * @trigger_key: The trigger key of the snippet.
- * @snippet_language: The language for which the snippet is meant.
+ * @snippet_languages: A list with the languages for which the snippet is meant.
  * @snippet_name: A short, intuitive name of the snippet.
  * @snippet_content: The actual content of the snippet.
  * @variables_names: A #GList with the variable names.
@@ -160,7 +170,7 @@ snippet_init (AnjutaSnippet* snippet)
  **/
 AnjutaSnippet* 
 snippet_new (const gchar* trigger_key,
-             const gchar* snippet_language,
+             GList* snippet_languages,
              const gchar* snippet_name,
              const gchar* snippet_content,
              GList* variable_names,
@@ -175,7 +185,7 @@ snippet_new (const gchar* trigger_key,
 	
 	/* Assertions */
 	g_return_val_if_fail (trigger_key != NULL, NULL);
-	g_return_val_if_fail (snippet_language != NULL, NULL);
+	g_return_val_if_fail (snippet_languages != NULL, NULL);
 	g_return_val_if_fail (snippet_name != NULL, NULL);
 	g_return_val_if_fail (snippet_content != NULL, NULL);
 	g_return_val_if_fail (g_list_length (variable_names) == g_list_length (variable_default_values),
@@ -188,15 +198,24 @@ snippet_new (const gchar* trigger_key,
 	
 	/* Make a copy of the given strings */
 	snippet->priv->trigger_key      = g_strdup (trigger_key);
-	snippet->priv->snippet_language = g_utf8_strdown (snippet_language, -1);
 	snippet->priv->snippet_name     = g_strdup (snippet_name);
 	snippet->priv->snippet_content  = g_strdup (snippet_content);
+
+	/* Copy all the snippet languages to a new list */
+	snippet->priv->snippet_languages = NULL;
+	for (iter1 = g_list_first (snippet_languages); iter1 != NULL; iter1 = g_list_next (iter1))
+	{
+		/* We keep all languages with lower letters */
+		temporary_string_holder = g_utf8_strdown ((const gchar *)iter1->data, -1);
+		snippet->priv->snippet_languages = g_list_append (snippet->priv->snippet_languages,
+		                                                  temporary_string_holder);
+	}
 	
 	/* Copy all the keywords to a new list */
 	snippet->priv->keywords = NULL;
 	for (iter1 = g_list_first (keywords); iter1 != NULL; iter1 = g_list_next (iter1))
 	{
-		temporary_string_holder = g_strdup ((gchar*)iter1->data);
+		temporary_string_holder = g_strdup ((gchar *)iter1->data);
 		snippet->priv->keywords = g_list_append (snippet->priv->keywords, temporary_string_holder);
 	}
 	
@@ -247,17 +266,161 @@ snippet_get_trigger_key (AnjutaSnippet* snippet)
  * snippet_get_language:
  * @snippet: A #AnjutaSnippet object.
  *
- * Gets the language of the snippet.
+ * Gets the supported languages of the snippet.
  *
- * Returns: The snippet language or NULL if @snippet is invalid.
+ * Returns: A GList with strings representing the supported languages or NULL if @snippet is invalid.
  **/
-const gchar*	
-snippet_get_language (AnjutaSnippet* snippet)
+const GList *	
+snippet_get_languages (AnjutaSnippet* snippet)
 {
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 
-	return snippet->priv->snippet_language;
+	return snippet->priv->snippet_languages;
+}
+
+/**
+ * snippet_get_languages_string:
+ * @snippet: A #AnjutaSnippets object.
+ *
+ * Formats a string with the supported languages. For example, if the snippet
+ * is supported by C, C++ and Java, the returned string should look like:
+ * "C/C++/Java".
+ *
+ * Returns: The above mentioned string or NULL on error. The memory should be free'd.
+ */
+gchar*          
+snippet_get_languages_string (AnjutaSnippet *snippet)
+{
+	GString *languages_string = NULL;
+	GList *languages = NULL, *iter = NULL;
+	gchar *cur_language = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
+	g_return_val_if_fail (snippet->priv != NULL, NULL);
+	languages = snippet->priv->snippet_languages;
+	languages_string = g_string_new ("");
+	
+	for (iter = g_list_first (languages); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_language = (gchar *)iter->data;
+		languages_string = g_string_append (languages_string, cur_language);
+		languages_string = g_string_append_c (languages_string, '/');
+	}
+	/* We delete the last '/' */
+	languages_string = g_string_set_size (languages_string, languages_string->len - 1);
+
+	return g_string_free (languages_string, FALSE);
+}
+
+/**
+ * snippet_has_language:
+ * @snippet: A #AnjutaSnippet object.
+ * @language: The language for which the query is done.
+ *
+ * Tests if the snippet is meant for the given language.
+ *
+ * Returns: TRUE if the snippet is meant for the given language.
+ */
+gboolean
+snippet_has_language (AnjutaSnippet *snippet,
+                      const gchar *language)
+{
+	GList *languages = NULL, *iter = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
+	g_return_val_if_fail (snippet->priv != NULL, FALSE);
+	g_return_val_if_fail (language != NULL, FALSE);
+	languages = snippet->priv->snippet_languages;
+
+	for (iter = g_list_first (languages); iter != NULL; iter = g_list_next (iter))
+	{
+		if (!g_strcmp0 ((gchar *)iter->data, language))
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
+/**
+ * snippet_get_any_language:
+ * @snippet: A #AnjutaSnippet object.
+ *
+ * Returns any of the languages that is supported by the given snippet. This should
+ * be useful for stuff like removing a snippet from a snippets-group.
+ *
+ * Returns: Any of the languages supported by the snippet (or NULL if an error occured).
+ */
+const gchar*
+snippet_get_any_language (AnjutaSnippet *snippet)
+{
+	GList *first_language_node = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
+	g_return_val_if_fail (snippet->priv != NULL, NULL);
+	
+	first_language_node = g_list_first (snippet->priv->snippet_languages);
+	if (first_language_node == NULL)
+		return NULL;
+	
+	return (const gchar *)first_language_node->data;
+}
+
+/**
+ * snippet_add_language:
+ * @snippet: A #AnjutaSnippet object
+ * @language: The language for which we want to add support to the snippet.
+ *
+ * By adding a language to a snippet, we mean that now the snippet can be used in that
+ * programming language.
+ */
+void            
+snippet_add_language (AnjutaSnippet *snippet,
+                      const gchar *language)
+{
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (snippet->priv != NULL);
+	
+	if (snippet_has_language (snippet, language))
+		return;
+
+	snippet->priv->snippet_languages = g_list_append (snippet->priv->snippet_languages, 
+	                                                  (gchar *)language);
+}
+
+
+/**
+ * snippet_remove_language:
+ * @snippet: A #AnjutaSnippet object
+ * @language: The language for which we want to remove support from the snippet.
+ *
+ * The snippet won't be able to be used for the removed programming language.
+ */                                                   
+void
+snippet_remove_language (AnjutaSnippet *snippet,
+                         const gchar *language)
+{
+	GList *iter = NULL;
+	gpointer p = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (snippet->priv != NULL);
+	g_return_if_fail (language != NULL);
+
+	for (iter = g_list_first (snippet->priv->snippet_languages); iter != NULL; iter = g_list_next (iter))
+		if (!g_strcmp0 ((gchar *)iter->data, language))
+		{
+			p = iter->data;
+			snippet->priv->snippet_languages = g_list_remove (snippet->priv->snippet_languages,
+			                                                  iter->data);
+			g_free (p);
+		}
+	
 }
 
 /**
@@ -433,7 +596,7 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 	{
 		/* If it's the start of a variable name, we look up the end, get the name
 		   and evaluate it. */
-		if (snippet_text[i] == '$' && snippet_text[i + 1] == '{')
+		if (SNIPPET_VARIABLE_START (snippet_text, i))
 		{
 			GString *cur_var_name = NULL;
 			gchar *cur_var_value = NULL;
@@ -441,9 +604,9 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 			AnjutaSnippetVariable *cur_var = NULL;
 			GList *iter = NULL;
 			
-			/* We search for the "}" */
+			/* We search for the variable end */
 			cur_var_name = g_string_new ("");
-			for (j = i + 2; j < snippet_text_size && snippet_text[j] != '}'; j ++)
+			for (j = i + 2; j < snippet_text_size && !SNIPPET_VARIABLE_END (snippet_text, j); j ++)
 				cur_var_name = g_string_append_c (cur_var_name, snippet_text[j]);
 			i = j;
 

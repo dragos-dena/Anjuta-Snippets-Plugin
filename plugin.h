@@ -68,6 +68,11 @@ struct _SnippetsManagerPlugin
 	/* Current IAnjutaEditor or NULL if the current IAnjutaDocument isn't an Editor */
 	IAnjutaEditor *cur_editor;
 	gint cur_editor_watch_id;
+	gint cur_editor_handler_id;
+
+	/* The Menu UI */
+	GtkActionGroup *action_group;
+	gint uiid;
 };
 
 

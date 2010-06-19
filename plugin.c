@@ -31,14 +31,36 @@
 #include <libanjuta/anjuta-debug.h>
 #include <libanjuta/anjuta-utils.h>
 
-#define ICON_FILE	"anjuta-snippets-manager.png"
-#define PREFERENCES_UI	PACKAGE_DATA_DIR"/glade/snippets-manager-preferences.ui"
+#define ICON_FILE	                      "anjuta-snippets-manager.png"
+#define PREFERENCES_UI	                  PACKAGE_DATA_DIR"/glade/snippets-manager-preferences.ui"
 #define SNIPPETS_MANAGER_PREFERENCES_ROOT "snippets_preferences_root"
+#define MENU_UI                           PACKAGE_DATA_DIR"/ui/snippets-manager-ui.xml"
 
 #define GLOBAL_VAR_NEW_NAME   "new_global_var_name"
 #define GLOBAL_VAR_NEW_VALUE  "new_global_var_value"
 
 static gpointer parent_class;
+
+static void on_menu_insert_snippet (GtkAction *action, SnippetsManagerPlugin *plugin);
+
+/* TODO - add the other menu items and actions */
+
+static GtkActionEntry actions_snippets[] = {
+	{
+		"ActionMenuEditSnippetsManager",
+		NULL,
+		N_("Snippets Manager"),
+		NULL,
+		NULL,
+		NULL},
+	{
+		"ActionEditInsertSnippet",
+		NULL,
+		N_("_Insert Snippet"),
+		"<control><alt>e",
+		N_("Insert a macro using the trigger-key"),
+		G_CALLBACK (on_menu_insert_snippet)}
+};
 
 typedef struct _GlobalVariablesUpdateData
 {
@@ -104,6 +126,30 @@ snippet_insert (SnippetsManagerPlugin * plugin,
 	return TRUE;
 }
 
+static void 
+on_menu_insert_snippet (GtkAction *action, 
+                        SnippetsManagerPlugin *plugin)
+{
+	gchar *current_word = NULL;
+	IAnjutaIterable *cur_pos = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin));
+
+	/* If the current document isn't an editor, return */
+	if (plugin->cur_editor == NULL)
+		return;
+
+	/* Get the current word and request an insert */
+	current_word = ianjuta_editor_get_current_word (plugin->cur_editor, NULL);
+	cur_pos = ianjuta_editor_get_position (plugin->cur_editor, NULL);
+	
+	if (snippet_insert (plugin, current_word))
+	{
+		/* TODO - delete the current_word from the editor */
+	}
+}
+
 static void
 on_added_current_document (AnjutaPlugin *plugin, 
                            const gchar *name,
@@ -136,6 +182,13 @@ on_removed_current_document (AnjutaPlugin *plugin,
 	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin));
 	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
 
+	/* Disconnect the handler if needed */
+//	if (IANJUTA_IS_EDITOR (snippets_manager_plugin->cur_editor))
+//	{
+//		g_signal_handler_disconnect (G_OBJECT (snippets_manager_plugin->cur_editor),
+//		                             snippets_manager_plugin->cur_editor_handler_id);
+//	}
+
 	snippets_manager_plugin->cur_editor = NULL;
 }
 
@@ -143,7 +196,8 @@ static gboolean
 snippets_manager_activate (AnjutaPlugin * plugin)
 {
 	SnippetsManagerPlugin *snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
-
+	AnjutaUI *anjuta_ui = NULL;
+	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (snippets_manager_plugin),
 	                      FALSE);
@@ -153,11 +207,26 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 
 	/* Add a watch for the current document */
 	snippets_manager_plugin->cur_editor_watch_id = 
-	                         anjuta_plugin_add_watch (plugin,
-	                                                  IANJUTA_DOCUMENT_MANAGER_CURRENT_DOCUMENT,
-	                                                  on_added_current_document,
-	                                                  on_removed_current_document,
-	                                                  NULL);
+		anjuta_plugin_add_watch (plugin,
+		                         IANJUTA_DOCUMENT_MANAGER_CURRENT_DOCUMENT,
+		                         on_added_current_document,
+		                         on_removed_current_document,
+		                         NULL);
+
+	/* Merge the Menu UI */
+	anjuta_ui = anjuta_shell_get_ui (plugin->shell, FALSE);
+
+	snippets_manager_plugin->action_group =
+		anjuta_ui_add_action_group_entries (anjuta_ui,
+		                                    "ActionGroupSnippetsManager",
+		                                    _("Snippets Manager actions"),
+		                                    actions_snippets,
+		                                    G_N_ELEMENTS (actions_snippets),
+		                                    GETTEXT_PACKAGE, 
+		                                    TRUE, 
+		                                    snippets_manager_plugin);
+
+	snippets_manager_plugin->uiid = anjuta_ui_merge (anjuta_ui, MENU_UI);
 
 	DEBUG_PRINT ("%s", "SnippetsManager: Activating SnippetsManager plugin …");
 
@@ -165,13 +234,26 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 }
 
 static gboolean
-snippets_manager_deactivate (AnjutaPlugin * plugin)
+snippets_manager_deactivate (AnjutaPlugin *plugin)
 {
-	SnippetsManagerPlugin *snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
-
+	SnippetsManagerPlugin *snippets_manager_plugin = NULL;
+	AnjutaUI *anjuta_ui = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin), FALSE);
+	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
+	
 	DEBUG_PRINT ("%s", "SnippetsManager: Deactivating SnippetsManager plugin …");
 
-	snippet_insert (snippets_manager_plugin, "ifelse");
+	anjuta_plugin_remove_watch (plugin, 
+	                            snippets_manager_plugin->cur_editor_watch_id, 
+	                            FALSE);
+
+	/* Remove the Menu UI */
+	anjuta_ui = anjuta_shell_get_ui (plugin->shell, NULL);
+	anjuta_ui_unmerge (anjuta_ui, snippets_manager_plugin->uiid);
+	anjuta_ui_remove_action_group (anjuta_ui, snippets_manager_plugin->action_group);
+	
 	return TRUE;
 }
 
@@ -224,6 +306,10 @@ snippets_manager_plugin_instance_init (GObject * obj)
 
 	snippets_manager->cur_editor = NULL;
 	snippets_manager->cur_editor_watch_id = -1;
+	snippets_manager->cur_editor_handler_id = -1;
+
+	snippets_manager->action_group = NULL;
+	snippets_manager->uiid = -1;
 
 	/* TODO */
 	snippets_manager->snippets_db = snippets_db_new ();

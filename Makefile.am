@@ -8,7 +8,8 @@ snippets_manager_glade_DATA = snippets-manager-preferences.ui
 # The default installed plugins here.
 default_snippetsdir = $(anjuta_data_dir)
 default_snippets_DATA = \
-	default-snippets.xml \
+	comments-and-licenses-snippets.xml \
+	general-purpose-snippets.xml \
 	snippets-global-variables.xml
                         
 
@@ -17,9 +18,9 @@ snippets_manager_pixmaps_DATA = \
 	anjuta-snippets-manager.png
 
 # Plugin menu UI file
-# Not sure if an entrance in the menu will be necessary.
-# snippets_manager_uidir = $(anjuta_ui_dir)
-# snippets_manager_ui_DATA = anjuta-snippets-manager.xml [TODO-stage2]
+snippets_manager_uidir = $(anjuta_ui_dir)
+snippets_manager_ui_DATA = \
+	snippets-manager-ui.xml
 
 plugin_in_files = anjuta-snippets-manager.plugin.in
 %.plugin: %.plugin.in $(INTLTOOL_MERGE) $(wildcard $(top_srcdir)/po/*po) ; $(INTLTOOL_MERGE) $(top_srcdir)/po $< $@ -d -u -c $(top_builddir)/po/.intltool-merge-cache
@@ -66,6 +67,7 @@ EXTRA_DIST = \
 	$(snippets_manager_pixmaps_DATA) \
 	$(snippets_manager_plugin_DATA) \
 	$(snippets_manager_glade_DATA) \
-	$(default_snippets_DATA)
+	$(default_snippets_DATA) \
+	$(snippets_manager_ui_DATA)
 
 -include $(top_srcdir)/git.mk

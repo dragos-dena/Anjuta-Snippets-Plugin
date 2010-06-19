@@ -69,7 +69,8 @@ gboolean              snippets_group_add_snippet       (AnjutaSnippetsGroup* sni
                                                         gboolean overwrite);
 void                  snippets_group_remove_snippet    (AnjutaSnippetsGroup* snippets_group,
                                                         const gchar* trigger_key,
-                                                        const gchar* language);
+                                                        const gchar* language,
+                                                        gboolean remove_all_languages_support);
 const GList*          snippets_group_get_snippets_list (AnjutaSnippetsGroup* snippets_group);
 
 G_END_DECLS

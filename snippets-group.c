@@ -182,26 +182,40 @@ snippets_group_add_snippet (AnjutaSnippetsGroup* snippets_group,
                             AnjutaSnippet* snippet,
                             gboolean overwrite)
 {
-	GList *iter = NULL, *to_be_replaced_node = NULL;
+	GList *iter = NULL, *to_be_replaced_node = NULL, *languages = NULL, *iter2 = NULL;
 	AnjutaSnippet *cur_snippet = NULL, *to_be_replaced_snippet = NULL;
 	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group), FALSE);
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
+	languages = (GList *)snippet_get_languages (snippet);
 	
 	/* Check if there is a snippet with the same key */
 	for (iter = g_list_first (snippets_group->priv->snippets); iter != NULL; iter = g_list_next (iter))
 	{
 		cur_snippet = (AnjutaSnippet *)iter->data;
 		g_return_val_if_fail (ANJUTA_IS_SNIPPET (cur_snippet), FALSE);
-		
-		if (!g_strcmp0 (snippet_get_trigger_key (cur_snippet), snippet_get_trigger_key (snippet)) &&
-		    !g_strcmp0 (snippet_get_language (cur_snippet), snippet_get_language (snippet)))
+
+		if (!g_strcmp0 (snippet_get_trigger_key (cur_snippet), snippet_get_trigger_key (snippet)))
 		{
-			to_be_replaced_snippet = cur_snippet;
-			 /* Could of used iter here, but just to be clear */
-			to_be_replaced_node = iter;
-			break;
+			/* We test if any language conflict occurs */
+			gboolean conflict = FALSE;
+			for (iter2 = g_list_first (languages); iter2 != NULL; iter2 = g_list_next (iter2))
+				if (snippet_has_language (cur_snippet, (gchar *)iter2->data))
+				{
+					conflict = TRUE;
+					break;
+				}
+
+			/* If we have a conflict it means we need to overwrite it (if we have permissions)
+			   or the adding will fail (if we don't) */
+			if (conflict)
+			{
+				to_be_replaced_snippet = cur_snippet;
+				 /* Could of used iter here, but just to be clear */
+				to_be_replaced_node = iter;
+				break;
+			}
 		}
 		
 	}
@@ -240,18 +254,21 @@ snippets_group_add_snippet (AnjutaSnippetsGroup* snippets_group,
  * @snippets_group: A #AnjutaSnippetsGroup object.
  * @trigger_key: The trigger-key of the #AnjutaSnippet to be removed.
  * @language: The language of the #AnjutaSnippet to be removed.
+ * @remove_all_languages_support: If it's FALSE it will remove just the support of the snippet for
+ *                                the language. If it's TRUE it will actually remove the snippet.
  *
- * Removes a new #AnjutaSnippet from the snippet group.
+ * If remove_all_languages_support is TRUE, this will remove the snippet from the snippet-group,
+ * if it's FALSE, it will just remove the language support for the given language.
  **/
 void 
 snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
                                const gchar* trigger_key,
-                               const gchar* language)
+                               const gchar* language,
+                               gboolean remove_all_languages_support)
 {
 	GList *iter = NULL;
 	AnjutaSnippet *to_be_deleted_snippet = NULL, *cur_snippet;
 	const gchar *cur_snippet_trigger = NULL;
-	const gchar *cur_snippet_language = NULL;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group));
@@ -265,13 +282,20 @@ snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
 		if (!ANJUTA_IS_SNIPPET (cur_snippet))
 			g_return_if_reached ();
 		cur_snippet_trigger = snippet_get_trigger_key (cur_snippet);
-		cur_snippet_language = snippet_get_language (cur_snippet);
 		
 		if (!g_strcmp0 (cur_snippet_trigger, trigger_key) &&
-		    !g_strcmp0 (cur_snippet_language, language))
+		    snippet_has_language (cur_snippet, language))
 		{
-			to_be_deleted_snippet = cur_snippet;
-			break;
+			if (remove_all_languages_support)
+			{
+				to_be_deleted_snippet = cur_snippet;
+				break;
+			}
+			else
+			{
+				snippet_remove_language (cur_snippet, language);
+				return;
+			}
 		}
 		
 	}
