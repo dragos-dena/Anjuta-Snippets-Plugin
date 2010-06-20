@@ -22,6 +22,7 @@
 #ifndef __SNIPPETS_INTERACTION_H__
 #define __SNIPPETS_INTERACTION_H__
 
+#include <glib.h>
 #include <glib-object.h>
 #include "snippet.h"
 #include <libanjuta/anjuta-shell.h>

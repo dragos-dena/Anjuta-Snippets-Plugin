@@ -27,6 +27,8 @@
 #define SNIPPET_VARIABLE_START(text, index)  (text[index] == '$' && text[index + 1] == '{')
 #define SNIPPET_VARIABLE_END(text, index)    (text[index] == '}')
 
+#define STRING_CUR_POSITION(string)          string->len
+
 #define END_CURSOR_VARIABLE_NAME             "END_CURSOR_POSITION"
 
 /**
@@ -46,8 +48,9 @@ typedef struct _AnjutaSnippetVariable
 	gchar* variable_name;
 	gchar* default_value;
 	gboolean is_global;
-	gint16 appearances;
-	guint32* relative_positions;
+	gint appearances;
+	gint cur_value_len;
+	GPtrArray* relative_positions;
 } AnjutaSnippetVariable;
 
 
@@ -65,6 +68,8 @@ struct _AnjutaSnippetPrivate
 	GList* keywords;
 	
 	gint32 chars_inserted;
+
+	gint cur_value_end_position;
 };
 
 
@@ -111,7 +116,7 @@ snippet_dispose (GObject* snippet)
 		
 		g_free (cur_snippet_var->variable_name);
 		g_free (cur_snippet_var->default_value);
-		g_free (cur_snippet_var->relative_positions);
+		g_ptr_array_free (cur_snippet_var->relative_positions, TRUE);
 		
 		g_free (cur_snippet_var);
 	}
@@ -153,6 +158,7 @@ snippet_init (AnjutaSnippet* snippet)
 	snippet->priv->variables = NULL;
 	snippet->priv->keywords = NULL;
 	snippet->priv->chars_inserted = 0;
+	snippet->priv->cur_value_end_position = 0;
 }
 
 /**
@@ -233,9 +239,9 @@ snippet_new (const gchar* trigger_key,
 		cur_snippet_var->variable_name = g_strdup ((gchar*)iter1->data);
 		cur_snippet_var->default_value = g_strdup ((gchar*)iter2->data);
 		cur_snippet_var->is_global = GPOINTER_TO_INT (iter3->data);
-		cur_snippet_var->appearances = 0;            /* TODO */
-		cur_snippet_var->relative_positions = NULL;  /* TODO The relative positions should be calculated in a single
-		                                                     snippet_content parsing after this block. */
+		cur_snippet_var->appearances = 0;            
+		cur_snippet_var->cur_value_len = 0;
+		cur_snippet_var->relative_positions = g_ptr_array_new ();
 		
 		snippet->priv->variables = g_list_append (snippet->priv->variables, cur_snippet_var);
 
@@ -574,23 +580,48 @@ snippet_get_content (AnjutaSnippet* snippet)
 	return snippet->priv->snippet_content;
 }
 
+static void
+reset_variables (AnjutaSnippet *snippet)
+{
+	GList *iter = NULL;
+	AnjutaSnippetVariable *cur_var = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (snippet->priv != NULL);
+	
+	for (iter = g_list_first (snippet->priv->variables); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_var = (AnjutaSnippetVariable *)iter->data;
+
+		cur_var->appearances = 0;
+		cur_var->cur_value_len = 0;
+		if (cur_var->relative_positions->len > 0)
+			g_ptr_array_remove_range (cur_var->relative_positions, 
+				                      0, cur_var->relative_positions->len);
+	}
+}
+
 static gchar *
 expand_global_and_default_variables (AnjutaSnippet *snippet,
+                                     gchar *snippet_text,
                                      SnippetsDB *snippets_db)
 {
-	gchar *snippet_text = NULL;
 	gint snippet_text_size = 0, i = 0, j = 0;
 	GString *buffer = NULL;
-	
+	GList *iter = NULL;
+
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), NULL);
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
-	snippet_text = snippet->priv->snippet_content;
 
 	/* We get the snippet_text_size (for iterating) and init the buffer */
 	snippet_text_size = strlen (snippet_text);
 	buffer = g_string_new ("");
 
+	/* We reset the variable */
+	reset_variables (snippet);
+	
 	/* We expand the variables to the default value or if they are global variables
 	   we query the database for their value. If the database can't answer to our
 	   request, we fill them also with their default values */
@@ -604,7 +635,6 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 			gchar *cur_var_value = NULL;
 			gint cur_var_value_size = 0;
 			AnjutaSnippetVariable *cur_var = NULL;
-			GList *iter = NULL;
 			
 			/* We search for the variable end */
 			cur_var_name = g_string_new ("");
@@ -615,7 +645,7 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 			/* We first see if it's the END_CURSOR_POSITION variable */
 			if (!g_strcmp0 (cur_var_name->str, END_CURSOR_VARIABLE_NAME))
 			{
-				/* TODO - do something with this position */
+				snippet->priv->cur_value_end_position = STRING_CUR_POSITION (buffer);
 
 				g_string_free (cur_var_name, TRUE);
 				continue;
@@ -647,8 +677,13 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 					cur_var_value = g_strdup (cur_var->default_value);
 			}
 
-			/* Append the variable value to the buffer */
+			/* Update the variable data */
 			cur_var_value_size = strlen (cur_var_value);
+			cur_var->cur_value_len = cur_var_value_size;
+			g_ptr_array_add (cur_var->relative_positions, 
+			                 GINT_TO_POINTER (STRING_CUR_POSITION (buffer)));
+			printf ("[%s %d]\n", cur_var_value, STRING_CUR_POSITION (buffer));
+			/* Append the variable value to the buffer */
 			buffer = g_string_append (buffer, cur_var_value);
 
 			g_free (cur_var_value);
@@ -659,7 +694,7 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 			buffer = g_string_append_c (buffer, snippet_text[i]);
 		}
 	}
-
+	printf ("\n---------\n%s\n----------------\n", buffer->str);
 	return g_string_free (buffer, FALSE);
 }
 
@@ -714,25 +749,21 @@ snippet_get_default_content (AnjutaSnippet *snippet,
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
 
-	temp = snippet->priv->snippet_content;
+	/* Get the with indentation */
+	temp = get_text_with_indentation (snippet->priv->snippet_content, indent);
 
 	/* If we should expand the global variables */
 	if (snippets_db_obj && ANJUTA_IS_SNIPPETS_DB (snippets_db_obj))
 	{
 		/* Expand the global variables */
-		temp = expand_global_and_default_variables (snippet, 
-		                                            ANJUTA_SNIPPETS_DB (snippets_db_obj));
-	}
-	
-	/* Get the text with indentation */
-	if (temp)
-	{
-		buffer = get_text_with_indentation (temp, indent);
+		buffer = expand_global_and_default_variables (snippet,
+		                                              temp,
+		                                              ANJUTA_SNIPPETS_DB (snippets_db_obj));
 		g_free (temp);
 	}
 	else
 	{
-		buffer = get_text_with_indentation (snippet->priv->snippet_content, indent);
+		buffer = temp;
 	}
 	
 	return buffer;

@@ -31,6 +31,11 @@ struct _SnippetsInteractionPrivate
 	IAnjutaIterable *cursor_position;
 
 	AnjutaSnippet *cur_snippet;
+
+	gchar *cur_editor_name;
+	gboolean editing;
+	
+	AnjutaShell *shell;
 };
 
 G_DEFINE_TYPE (SnippetsInteraction, snippets_interaction, G_TYPE_OBJECT);
@@ -60,6 +65,12 @@ snippets_interaction_init (SnippetsInteraction *snippets_interaction)
 	snippets_interaction->priv->cursor_position        = NULL;
 
 	snippets_interaction->priv->cur_snippet = NULL;
+
+	snippets_interaction->priv->cur_editor_name = NULL;
+	snippets_interaction->priv->editing         = FALSE;
+
+	snippets_interaction->priv->shell = NULL;
+	
 }
 
 static void
@@ -84,7 +95,11 @@ void
 snippets_interaction_start (SnippetsInteraction *snippets_interaction,
                             AnjutaShell *shell)
 {
-	/* TODO */
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_INTERACTION (snippets_interaction));
+	g_return_if_fail (ANJUTA_IS_SHELL (shell));
+
+	snippets_interaction->priv->shell = shell;
 }
 
 void
@@ -97,5 +112,9 @@ void
 snippets_interaction_interpret_snippet (SnippetsInteraction *snippets_interaction,
                                         const AnjutaSnippet *snippet)
 {
-	/* TODO */
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_INTERACTION (snippets_interaction));
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+
+	snippets_interaction->priv->cur_snippet = (AnjutaSnippet *)snippet;
 }
