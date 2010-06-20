@@ -83,11 +83,8 @@ const gchar*    snippet_get_content                     (AnjutaSnippet *snippet)
 gchar*          snippet_get_default_content             (AnjutaSnippet *snippet,
                                                          GObject *snippets_db_obj,
                                                          const gchar *indent);
-void            snippet_set_editing_mode                (AnjutaSnippet *snippet);
-GList*          snippet_get_variable_relative_positions (AnjutaSnippet *snippet,
-                                                         const gchar *variable_name);
-void            snippet_update_chars_inserted           (AnjutaSnippet *snippet,
-                                                         gint32 inserted_chars);
+GList*          snippet_get_variable_relative_positions (AnjutaSnippet *snippet);
+GList*          snippet_get_variable_cur_values_len     (AnjutaSnippet *snippet);
 
 G_END_DECLS
 

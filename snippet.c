@@ -30,13 +30,15 @@
 #define STRING_CUR_POSITION(string)          string->len
 
 #define END_CURSOR_VARIABLE_NAME             "END_CURSOR_POSITION"
+#define LANGUAGE_SEPARATOR                   '/'
 
 /**
  * SnippetVariable:
  * @variable_name: the name of the variable.
  * @default_value: the default value as it will be inserted in the code.
  * @is_global: if the variable is global accross the SnippetDB. Eg: username or email.
- * @appearances: the number of appearances the variable has in the snippet.
+ * @cur_valaue_len: If the snippet was computed recently, it represents the length of the current variable
+ *                  (default or global variable)
  * @relative_positions: the relative positions from the start of the snippet code each instance of
  *                      this variable has.
  *
@@ -48,9 +50,10 @@ typedef struct _AnjutaSnippetVariable
 	gchar* variable_name;
 	gchar* default_value;
 	gboolean is_global;
-	gint appearances;
+
 	gint cur_value_len;
 	GPtrArray* relative_positions;
+	
 } AnjutaSnippetVariable;
 
 
@@ -66,10 +69,10 @@ struct _AnjutaSnippetPrivate
 	
 	GList* variables;
 	GList* keywords;
-	
-	gint32 chars_inserted;
 
 	gint cur_value_end_position;
+
+	gboolean default_computed;
 };
 
 
@@ -116,7 +119,7 @@ snippet_dispose (GObject* snippet)
 		
 		g_free (cur_snippet_var->variable_name);
 		g_free (cur_snippet_var->default_value);
-		g_ptr_array_free (cur_snippet_var->relative_positions, TRUE);
+		g_ptr_array_unref (cur_snippet_var->relative_positions);
 		
 		g_free (cur_snippet_var);
 	}
@@ -157,8 +160,9 @@ snippet_init (AnjutaSnippet* snippet)
 	snippet->priv->snippet_content = NULL;
 	snippet->priv->variables = NULL;
 	snippet->priv->keywords = NULL;
-	snippet->priv->chars_inserted = 0;
+
 	snippet->priv->cur_value_end_position = 0;
+	snippet->priv->default_computed = FALSE;
 }
 
 /**
@@ -239,7 +243,7 @@ snippet_new (const gchar* trigger_key,
 		cur_snippet_var->variable_name = g_strdup ((gchar*)iter1->data);
 		cur_snippet_var->default_value = g_strdup ((gchar*)iter2->data);
 		cur_snippet_var->is_global = GPOINTER_TO_INT (iter3->data);
-		cur_snippet_var->appearances = 0;            
+		
 		cur_snippet_var->cur_value_len = 0;
 		cur_snippet_var->relative_positions = g_ptr_array_new ();
 		
@@ -314,7 +318,7 @@ snippet_get_languages_string (AnjutaSnippet *snippet)
 	{
 		cur_language = (gchar *)iter->data;
 		languages_string = g_string_append (languages_string, cur_language);
-		languages_string = g_string_append_c (languages_string, '/');
+		languages_string = g_string_append_c (languages_string, LANGUAGE_SEPARATOR);
 	}
 	/* We delete the last '/' */
 	languages_string = g_string_set_size (languages_string, languages_string->len - 1);
@@ -594,7 +598,6 @@ reset_variables (AnjutaSnippet *snippet)
 	{
 		cur_var = (AnjutaSnippetVariable *)iter->data;
 
-		cur_var->appearances = 0;
 		cur_var->cur_value_len = 0;
 		if (cur_var->relative_positions->len > 0)
 			g_ptr_array_remove_range (cur_var->relative_positions, 
@@ -682,7 +685,7 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 			cur_var->cur_value_len = cur_var_value_size;
 			g_ptr_array_add (cur_var->relative_positions, 
 			                 GINT_TO_POINTER (STRING_CUR_POSITION (buffer)));
-			printf ("[%s %d]\n", cur_var_value, STRING_CUR_POSITION (buffer));
+			
 			/* Append the variable value to the buffer */
 			buffer = g_string_append (buffer, cur_var_value);
 
@@ -694,7 +697,7 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 			buffer = g_string_append_c (buffer, snippet_text[i]);
 		}
 	}
-	printf ("\n---------\n%s\n----------------\n", buffer->str);
+	
 	return g_string_free (buffer, FALSE);
 }
 
@@ -765,63 +768,83 @@ snippet_get_default_content (AnjutaSnippet *snippet,
 	{
 		buffer = temp;
 	}
+
+	snippet->priv->default_computed = TRUE;
 	
 	return buffer;
 }
 
 /**
- * snippet_set_editing_mode:
- * @snippet: A #AnjutaSnippet object.
- *
- * Should be called after the snippet is inserted to reset it's internal counter.
- *
- **/
-void
-snippet_set_editing_mode (AnjutaSnippet* snippet)
-{
-	/* Assertions */
-	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
-
-	/* TODO Compute the relative positions (may be changed after a previous editing mode) */
-	snippet->priv->chars_inserted = 0;
-}
-
-/**
  * snippet_get_variable_relative_positions:
  * @snippet: A #AnjutaSnippet object.
- * @variable_name: The name of the variable for which the relative positions are requested.
  *
- * Gets a list with the relative positions of all the variables from the start of the snippet text
- * at the time the function is called.
+ * A GList* of GPtrArray* with the relative positions of all snippet variables instances
+ * from the start of the last computed default content.
+ *
+ * For example, the second element of the GPtrArray found in the first GList node has
+ * the meaning of: the relative position of the second instance of the first variable
+ * in the last computed default content.
+ *
+ * The values in the GPTrArray are gint's.
+ *
+ * If the default content was never computed, the method will return NULL.
+ *
+ * The GList should be free'd, but each GPtrArray should be just unrefed!
  *
  * Returns: A #GList with the positions or NULL on failure.
  **/
 GList*	
-snippet_get_variable_relative_positions	(AnjutaSnippet* snippet,
-                                         const gchar* variable_name)
+snippet_get_variable_relative_positions	(AnjutaSnippet* snippet)
 {
+	GList *relative_positions_list = NULL, *iter = NULL;
+	AnjutaSnippetVariable *cur_variable = NULL;
+	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
+	g_return_val_if_fail (snippet->priv != NULL, NULL);
+	g_return_val_if_fail (snippet->priv->default_computed, NULL);
 
-	/* TODO */
-	return NULL;
+	for (iter = g_list_first (snippet->priv->variables); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_variable = (AnjutaSnippetVariable *)iter->data;
+
+		relative_positions_list = g_list_append (relative_positions_list,
+		                                         cur_variable->relative_positions);
+		g_ptr_array_ref (cur_variable->relative_positions);
+	}
+	
+	return relative_positions_list;
 }
 
 /**
- * snippet_update_chars_inserted:
- * @snippet: A #AnjutaSnippet object.
- * @inserted_chars: The number of characters were inserted/deleted after the last update.
+ * snippet_get_variable_cur_values_len:
+ * @snippet: A #AnjutaSnippet object
  *
- * Updates the internal counter of the inserted characters so a next call of
- * #AnjutaSnippet_get_variable_relative_positions will be relevant.
+ * Get's a #GList with the length (#gint) of each of the variables last computed
+ * default value. The order is the same as for #snippet_get_variable_relative_positions.
  *
- **/
-void
-snippet_update_chars_inserted (AnjutaSnippet* snippet,
-                               gint32 inserted_chars)
+ * The #GList should be free'd.
+ *
+ * Returns: The requested #GList or NULL on failure.
+ */
+GList*          
+snippet_get_variable_cur_values_len (AnjutaSnippet *snippet)
 {
+	GList *cur_values_len_list = NULL, *iter = NULL;
+	AnjutaSnippetVariable *cur_variable = NULL;
+	
 	/* Assertions */
-	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
+	g_return_val_if_fail (snippet->priv != NULL, NULL);
 
-	snippet->priv->chars_inserted += inserted_chars;
+	for (iter = g_list_first (snippet->priv->variables); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_variable = (AnjutaSnippetVariable *)iter->data;
+
+		cur_values_len_list = g_list_append (cur_values_len_list,
+		                                     GINT_TO_POINTER (cur_variable->cur_value_len));
+	
+	}
+
+	return cur_values_len_list;	
 }
