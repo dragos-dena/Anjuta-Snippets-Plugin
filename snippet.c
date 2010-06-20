@@ -27,6 +27,8 @@
 #define SNIPPET_VARIABLE_START(text, index)  (text[index] == '$' && text[index + 1] == '{')
 #define SNIPPET_VARIABLE_END(text, index)    (text[index] == '}')
 
+#define END_CURSOR_VARIABLE_NAME             "END_CURSOR_POSITION"
+
 /**
  * SnippetVariable:
  * @variable_name: the name of the variable.
@@ -610,6 +612,15 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 				cur_var_name = g_string_append_c (cur_var_name, snippet_text[j]);
 			i = j;
 
+			/* We first see if it's the END_CURSOR_POSITION variable */
+			if (!g_strcmp0 (cur_var_name->str, END_CURSOR_VARIABLE_NAME))
+			{
+				/* TODO - do something with this position */
+
+				g_string_free (cur_var_name, TRUE);
+				continue;
+			}
+			
 			/* Look up the variable */
 			for (iter = g_list_first (snippet->priv->variables); iter != NULL; iter = g_list_next (iter))
 			{

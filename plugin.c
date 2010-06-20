@@ -267,7 +267,11 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	/* Link the AnjutaShell to the SnippetsDB and load the SnippetsDB*/
 	snippets_manager_plugin->snippets_db->anjuta_shell = plugin->shell;
 	snippets_db_load (snippets_manager_plugin->snippets_db);
-	
+
+	/* Initialize the Interaction Interpreter */
+	snippets_interaction_start (snippets_manager_plugin->snippets_interaction,
+	                            plugin->shell);
+
 	/* Add a watch for the current document */
 	snippets_manager_plugin->cur_editor_watch_id = 
 		anjuta_plugin_add_watch (plugin,
@@ -319,6 +323,9 @@ snippets_manager_deactivate (AnjutaPlugin *plugin)
 
 	/* Destroy the SnippetsDB */
 	snippets_db_close (snippets_manager_plugin->snippets_db);
+
+	/* Destroy the Interaction Interpreter */
+	snippets_interaction_destroy (snippets_manager_plugin->snippets_interaction);
 	
 	return TRUE;
 }
@@ -344,10 +351,10 @@ snippets_manager_dispose (GObject * obj)
 		snippets_manager->snippets_db = NULL;
 	}
 	
-	if (snippets_manager->snippet_interpreter != NULL)
+	if (snippets_manager->snippets_interaction != NULL)
 	{
-		g_object_unref (snippets_manager->snippet_interpreter);
-		snippets_manager->snippet_interpreter = NULL;
+		g_object_unref (snippets_manager->snippets_interaction);
+		snippets_manager->snippets_interaction = NULL;
 	}
 	
 	if (snippets_manager->snippet_browser != NULL)
@@ -382,7 +389,7 @@ snippets_manager_plugin_instance_init (GObject * obj)
 
 	/* TODO */
 	snippets_manager->snippets_db = snippets_db_new ();
-	snippets_manager->snippet_interpreter = NULL;
+	snippets_manager->snippets_interaction = snippets_interaction_new ();
 	snippets_manager->snippet_browser = NULL;
 	snippets_manager->snippet_editor = NULL;
 

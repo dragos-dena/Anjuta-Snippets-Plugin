@@ -50,12 +50,12 @@ struct _SnippetsManagerPlugin
 	AnjutaPlugin parent;
 
 	/* Snippet Database. This is where snippets are loaded into memory.
-	   Provides search functions. TODO */
+	   Provides search functions. */
 	SnippetsDB* snippets_db;
 	
 	/* Snippets Interaction Interpreter. This should take care of interacting with
 	   the editor for inserting and live editing the snippets. TODO */
-	GObject* snippet_interpreter;
+	SnippetsInteraction* snippets_interaction;
 		
 	/* GUI parts. TODO */
 	GtkWidget* snippet_browser;
