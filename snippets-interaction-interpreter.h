@@ -60,8 +60,9 @@ void                 snippets_interaction_start             (SnippetsInteraction
                                                              AnjutaShell *shell);
 void                 snippets_interaction_destroy           (SnippetsInteraction *snippets_interaction);
 
-void                 snippets_interaction_interpret_snippet (SnippetsInteraction *snippets_interaction,
-                                                             const AnjutaSnippet *snippet);
+void                 snippets_interaction_insert_snippet    (SnippetsInteraction *snippets_interaction,
+                                                             GObject *snippets_db,
+                                                             AnjutaSnippet *snippet);
 
 G_END_DECLS
 

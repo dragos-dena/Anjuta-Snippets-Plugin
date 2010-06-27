@@ -59,7 +59,6 @@ static GtkActionEntry actions_snippets[] = {
 		"ActionEditInsertSnippet",
 		NULL,
 		N_("_Insert Snippet"),
-		//"<control><alt>e",
 		"<control>e",
 		N_("Insert a macro using the trigger-key"),
 		G_CALLBACK (on_menu_insert_snippet)}
@@ -77,32 +76,12 @@ snippet_insert (SnippetsManagerPlugin * plugin,
 {
 	AnjutaSnippet *requested_snippet = NULL;
 	SnippetsManagerPlugin *snippets_manager_plugin = NULL;
-	gchar *indent = NULL, *cur_line = NULL, *snippet_default_content = NULL;
-	IAnjutaIterable *line_begin = NULL, *cur_pos = NULL;
-	gint cur_line_no = -1, i = 0;
 	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin),
 	                      FALSE);
 	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
-	g_return_val_if_fail (IANJUTA_IS_EDITOR (snippets_manager_plugin->cur_editor),
-	                      FALSE);
 
-	/* Get the current line */
-	cur_line_no = ianjuta_editor_get_lineno (snippets_manager_plugin->cur_editor,
-	                                         NULL);
-	line_begin = ianjuta_editor_get_line_begin_position (snippets_manager_plugin->cur_editor,
-	                                                     cur_line_no, NULL);
-	cur_pos = ianjuta_editor_get_position (snippets_manager_plugin->cur_editor, NULL);
-	cur_line = ianjuta_editor_get_text (snippets_manager_plugin->cur_editor,
-	                                    line_begin, cur_pos, NULL);
-
-	/* Calculate the current indentation */
-	indent = g_strdup (cur_line);
-	while (cur_line[i] == ' ' || cur_line[i] == '\t')
-		i ++;
-	indent[i] = 0;
-	
 	/* Get the snippet from the database and check if it's not found */
 	requested_snippet = (AnjutaSnippet *)snippets_db_get_snippet (snippets_manager_plugin->snippets_db,\
 	                                                              trigger,
@@ -110,22 +89,9 @@ snippet_insert (SnippetsManagerPlugin * plugin,
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (requested_snippet), FALSE);
 
 	/* Get the default content of the snippet */
-	snippet_default_content = snippet_get_default_content (requested_snippet,
-	                                                       G_OBJECT (snippets_manager_plugin->snippets_db), 
-	                                                       indent);
-	g_return_val_if_fail (snippet_default_content != NULL, FALSE);
-	
-	/* Insert the default content into the editor */
-	ianjuta_editor_insert (snippets_manager_plugin->cur_editor, 
-	                       cur_pos, 
-	                       snippet_default_content, 
-	                       -1,
-	                       NULL);
-
-	g_free (indent);
-	g_free (snippet_default_content);
-	g_object_unref (line_begin);
-	g_object_unref (cur_pos);
+	snippets_interaction_insert_snippet (snippets_manager_plugin->snippets_interaction,
+	                                     G_OBJECT (snippets_manager_plugin->snippets_db),
+	                                     requested_snippet);
 
 	return TRUE;
 }
@@ -162,7 +128,7 @@ on_menu_insert_snippet (GtkAction *action,
 	IAnjutaIterable *rewind_iter = NULL, *cur_pos = NULL;
 	gchar *trigger = NULL, cur_char = 0;
 	gboolean reached_start = FALSE;
-	
+
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin));
 	g_return_if_fail (IANJUTA_IS_EDITOR (plugin->cur_editor));
@@ -268,6 +234,10 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	snippets_manager_plugin->snippets_db->anjuta_shell = plugin->shell;
 	snippets_db_load (snippets_manager_plugin->snippets_db);
 
+	/* Load the SnippetsBrowser with the snippets in the SnippetsDB */
+	snippets_browser_load (snippets_manager_plugin->snippets_browser,
+	                       snippets_manager_plugin->snippets_db);
+	
 	/* Initialize the Interaction Interpreter */
 	snippets_interaction_start (snippets_manager_plugin->snippets_interaction,
 	                            plugin->shell);
@@ -321,6 +291,9 @@ snippets_manager_deactivate (AnjutaPlugin *plugin)
 	anjuta_ui_unmerge (anjuta_ui, snippets_manager_plugin->uiid);
 	anjuta_ui_remove_action_group (anjuta_ui, snippets_manager_plugin->action_group);
 
+	/* Unload the SnippetsBrowser */
+	snippets_browser_unload (snippets_manager_plugin->snippets_browser);
+	
 	/* Destroy the SnippetsDB */
 	snippets_db_close (snippets_manager_plugin->snippets_db);
 
@@ -357,16 +330,16 @@ snippets_manager_dispose (GObject * obj)
 		snippets_manager->snippets_interaction = NULL;
 	}
 	
-	if (snippets_manager->snippet_browser != NULL)
+	if (snippets_manager->snippets_browser != NULL)
 	{
-		g_object_unref (snippets_manager->snippet_browser);
-		snippets_manager->snippet_browser = NULL;
+		g_object_unref (snippets_manager->snippets_browser);
+		snippets_manager->snippets_browser = NULL;
 	}
 	
-	if (snippets_manager->snippet_editor != NULL)
+	if (snippets_manager->snippets_editor != NULL)
 	{
-		g_object_unref (snippets_manager->snippet_editor);
-		snippets_manager->snippet_editor = NULL;
+		g_object_unref (snippets_manager->snippets_editor);
+		snippets_manager->snippets_editor = NULL;
 	}
 		
 	G_OBJECT_CLASS (parent_class)->dispose (obj);
@@ -390,8 +363,8 @@ snippets_manager_plugin_instance_init (GObject * obj)
 	/* TODO */
 	snippets_manager->snippets_db = snippets_db_new ();
 	snippets_manager->snippets_interaction = snippets_interaction_new ();
-	snippets_manager->snippet_browser = NULL;
-	snippets_manager->snippet_editor = NULL;
+	snippets_manager->snippets_browser = snippets_browser_new ();
+	snippets_manager->snippets_editor = NULL;
 
 }
 

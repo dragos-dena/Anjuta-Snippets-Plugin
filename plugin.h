@@ -58,8 +58,8 @@ struct _SnippetsManagerPlugin
 	SnippetsInteraction* snippets_interaction;
 		
 	/* GUI parts. TODO */
-	GtkWidget* snippet_browser;
-	GtkWidget* snippet_editor;
+	SnippetsBrowser* snippets_browser;
+	GtkWidget* snippets_editor;
 	
 	/* Plug-in settings */
 	gboolean overwrite_on_conflict;

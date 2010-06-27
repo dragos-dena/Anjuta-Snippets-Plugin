@@ -38,6 +38,8 @@
 #define USER_SNIPPETS_DB_DIR                "snippets-database"
 #define USER_SNIPPETS_DIR                   "snippets-database/snippet-packages"
 
+#define SNIPPETS_DB_MODEL_DEPTH             2
+
 /* Internal global variables */
 #define GLOBAL_VAR_FILE_NAME       "filename"
 #define GLOBAL_VAR_USER_NAME       "username"
@@ -606,7 +608,7 @@ snippets_db_dispose (GObject* obj)
 
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
-	snippets_db = ANJUTA_SNIPPETS_DB (snippets_db);
+	snippets_db = ANJUTA_SNIPPETS_DB (obj);
 	g_return_if_fail (snippets_db->priv != NULL);
 	
 	g_list_free (snippets_db->priv->snippets_groups);
@@ -661,7 +663,6 @@ static void
 snippets_db_init (SnippetsDB *snippets_db)
 {
 	SnippetsDBPrivate* priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
-	
 	snippets_db->priv = priv;
 	snippets_db->anjuta_shell = NULL;
 	snippets_db->stamp = g_random_int ();
@@ -1009,11 +1010,11 @@ snippets_db_get_snippet (SnippetsDB* snippets_db,
 
 	/* Calculate the snippet-key */
 	snippet_key = get_snippet_key_from_trigger_and_language (trigger_key, language);
+
 	g_return_val_if_fail (snippet_key != NULL, NULL);
-	
 	/* Look up the the snippet in the hashtable */
 	snippet = g_hash_table_lookup (snippets_db->priv->snippet_keys_map, snippet_key);
-
+	
 	return snippet;
 }
 
@@ -1753,6 +1754,118 @@ snippets_db_get_global_vars_model (SnippetsDB* snippets_db)
 }
 
 /* GtkTreeModel methods definition */
+
+static GObject *
+iter_get_data (GtkTreeIter *iter)
+{
+	GList *cur_node = NULL;
+
+	g_return_val_if_fail (iter != NULL, NULL);
+	g_return_val_if_fail (iter->user_data != NULL, NULL);
+	cur_node = (GList *)iter->user_data;
+	g_return_val_if_fail (G_IS_OBJECT (cur_node->data), NULL);
+	
+	return G_OBJECT (cur_node->data);
+}
+
+static gboolean
+iter_is_snippets_group_node (GtkTreeIter *iter)
+{
+	GObject *data = iter_get_data (iter);
+	
+	return ANJUTA_IS_SNIPPETS_GROUP (data);
+}
+
+static gboolean
+iter_is_snippet_node (GtkTreeIter *iter)
+{
+	GObject *data = iter_get_data (iter);
+
+	return ANJUTA_IS_SNIPPET (data);
+}
+
+static void
+iter_get_first (GtkTreeIter *iter,
+                            SnippetsDB *snippets_db)
+{
+	SnippetsDBPrivate *priv = NULL;
+	
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
+	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
+
+	iter->user_data  = g_list_first (priv->snippets_groups);
+	iter->user_data2 = NULL;
+	iter->user_data3 = NULL;
+	iter->stamp      = snippets_db->stamp;
+}
+
+static gboolean
+iter_next (GtkTreeIter *iter)
+{
+	g_return_val_if_fail (iter != NULL, FALSE);
+	
+	iter->user_data = g_list_next ((GList *)iter->user_data);
+
+	return (iter->user_data != NULL);
+}
+
+static void
+iter_parent (GtkTreeIter *iter)
+{
+	g_return_if_fail (iter != NULL);
+	
+	iter->user_data  = iter->user_data2;
+	iter->user_data2 = NULL;
+}
+
+static void
+iter_first_child (GtkTreeIter *iter)
+{
+	AnjutaSnippetsGroup *snippets_group = NULL;
+	GList *snippets_list = NULL;
+
+	snippets_group = ANJUTA_SNIPPETS_GROUP (iter_get_data (iter));
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group));
+	
+	snippets_list = (GList *)snippets_group_get_snippets_list (snippets_group);
+
+	iter->user_data2 = iter->user_data;
+	iter->user_data  = g_list_first (snippets_list);
+}
+
+static gboolean
+iter_nth (GtkTreeIter *iter, gint n)
+{
+	g_return_val_if_fail (iter != NULL, FALSE);
+	
+	iter->user_data = g_list_nth ((GList *)iter->user_data, n);
+
+	return (iter->user_data != NULL);
+}
+
+static GList *
+iter_get_list_node (GtkTreeIter *iter)
+{
+	g_return_val_if_fail (iter != NULL, NULL);
+
+	return iter->user_data;
+}
+
+static void
+iter_copy (GtkTreeIter *iter1,
+           GtkTreeIter *iter2)
+{
+	if (iter2 == NULL)
+		printf ("Iter2 NULL in iter_copy\n");
+	g_return_if_fail (iter1 != NULL);
+	g_return_if_fail (iter2 != NULL);
+
+	iter1->user_data  = iter2->user_data;
+	iter1->user_data2 = iter2->user_data2;
+	iter1->user_data3 = iter2->user_data3;
+	iter1->stamp      = iter2->stamp;
+}
+
 static GtkTreeModelFlags 
 snippets_db_get_flags (GtkTreeModel *tree_model)
 {
@@ -1778,11 +1891,8 @@ snippets_db_get_column_type (GtkTreeModel *tree_model,
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (tree_model), G_TYPE_INVALID);
 	g_return_val_if_fail (index >= 0 && index < SNIPPETS_DB_MODEL_COL_N, G_TYPE_INVALID);
-
-	if (index == 1)
-		return G_TYPE_BOOLEAN;
-	else
-		return G_TYPE_STRING;
+	
+	return G_TYPE_OBJECT;
 }
 
 static gboolean
@@ -1791,53 +1901,32 @@ snippets_db_get_iter (GtkTreeModel *tree_model,
                       GtkTreePath *path)
 {
 	SnippetsDB *snippets_db = NULL;
-	AnjutaSnippetsGroup *snippets_group = NULL;
-	GList *snippets_group_node = NULL, *snippet_node = NULL;
 	gint *indices = NULL, depth = 0, db_count = 0, group_count = 0;
-	gpointer parent_node = NULL, own_node = NULL;
 	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (tree_model), FALSE);
 	g_return_val_if_fail (path != NULL, FALSE);
-	snippets_db = ANJUTA_SNIPPETS_DB (snippets_db);
+	snippets_db = ANJUTA_SNIPPETS_DB (tree_model);
 	
-	/* Get the indices and depth of the path and assert the depth */
+	/* Get the indices and depth of the path */
 	indices = gtk_tree_path_get_indices (path);
-	depth = gtk_tree_path_get_depth (path);
-	g_return_val_if_fail (depth > 2, FALSE);
+	depth   = gtk_tree_path_get_depth (path);
+	g_return_val_if_fail (depth <= SNIPPETS_DB_MODEL_DEPTH, FALSE);
+
 	db_count = indices[0];
 	if (depth == 2)
 		group_count = indices[1];
 
-	/* Get the snippets_group node for the given db_count */
-	snippets_group_node = g_list_nth (snippets_db->priv->snippets_groups, db_count);
-	g_return_val_if_fail (snippets_group_node != NULL, FALSE);
+	/* Get the top-level iter with the count being db_count */
+	iter_get_first (iter, snippets_db);
+	iter_nth (iter, db_count);
 
-	/* If the path points to the SnippetsGroups level */
-	if (depth == 1)
+	/* If depth is SNIPPETS_DB_MODEL_DEPTH, get the group_count'th child */
+	if (depth == SNIPPETS_DB_MODEL_DEPTH)
 	{
-		parent_node = NULL;
-		own_node = snippets_group_node;
+		iter_first_child (iter);
+		iter_nth (iter, group_count);
 	}
-	/* If the path points to the Snippets level */
-	else
-	{
-		/* Get the Snippet node */
-		snippets_group = (AnjutaSnippetsGroup *)snippets_group_node->data;
-		g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group), FALSE);
-		snippet_node = g_list_nth ((GList *)snippets_group_get_snippets_list (snippets_group),
-		                           group_count);
-		g_return_val_if_fail (snippet_node != NULL, FALSE);
-
-		parent_node = snippets_group_node;
-		own_node = snippet_node;
-	}
-	
-	/* Finally complete the iter fields */
-	iter->user_data  = parent_node;
-	iter->user_data2 = own_node;
-	iter->user_data3 = NULL;
-	iter->stamp = snippets_db->stamp;
 	
 	return TRUE;
 }
@@ -1847,21 +1936,21 @@ snippets_db_get_path (GtkTreeModel *tree_model,
                       GtkTreeIter *iter)
 {
 	GtkTreePath *path = NULL;
+	GtkTreeIter *iter_copy = NULL;
 	SnippetsDB *snippets_db = NULL;
 	gint count = 0;
 	GList *l_iter = NULL;
-	
+
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (tree_model), NULL);
 	g_return_val_if_fail (iter != NULL, NULL);
-	g_return_val_if_fail (iter->user_data2 != NULL, NULL);
 	snippets_db = ANJUTA_SNIPPETS_DB (tree_model);
 
 	/* Make a new GtkTreePath object */
 	path = gtk_tree_path_new ();
 
 	/* Get the first index */
-	l_iter = iter->user_data2;
+	l_iter = iter_get_list_node (iter);
 	while (l_iter != NULL)
 	{
 		count ++;
@@ -1870,16 +1959,19 @@ snippets_db_get_path (GtkTreeModel *tree_model,
 	gtk_tree_path_append_index (path, count);
 	
 	/* If it's a snippet node, then it has a parent */
-	if (iter->user_data != NULL)
+	count = 0;
+	if (iter_is_snippet_node (iter))
 	{
-		l_iter = iter->user_data;
+		iter_copy = gtk_tree_iter_copy (iter);
 
+		iter_parent (iter_copy);
+		l_iter = iter_get_list_node (iter_copy);
 		while (l_iter != NULL)
 		{
 			count ++;
 			l_iter = g_list_previous (l_iter);
 		}
-		gtk_tree_path_append_index (path, count);
+		gtk_tree_iter_free (iter);
 	}
 
 	return path;
@@ -1892,94 +1984,37 @@ snippets_db_get_value (GtkTreeModel *tree_model,
                        GValue *value)
 {
 	SnippetsDB *snippets_db = NULL;
-	AnjutaSnippet *snippet = NULL;
-	AnjutaSnippetsGroup *snippets_group = NULL;
-	GList *node = NULL;
-	
+
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (tree_model));
 	g_return_if_fail (iter != NULL);
-	g_return_if_fail (iter->user_data2 != NULL);
 	g_return_if_fail (column >= 0 && column < SNIPPETS_DB_MODEL_COL_N);
+	snippets_db = ANJUTA_SNIPPETS_DB (tree_model);
 
 	/* Initializations */
 	g_value_init (value, snippets_db_get_column_type (tree_model, column));
-	snippets_db = ANJUTA_SNIPPETS_DB (tree_model);
 
 	/* Get the data in the node */
-	node = (GList *)iter->user_data2;
-	if (iter->user_data == NULL)
-		snippet = (AnjutaSnippet *)node->data;
-	else
-		snippets_group = (AnjutaSnippetsGroup *)node->data;
-
-	/* Fill value based on column */
-	switch (column)
-	{
-		case SNIPPETS_DB_MODEL_COL_NAME:
-			if (snippet)
-				g_value_set_static_string (value, snippet_get_name (snippet));
-			else
-				g_value_set_static_string (value, snippets_group_get_name (snippets_group));
-			break;
-
-		case SNIPPETS_DB_MODEL_COL_IS_SNIPPET:
-			if (snippet)
-				g_value_set_boolean (value, TRUE);
-			else
-				g_value_set_boolean (value, FALSE);
-			break;
-
-		case SNIPPETS_DB_MODEL_COL_DEFAULT_CONTENT:
-			if (snippet)
-				g_value_set_string (value, 
-				                    (gpointer)snippet_get_default_content (snippet,
-				                                                           G_OBJECT (snippets_db),
-				                                                           ""));
-			else
-				g_value_set_string (value, NULL);
-			break;
-
-		case SNIPPETS_DB_MODEL_COL_LANG:
-			if (snippet)
-				g_value_set_static_string (value, snippet_get_languages_string (snippet));
-			else
-				g_value_set_static_string (value, NULL);
-			break;
-
-		case SNIPPETS_DB_MODEL_COL_TRIGGER:
-			if (snippet)
-				g_value_set_static_string (value, snippet_get_trigger_key (snippet));
-			else
-				g_value_set_static_string (value, NULL);
-			break;
-	}
-	
+	g_value_set_object (value, iter_get_data (iter));
 }
 
 static gboolean
 snippets_db_iter_next (GtkTreeModel *tree_model,
                        GtkTreeIter *iter)
 {
-	GList *l_iter = NULL;
 	SnippetsDB* snippets_db = NULL;
-	
+
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (tree_model), FALSE);
 	g_return_val_if_fail (iter != NULL, FALSE);
-	g_return_val_if_fail (iter->user_data2 != NULL, FALSE);
 	snippets_db = ANJUTA_SNIPPETS_DB (tree_model);
 
 	/* Check if the stamp is correct */
 	g_return_val_if_fail (snippets_db->stamp == iter->stamp,
 	                      FALSE);
 
-	/* Update the iter */
-	l_iter = (GList *)iter->user_data2;
-	l_iter = g_list_next (l_iter);
-	iter->user_data2 = l_iter;
-
-	return TRUE;
+	/* Update the iter and return TRUE if it didn't reached the end*/
+	return iter_next (iter);
 }
 
 static gboolean
@@ -1987,8 +2022,6 @@ snippets_db_iter_children (GtkTreeModel *tree_model,
                            GtkTreeIter *iter,
                            GtkTreeIter *parent)
 {
-	GList *parent_node = NULL, *own_node = NULL;
-	AnjutaSnippetsGroup *snippets_group = NULL;
 	SnippetsDB *snippets_db = NULL;
 	
 	/* Assertions */
@@ -1998,37 +2031,22 @@ snippets_db_iter_children (GtkTreeModel *tree_model,
 	/* Get the first node of the SnippetsGroup list */
 	if (parent == NULL)
 	{
-		parent_node = NULL;
-		own_node = snippets_db->priv->snippets_groups;
+		iter_get_first (iter, snippets_db);
+		return TRUE;
 	}
 
+	/* Copy the data of parent to iter */
+	iter_copy (iter, parent);
+	
 	/* If it's a Snippets Group node */
-	if (parent->user_data == NULL)
+	if (iter_is_snippets_group_node (iter))
 	{
-		/* Get the snippets_group object and assert it */
-		snippets_group = (AnjutaSnippetsGroup *)parent->user_data2;
-		g_return_val_if_fail (snippets_group != NULL &&
-		                      ANJUTA_IS_SNIPPETS_GROUP (snippets_group) &&
-		                      snippets_db->stamp == parent->stamp,
-		                      FALSE);
-
-		/* Get the first snippet of the snippets_group object */
-		own_node = (GList *)snippets_group_get_snippets_list (snippets_group);		
-		parent_node = parent->user_data2;
-
+		iter_first_child (iter);
+		return TRUE;
 	}
 
-	/* If it's a Snippet node */
-	if (parent->user_data != NULL)
-		return FALSE;
-
-	/* Fill the iter structure */
-	iter->user_data  = parent_node;
-	iter->user_data2 = own_node;
-	iter->user_data3 = NULL;
-	iter->stamp      = snippets_db->stamp;
-
-	return TRUE;
+	/* If we got to this point, it's a Snippet node, so it doesn't have a child */
+	return FALSE;
 }
 
 static gboolean
@@ -2038,10 +2056,9 @@ snippets_db_iter_has_child (GtkTreeModel *tree_model,
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (tree_model), FALSE);
 	g_return_val_if_fail (iter != NULL, FALSE);
-	g_return_val_if_fail (iter->user_data2 != NULL, FALSE);
 
 	/* If the parent field is NULL then it's the 1st level so it has children */
-	return iter->user_data == NULL;
+	return iter_is_snippets_group_node (iter);
 }
 
 static gint
@@ -2063,10 +2080,10 @@ snippets_db_iter_n_children (GtkTreeModel *tree_model,
 	}
 
 	/* If iter points to a SnippetsGroup node */
-	if (iter->user_data == NULL)
+	if (iter_is_snippets_group_node (iter))
 	{
 		/* Get the Snippets Group object and assert it */
-		snippets_group = ANJUTA_SNIPPETS_GROUP (iter->user_data2);
+		snippets_group = ANJUTA_SNIPPETS_GROUP (iter_get_data (iter));
 		g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group),
 		                      -1);
 
@@ -2085,50 +2102,26 @@ snippets_db_iter_nth_child (GtkTreeModel *tree_model,
                             gint n)
 {
 	SnippetsDB *snippets_db = NULL;
-	AnjutaSnippetsGroup *snippets_group = NULL;
-	GList *parent_node = NULL, *own_node = NULL;
-	const GList *snippets_list = NULL;
-
+	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (tree_model), FALSE);
-	snippets_db = ANJUTA_SNIPPETS_DB (snippets_db);
-
+	snippets_db = ANJUTA_SNIPPETS_DB (tree_model);
+	
 	/* If it's a top level request */
 	if (parent == NULL)
 	{
-		parent_node = NULL;
-		own_node = g_list_nth (snippets_db->priv->snippets_groups, n);
-		if (own_node == NULL)
-			return FALSE;
+		iter_get_first (iter, snippets_db);
+		return iter_nth (iter, n);
 	}
 
-	g_return_val_if_fail (parent != NULL && parent->user_data2 != NULL,
-	                      FALSE);
-	/* If it's a SnippetsGroup Node */
-	if (parent->user_data == NULL)
+	iter_copy (iter, parent);
+	if (iter_is_snippets_group_node (iter))
 	{
-		parent_node = (GList *)parent->user_data2;
-		snippets_group = (AnjutaSnippetsGroup *)parent_node->data;
-		g_return_val_if_fail (snippets_group != NULL && 
-		                      ANJUTA_IS_SNIPPETS_DB (snippets_group),
-		                      FALSE);
-		
-		snippets_list = snippets_group_get_snippets_list (snippets_group);
-		own_node = g_list_nth ((GList *)snippets_list, n);
+		iter_first_child (iter);
+		return iter_nth (iter, n);
 	}
 
-	/* If it's a Snippet node. No children. We could of skipped this check. */
-	if (parent->user_data != NULL)
-	{
-		return FALSE;
-	}
-
-	/* Fill the iter fields */
-	iter->user_data  = parent_node;
-	iter->user_data2 = own_node;
-	iter->user_data3 = NULL;
-	iter->stamp      = snippets_db->stamp;
-	
+	/* If we got to this point, it's a snippet node, so it doesn't have a child*/
 	return FALSE;
 }
 
@@ -2142,14 +2135,14 @@ snippets_db_iter_parent (GtkTreeModel *tree_model,
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (tree_model), FALSE);
 	g_return_val_if_fail (child != NULL, FALSE);
-	g_return_val_if_fail (child->user_data != NULL, FALSE);
 	snippets_db = ANJUTA_SNIPPETS_DB (tree_model);
+
+	/* If it's a snippets group node, it doesn't have a parent */
+	if (iter_is_snippets_group_node (child))
+		return FALSE;
 	
 	/* Fill the iter fields */
-	iter->user_data  = NULL;
-	iter->user_data2 = child->user_data;
-	iter->user_data3 = NULL;
-	iter->stamp      = snippets_db->stamp;
-
+	iter_copy (iter, child);
+	iter_parent (iter);
 	return TRUE;
 }
