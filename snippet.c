@@ -149,7 +149,7 @@ static void
 snippet_init (AnjutaSnippet* snippet)
 {
 	AnjutaSnippetPrivate* priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
-	
+
 	snippet->priv = priv;
 	snippet->parent_snippets_group = NULL;
 
@@ -847,4 +847,33 @@ snippet_get_variable_cur_values_len (AnjutaSnippet *snippet)
 	}
 
 	return cur_values_len_list;	
+}
+
+/**
+ * snippet_is_equal:
+ * @snippet: A #AnjutaSnippet object.
+ * @snippet2: A #AnjutaSnippet object.
+ *
+ * Compares @snippet with @snippet2 and returns TRUE if they have the same identifier.
+ *
+ * Returns: TRUE if the snippets have the same identifier.
+ */
+gboolean        
+snippet_is_equal (AnjutaSnippet *snippet,
+                  AnjutaSnippet *snippet2)
+{
+	const gchar *trigger = NULL, *trigger2 = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
+
+	trigger  = snippet_get_trigger_key (snippet);
+	trigger2 = snippet_get_trigger_key (snippet2);
+
+	if (!g_strcmp0 (trigger, trigger2))
+		return snippet_has_language (snippet,
+		                             snippet_get_any_language (snippet2));
+	else
+		return FALSE;	
 }

@@ -42,7 +42,7 @@ typedef struct _SnippetsBrowserClass SnippetsBrowserClass;
 
 struct _SnippetsBrowser
 {
-	GtkWidget parent;
+	GtkHBox parent;
 
 	/*< private >*/
 	SnippetsBrowserPrivate *priv;
@@ -50,7 +50,7 @@ struct _SnippetsBrowser
 
 struct _SnippetsBrowserClass
 {
-	GtkWidgetClass parent_class;
+	GtkHBoxClass parent_class;
 
 	/* Signals */
 	void (*current_selection_changed) (SnippetsBrowser *snippets_browser,

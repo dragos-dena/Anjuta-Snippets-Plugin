@@ -289,7 +289,7 @@ snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group));
 	g_return_if_fail (trigger_key != NULL);
 	g_return_if_fail (language != NULL);
-	
+
 	/* Check if there is a snippet with the same key */
 	for (iter = g_list_first (snippets_group->priv->snippets); iter != NULL; iter = g_list_next (iter))
 	{
@@ -320,6 +320,7 @@ snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
 	{
 		snippets_group->priv->snippets = g_list_remove (snippets_group->priv->snippets, to_be_deleted_snippet);
 		g_object_unref (to_be_deleted_snippet);
+
 	}
 }
 

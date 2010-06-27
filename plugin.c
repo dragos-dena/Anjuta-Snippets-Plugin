@@ -237,6 +237,13 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	/* Load the SnippetsBrowser with the snippets in the SnippetsDB */
 	snippets_browser_load (snippets_manager_plugin->snippets_browser,
 	                       snippets_manager_plugin->snippets_db);
+	anjuta_shell_add_widget (plugin->shell,
+	                         GTK_WIDGET (snippets_manager_plugin->snippets_browser),
+	                         "snippets_browser",
+	                         _("Snippets Browser"),
+	                         GTK_STOCK_FILE,
+	                         ANJUTA_SHELL_PLACEMENT_LEFT,
+	                         NULL);
 	
 	/* Initialize the Interaction Interpreter */
 	snippets_interaction_start (snippets_manager_plugin->snippets_interaction,
@@ -293,6 +300,9 @@ snippets_manager_deactivate (AnjutaPlugin *plugin)
 
 	/* Unload the SnippetsBrowser */
 	snippets_browser_unload (snippets_manager_plugin->snippets_browser);
+	anjuta_shell_remove_widget (plugin->shell,
+	                            GTK_WIDGET (snippets_manager_plugin->snippets_browser),
+	                            NULL);
 	
 	/* Destroy the SnippetsDB */
 	snippets_db_close (snippets_manager_plugin->snippets_db);

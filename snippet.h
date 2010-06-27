@@ -85,6 +85,8 @@ gchar*          snippet_get_default_content             (AnjutaSnippet *snippet,
                                                          const gchar *indent);
 GList*          snippet_get_variable_relative_positions (AnjutaSnippet *snippet);
 GList*          snippet_get_variable_cur_values_len     (AnjutaSnippet *snippet);
+gboolean        snippet_is_equal                        (AnjutaSnippet *snippet,
+                                                         AnjutaSnippet *snippet2);
 
 G_END_DECLS
 

@@ -156,6 +156,13 @@ G_DEFINE_TYPE_WITH_CODE (SnippetsDB, snippets_db, G_TYPE_OBJECT,
 
 /* SnippetsDB private methods */
 
+static GtkTreePath *
+get_tree_path_for_snippets_group (SnippetsDB *snippets_db,
+                                  AnjutaSnippetsGroup *snippets_group);
+static GtkTreePath *
+get_tree_path_for_snippet (SnippetsDB *snippets_db,
+                           AnjutaSnippet *snippet);
+
 static gchar *
 get_snippet_key_from_trigger_and_language (const gchar *trigger_key,
                                            const gchar *language)
@@ -1040,7 +1047,8 @@ snippets_db_remove_snippet (SnippetsDB* snippets_db,
 	AnjutaSnippet *deleted_snippet = NULL;
 	AnjutaSnippetsGroup *deleted_snippet_group = NULL;
 	gchar *snippet_key = NULL;
-		
+	GtkTreePath *path = NULL;
+	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), FALSE);
 	snippet_key = get_snippet_key_from_trigger_and_language (trigger_key, language);
@@ -1065,6 +1073,13 @@ snippets_db_remove_snippet (SnippetsDB* snippets_db,
 		/* TODO - remove just this snippet-key from the searching tree's */
 	}
 
+	/* Emit the signal that the snippet was deleted */
+	path = get_tree_path_for_snippet (snippets_db, deleted_snippet);
+	g_signal_emit_by_name (G_OBJECT (snippets_db),
+	                       "row-deleted",
+	                       path, NULL);
+	gtk_tree_path_free (path);
+	
 	/* Remove it from the snippets group */
 	deleted_snippet_group = ANJUTA_SNIPPETS_GROUP (deleted_snippet->parent_snippets_group);
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (deleted_snippet_group), FALSE);
@@ -1220,12 +1235,15 @@ snippets_db_remove_snippets_group (SnippetsDB* snippets_db,
 {
 	GList *iter = NULL;
 	AnjutaSnippetsGroup *snippets_group = NULL;
+	GtkTreePath *path = NULL;
+	SnippetsDBPrivate *priv = NULL;
 	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), FALSE);
 	g_return_val_if_fail (group_name != NULL, FALSE);
-
-	for (iter = g_list_first (snippets_db->priv->snippets_groups); iter != NULL; iter = g_list_next (iter))
+	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
+	
+	for (iter = g_list_first (priv->snippets_groups); iter != NULL; iter = g_list_next (iter))
 	{
 		snippets_group = (AnjutaSnippetsGroup *)iter->data;
 		g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group), FALSE);
@@ -1238,9 +1256,19 @@ snippets_db_remove_snippets_group (SnippetsDB* snippets_db,
 			/* Remove the snippets in the group from the hash-table */
 			remove_snippets_group_from_hash_table (snippets_db, snippets_group);
 
+			/* Emit the signal that it was deleted */
+			path = get_tree_path_for_snippets_group (snippets_db, snippets_group);
+			g_signal_emit_by_name (G_OBJECT (snippets_db),
+			                       "row-deleted",
+			                       path, NULL);
+			gtk_tree_path_free (path);
+			
 			/* Destroy the snippets-group object */
 			g_object_unref (snippets_group);
 
+			/* Delete the list node */
+			iter->data = NULL;
+			priv->snippets_groups = g_list_delete_link (priv->snippets_groups, iter);
 			return TRUE;
 		}
 	}
@@ -1786,7 +1814,7 @@ iter_is_snippet_node (GtkTreeIter *iter)
 
 static void
 iter_get_first (GtkTreeIter *iter,
-                            SnippetsDB *snippets_db)
+                SnippetsDB *snippets_db)
 {
 	SnippetsDBPrivate *priv = NULL;
 	
@@ -1855,8 +1883,6 @@ static void
 iter_copy (GtkTreeIter *iter1,
            GtkTreeIter *iter2)
 {
-	if (iter2 == NULL)
-		printf ("Iter2 NULL in iter_copy\n");
 	g_return_if_fail (iter1 != NULL);
 	g_return_if_fail (iter2 != NULL);
 
@@ -2053,12 +2079,23 @@ static gboolean
 snippets_db_iter_has_child (GtkTreeModel *tree_model,
                             GtkTreeIter  *iter)
 {
+	GList *snippets_list = NULL;
+	AnjutaSnippetsGroup *snippets_group = NULL;
+	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (tree_model), FALSE);
 	g_return_val_if_fail (iter != NULL, FALSE);
 
 	/* If the parent field is NULL then it's the 1st level so it has children */
-	return iter_is_snippets_group_node (iter);
+	if (iter_is_snippets_group_node (iter))
+	{
+		snippets_group = ANJUTA_SNIPPETS_GROUP (iter_get_data (iter));
+		snippets_list = (GList *)snippets_group_get_snippets_list (snippets_group);
+
+		return (g_list_length (snippets_list) != 0);
+	}
+	else
+		return FALSE;
 }
 
 static gint
@@ -2145,4 +2182,84 @@ snippets_db_iter_parent (GtkTreeModel *tree_model,
 	iter_copy (iter, child);
 	iter_parent (iter);
 	return TRUE;
+}
+
+static GtkTreePath *
+get_tree_path_for_snippets_group (SnippetsDB *snippets_db,
+                                  AnjutaSnippetsGroup *snippets_group)
+{
+	GtkTreeIter iter;
+	gint index = 0;
+	const gchar *group_name = NULL;
+	AnjutaSnippetsGroup *cur_group = NULL;
+	GtkTreePath *path = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group), NULL);
+	                      
+	group_name = snippets_group_get_name (snippets_group);
+	path = gtk_tree_path_new ();
+	
+	iter_get_first (&iter, snippets_db);
+	do 
+	{
+		cur_group = ANJUTA_SNIPPETS_GROUP (iter_get_data (&iter));
+		if (!g_strcmp0 (snippets_group_get_name (cur_group), group_name))
+		{
+			gtk_tree_path_append_index (path, index);		
+			return path;
+		}
+		index ++;
+		
+	} while (iter_next (&iter));
+
+	gtk_tree_path_free (path);
+	return NULL;
+}
+
+static GtkTreePath *
+get_tree_path_for_snippet (SnippetsDB *snippets_db,
+                           AnjutaSnippet *snippet)
+{
+	GtkTreePath *path = NULL;
+	gint index1 = 0, index2 = 0;
+	GtkTreeIter iter1, iter2;
+	AnjutaSnippet *cur_snippet = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), NULL);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
+
+	path = gtk_tree_path_new ();
+
+	iter_get_first (&iter1, snippets_db);
+	do
+	{
+		index2 = 0;
+		iter_copy (&iter2, &iter1);
+		iter_first_child (&iter2);
+		
+		do
+		{
+			cur_snippet = ANJUTA_SNIPPET (iter_get_data (&iter2));
+			g_return_val_if_fail (ANJUTA_IS_SNIPPET (cur_snippet), NULL);
+
+			if (snippet_is_equal (snippet, cur_snippet))
+			{
+				gtk_tree_path_append_index (path, index1);
+				gtk_tree_path_append_index (path, index2);
+				return path;
+			}
+			
+			index2 ++;
+			
+		} while (iter_next (&iter2));
+		
+		index1 ++;
+		
+	} while (iter_next (&iter1));
+
+	gtk_tree_path_free (path);
+	return NULL;
 }

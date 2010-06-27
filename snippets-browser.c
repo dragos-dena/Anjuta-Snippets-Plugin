@@ -23,6 +23,8 @@
 #include "snippets-group.h"
 #include "snippets-interaction-interpreter.h"
 
+#define BROWSER_UI      PACKAGE_DATA_DIR"/glade/snippets-browser.ui"
+
 #define ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ANJUTA_TYPE_SNIPPETS_BROWSER, SnippetsBrowserPrivate))
 
 struct _SnippetsBrowserPrivate
@@ -30,10 +32,19 @@ struct _SnippetsBrowserPrivate
 	GtkTreeView *snippets_view;
 
 	SnippetsDB *snippets_db;
+
+	GtkButton *add_button;
+	GtkButton *delete_button;
+	GtkButton *insert_button;
+	GtkToggleButton *edit_button;
+
+	GtkScrolledWindow *snippets_view_cont;
+	
+	GtkHBox *browser_hbox;
 };
 
 
-G_DEFINE_TYPE (SnippetsBrowser, snippets_browser, GTK_TYPE_WIDGET);
+G_DEFINE_TYPE (SnippetsBrowser, snippets_browser, GTK_TYPE_HBOX);
 
 static void
 snippets_browser_destroy (GtkObject *gtk_object)
@@ -98,28 +109,131 @@ static void
 snippets_browser_init (SnippetsBrowser* snippets_browser)
 {
 	SnippetsBrowserPrivate* priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
-	
+		/* Add the hbox as the child of the snippets browser */
+
 	snippets_browser->priv = priv;
 	
 	/* Initialize the private field */
-	snippets_browser->priv->snippets_view = NULL;
-	snippets_browser->priv->snippets_db = NULL;
+	priv->snippets_view = NULL;
+	priv->snippets_db = NULL;
+	priv->add_button = NULL;
+	priv->delete_button = NULL;
+	priv->insert_button = NULL;
+	priv->edit_button = NULL;
+	priv->snippets_view_cont = NULL;
+	priv->browser_hbox = NULL;
+	
 }
+
+/* Handlers */
+
+static void    on_add_button_clicked      (GtkButton *add_button,
+                                           gpointer user_data);
+static void    on_delete_button_clicked   (GtkButton *delete_button,
+                                           gpointer user_data);
+static void    on_insert_button_clicked   (GtkButton *insert_button,
+                                           gpointer user_data);
+static void    on_edit_button_toggled     (GtkButton *edit_button,
+                                           gpointer user_data);
+static void    on_snippets_view_key_press (GtkWidget *snippets_view,
+                                           GdkEventKey *event_key,
+                                           gpointer user_data);
 
 /* Private methods */
 
 static void
-snippets_view_name_data_func (GtkTreeViewColumn *column,
-                              GtkCellRenderer *renderer,
-                              GtkTreeModel *snippets_db_model,
-                              GtkTreeIter *iter,
-                              gpointer user_data)
+init_browser_layout (SnippetsBrowser *snippets_browser)
+{
+	GError *error = NULL;
+	SnippetsBrowserPrivate *priv = NULL;
+	GtkBuilder *bxml = NULL;
+	
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
+
+	/* Load the UI file */
+	bxml = gtk_builder_new ();
+	if (!gtk_builder_add_from_file (bxml, BROWSER_UI, &error))
+	{
+		g_warning ("Couldn't load preferences ui file: %s", error->message);
+		g_error_free (error);
+	}
+
+	/* Get the Gtk objects */
+	priv->add_button    = GTK_BUTTON (gtk_builder_get_object (bxml, "add_button"));
+	priv->delete_button = GTK_BUTTON (gtk_builder_get_object (bxml, "delete_button"));
+	priv->insert_button = GTK_BUTTON (gtk_builder_get_object (bxml, "insert_button"));
+	priv->edit_button   = GTK_TOGGLE_BUTTON (gtk_builder_get_object (bxml, "edit_button"));
+	priv->browser_hbox  = GTK_HBOX (gtk_builder_get_object (bxml, "browser_hbox"));
+	priv->snippets_view_cont = GTK_SCROLLED_WINDOW (gtk_builder_get_object (bxml, "snippets_view_cont"));
+
+	/* Assert the objects */
+	g_return_if_fail (GTK_IS_BUTTON (priv->add_button));
+	g_return_if_fail (GTK_IS_BUTTON (priv->delete_button));
+	g_return_if_fail (GTK_IS_BUTTON (priv->insert_button));
+	g_return_if_fail (GTK_IS_TOGGLE_BUTTON (priv->edit_button));
+	g_return_if_fail (GTK_IS_HBOX (priv->browser_hbox));
+	g_return_if_fail (GTK_IS_SCROLLED_WINDOW (priv->snippets_view_cont));
+
+	/* Add the Snippets View to the scrolled window */
+	gtk_container_add (GTK_CONTAINER (priv->snippets_view_cont),
+	                   GTK_WIDGET (priv->snippets_view));
+	                   
+	/* Add the hbox as the child of the snippets browser */
+	gtk_widget_unparent (GTK_WIDGET (priv->browser_hbox));
+	gtk_box_pack_start (GTK_BOX (snippets_browser),
+	                    GTK_WIDGET (priv->browser_hbox),
+	                    TRUE,
+	                    TRUE,
+	                    0);
+}
+
+static void
+init_browser_handlers (SnippetsBrowser *snippets_browser)
+{
+	SnippetsBrowserPrivate *priv = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
+
+	g_signal_connect (GTK_OBJECT (priv->snippets_view),
+	                  "key-press-event",
+	                  GTK_SIGNAL_FUNC (on_snippets_view_key_press),
+	                  snippets_browser);
+	g_signal_connect (GTK_OBJECT (priv->add_button),
+	                  "clicked",
+	                  GTK_SIGNAL_FUNC (on_add_button_clicked),
+	                  snippets_browser);
+	g_signal_connect (GTK_OBJECT (priv->delete_button),
+	                  "clicked",
+	                  GTK_SIGNAL_FUNC (on_delete_button_clicked),
+	                  snippets_browser);
+	g_signal_connect (GTK_OBJECT (priv->insert_button),
+	                  "clicked",
+	                  GTK_SIGNAL_FUNC (on_insert_button_clicked),
+	                  snippets_browser);
+	g_signal_connect (GTK_OBJECT (priv->edit_button),
+	                  "toggled",
+	                  GTK_SIGNAL_FUNC (on_edit_button_toggled),
+	                  snippets_browser);
+}
+
+static void
+snippets_view_name_text_data_func (GtkTreeViewColumn *column,
+                                   GtkCellRenderer *renderer,
+                                   GtkTreeModel *snippets_db_model,
+                                   GtkTreeIter *iter,
+                                   gpointer user_data)
 {
 	const gchar *name = NULL;
 	GObject *cur_object = NULL;
 
 	/* Assertions */
 	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (renderer));
+	g_return_if_fail (GTK_IS_TREE_MODEL (snippets_db_model));
 	
 	/* Get the name */
 	gtk_tree_model_get (snippets_db_model, iter,
@@ -130,14 +244,102 @@ snippets_view_name_data_func (GtkTreeViewColumn *column,
 	else
 		name = snippets_group_get_name (ANJUTA_SNIPPETS_GROUP (cur_object));
 
+	g_object_unref (cur_object);
 	g_object_set (renderer, "text", name, NULL);
+}
+
+static void
+snippets_view_name_pixbuf_data_func (GtkTreeViewColumn *column,
+                                     GtkCellRenderer *renderer,
+                                     GtkTreeModel *snippets_db_model,
+                                     GtkTreeIter *iter,
+                                     gpointer user_data)
+{
+	GObject *cur_object = NULL;
+	gchar *stock_id = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (GTK_IS_CELL_RENDERER_PIXBUF (renderer));
+	g_return_if_fail (GTK_IS_TREE_MODEL (snippets_db_model));
+
+	gtk_tree_model_get (snippets_db_model, iter,
+	                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
+	                    -1);
+
+	if (ANJUTA_IS_SNIPPET (cur_object))
+		stock_id = GTK_STOCK_FILE;
+	else
+		stock_id = GTK_STOCK_DIRECTORY;
+
+	g_object_unref (cur_object);
+	g_object_set (renderer, "stock-id", stock_id, NULL);
+}
+
+static void
+snippets_view_trigger_data_func (GtkTreeViewColumn *column,
+                                 GtkCellRenderer *renderer,
+                                 GtkTreeModel *snippets_db_model,
+                                 GtkTreeIter *iter,
+                                 gpointer user_data)
+{
+	GObject *cur_object = NULL;
+	const gchar *trigger = NULL;
+	gchar *trigger_markup = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (renderer));
+	g_return_if_fail (GTK_IS_TREE_MODEL (snippets_db_model));
+
+	gtk_tree_model_get (snippets_db_model, iter,
+	                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
+	                    -1);
+
+	if (ANJUTA_IS_SNIPPET (cur_object))
+		trigger = snippet_get_trigger_key (ANJUTA_SNIPPET (cur_object));
+	else
+		trigger = "";
+
+	trigger_markup = g_strconcat ("<b>", trigger, "</b>", NULL);
+	g_object_set (renderer, "markup", trigger_markup, NULL);
+
+	g_object_unref (cur_object);
+	g_free (trigger_markup);
+}
+
+static void
+snippets_view_languages_data_func (GtkTreeViewColumn *column,
+                                  GtkCellRenderer *renderer,
+                                  GtkTreeModel *snippets_db_model,
+                                  GtkTreeIter *iter,
+                                  gpointer user_data)
+{ 
+	GObject *cur_object = NULL;
+	gchar *languages = NULL;
+
+	/* Assertions */
+	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (renderer));
+	g_return_if_fail (GTK_IS_TREE_MODEL (snippets_db_model));
+
+	gtk_tree_model_get (snippets_db_model, iter,
+	                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
+	                    -1);
+
+	if (ANJUTA_IS_SNIPPET (cur_object))
+		languages = snippet_get_languages_string (ANJUTA_SNIPPET (cur_object));
+	else
+		languages = g_strdup ("");
+
+	g_object_set (renderer, "text", languages, NULL);
+
+	g_object_unref (cur_object);
+	g_free (languages);
 }
 
 static void
 init_snippets_view (SnippetsBrowser *snippets_browser)
 {
 	SnippetsBrowserPrivate *priv = NULL;
-	GtkCellRenderer *renderer = NULL;
+	GtkCellRenderer *text_renderer = NULL, *pixbuf_renderer = NULL;
 	GtkTreeViewColumn *column = NULL;
 	
 	/* Assertions */
@@ -149,21 +351,44 @@ init_snippets_view (SnippetsBrowser *snippets_browser)
 	gtk_tree_view_set_model (priv->snippets_view,
 	                         GTK_TREE_MODEL (priv->snippets_db));
 
-	/* FIXME - delete after debugging is done */
-	renderer = gtk_cell_renderer_text_new ();
-	column   = gtk_tree_view_column_new ();
-	gtk_tree_view_column_set_title (column, "Name");
-	gtk_tree_view_column_pack_start (column, renderer, FALSE);
-	gtk_tree_view_column_set_cell_data_func (column, renderer,
-	                                         snippets_view_name_data_func,
-	                                         snippets_browser, NULL);
-	gtk_tree_view_append_column (priv->snippets_view, column);
 
-	GtkWidget *window;
-  window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-  g_signal_connect (window, "delete_event", gtk_main_quit, NULL);
-  gtk_container_add (GTK_CONTAINER (window), GTK_WIDGET (priv->snippets_view));
-  gtk_widget_show_all (window);
+	/* Column 1 - Name */
+	column          = gtk_tree_view_column_new ();
+	text_renderer   = gtk_cell_renderer_text_new ();
+	pixbuf_renderer = gtk_cell_renderer_pixbuf_new ();
+	gtk_tree_view_column_set_title (column, _("Name"));
+	gtk_tree_view_column_pack_start (column, pixbuf_renderer, FALSE);
+	gtk_tree_view_column_pack_end (column, text_renderer, FALSE);
+	gtk_tree_view_column_set_cell_data_func (column, pixbuf_renderer,
+	                                         snippets_view_name_pixbuf_data_func,
+	                                         snippets_browser, NULL);
+	gtk_tree_view_column_set_cell_data_func (column, text_renderer,
+	                                         snippets_view_name_text_data_func,
+	                                         snippets_browser, NULL);
+	g_object_set (G_OBJECT (column), "resizable", TRUE, NULL);
+	gtk_tree_view_insert_column (priv->snippets_view, column, -1);
+
+	/* Column 2 - Trigger */
+	column        = gtk_tree_view_column_new ();
+	text_renderer = gtk_cell_renderer_text_new ();
+	gtk_tree_view_column_set_title (column, _("Trigger"));
+	gtk_tree_view_column_pack_start (column, text_renderer, FALSE);
+	gtk_tree_view_column_set_cell_data_func (column, text_renderer,
+	                                         snippets_view_trigger_data_func,
+	                                         snippets_browser, NULL);
+	g_object_set (G_OBJECT (column), "resizable", TRUE, NULL);
+	gtk_tree_view_insert_column (priv->snippets_view, column, -1);
+
+	/* Column 3- Languages */
+	column        = gtk_tree_view_column_new ();
+	text_renderer = gtk_cell_renderer_text_new ();
+	gtk_tree_view_column_set_title (column, _("Languages"));
+	gtk_tree_view_column_pack_start (column, text_renderer, FALSE);
+	gtk_tree_view_column_set_cell_data_func (column, text_renderer, 
+	                                         snippets_view_languages_data_func,
+	                                         snippets_browser, NULL);
+	g_object_set (G_OBJECT (column), "resizable", TRUE, NULL);
+	gtk_tree_view_insert_column (priv->snippets_view, column, -1);
 }
 
 
@@ -197,10 +422,17 @@ snippets_browser_load (SnippetsBrowser *snippets_browser,
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
-
 	priv->snippets_db   = snippets_db;
+	
+	/* Set up the Snippets View */
 	priv->snippets_view = GTK_TREE_VIEW (gtk_tree_view_new ());
 	init_snippets_view (snippets_browser);
+
+	/* Set up the layout */
+	init_browser_layout (snippets_browser);
+
+	/* Initialize the snippet handlers */
+	init_browser_handlers (snippets_browser);
 }
 
 /**
@@ -239,4 +471,90 @@ void
 snippets_browser_hide_editor (SnippetsBrowser *snippets_browser)
 {
 	/* TODO */
+}
+
+
+/* Handlers definitions */
+
+static void    
+on_add_button_clicked (GtkButton *add_button,
+                       gpointer user_data)
+{
+
+}
+
+static void    
+on_delete_button_clicked (GtkButton *delete_button,
+                          gpointer user_data)
+{
+	GtkTreeIter iter;
+	SnippetsBrowser *snippets_browser = NULL;
+	SnippetsBrowserPrivate *priv = NULL;
+	gboolean has_selection = FALSE;
+	GObject *cur_object = NULL;
+	GtkTreeSelection *selection = NULL;
+	GtkTreeModel *snippets_db_model = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (user_data));
+	snippets_browser = ANJUTA_SNIPPETS_BROWSER (user_data);
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
+
+	selection = gtk_tree_view_get_selection (priv->snippets_view);
+	snippets_db_model = GTK_TREE_MODEL (priv->snippets_db);
+	has_selection = gtk_tree_selection_get_selected (selection,
+	                                                 &snippets_db_model,
+	                                                 &iter);
+
+	if (has_selection)
+	{
+		gtk_tree_model_get (GTK_TREE_MODEL (priv->snippets_db), &iter,
+		                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
+		                    -1);
+
+		if (ANJUTA_IS_SNIPPET (cur_object))
+		{
+			const gchar *trigger_key = NULL, *language = NULL;
+
+			trigger_key = snippet_get_trigger_key (ANJUTA_SNIPPET (cur_object));
+			language = snippet_get_any_language (ANJUTA_SNIPPET (cur_object));
+			g_return_if_fail (trigger_key != NULL);
+			g_return_if_fail (language != NULL);
+			
+			snippets_db_remove_snippet (priv->snippets_db, trigger_key, language, TRUE);
+		}
+		else
+		{
+			/* It's a SnippetsGroup object */
+			const gchar *name = NULL;
+
+			name = snippets_group_get_name (ANJUTA_SNIPPETS_GROUP (cur_object));
+			g_return_if_fail (name != NULL);
+			snippets_db_remove_snippets_group (priv->snippets_db, name);
+		}
+	}
+	
+	g_object_unref (cur_object);
+}
+
+static void    
+on_insert_button_clicked (GtkButton *insert_button,
+                          gpointer user_data)
+{
+
+}
+
+static void    
+on_edit_button_toggled (GtkButton *edit_button,
+                        gpointer user_data)
+{
+
+}
+
+static void    
+on_snippets_view_key_press (GtkWidget *snippets_view,
+                            GdkEventKey *event_key,
+                            gpointer user_data)
+{
+
 }
