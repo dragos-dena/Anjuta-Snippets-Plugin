@@ -44,6 +44,9 @@ typedef struct _SnippetsDBClass SnippetsDBClass;
 
 /**
  * @SNIPPETS_DB_MODEL_COL_CUR_OBJECT: An #AnjutaSnippet or #AnjutaSnippetsGroup object.
+ * @SNIPPETS_DB_MODEL_COL_NAME: The name of the #AnjutaSnippet or #AnjutaSnippetsGroup.
+ * @SNIPPETS_DB_MODEL_COL_TRIGGER: The trigger of the #AnjutaSnippet or "".
+ * @SNIPPETS_DB_MODEL_COL_LANGUAGES: The supported languages of the #AnjutaSnippet or "".
  *
  * SnippetsDB Tree Model columns.
  *
@@ -51,6 +54,9 @@ typedef struct _SnippetsDBClass SnippetsDBClass;
 enum
 {
 	SNIPPETS_DB_MODEL_COL_CUR_OBJECT = 0,
+	SNIPPETS_DB_MODEL_COL_NAME,
+	SNIPPETS_DB_MODEL_COL_TRIGGER,
+	SNIPPETS_DB_MODEL_COL_LANGUAGES,
 	SNIPPETS_DB_MODEL_COL_N
 };
 

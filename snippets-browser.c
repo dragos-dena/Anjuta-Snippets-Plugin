@@ -254,8 +254,7 @@ snippets_view_name_text_data_func (GtkTreeViewColumn *column,
                                    GtkTreeIter *iter,
                                    gpointer user_data)
 {
-	const gchar *name = NULL;
-	GObject *cur_object = NULL;
+	gchar *name = NULL;
 
 	/* Assertions */
 	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (renderer));
@@ -263,15 +262,11 @@ snippets_view_name_text_data_func (GtkTreeViewColumn *column,
 	
 	/* Get the name */
 	gtk_tree_model_get (snippets_db_model, iter,
-	                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
+	                    SNIPPETS_DB_MODEL_COL_NAME, &name,
 	                    -1);
-	if (ANJUTA_IS_SNIPPET (cur_object))
-		name = snippet_get_name (ANJUTA_SNIPPET (cur_object));
-	else
-		name = snippets_group_get_name (ANJUTA_SNIPPETS_GROUP (cur_object));
-
-	g_object_unref (cur_object);
+	                    
 	g_object_set (renderer, "text", name, NULL);
+	g_free (name);
 }
 
 static void
@@ -308,27 +303,19 @@ snippets_view_trigger_data_func (GtkTreeViewColumn *column,
                                  GtkTreeIter *iter,
                                  gpointer user_data)
 {
-	GObject *cur_object = NULL;
-	const gchar *trigger = NULL;
-	gchar *trigger_markup = NULL;
+	gchar *trigger = NULL, *trigger_markup = NULL;
 	
 	/* Assertions */
 	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (renderer));
 	g_return_if_fail (GTK_IS_TREE_MODEL (snippets_db_model));
 
 	gtk_tree_model_get (snippets_db_model, iter,
-	                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
+	                    SNIPPETS_DB_MODEL_COL_TRIGGER, &trigger,
 	                    -1);
-
-	if (ANJUTA_IS_SNIPPET (cur_object))
-		trigger = snippet_get_trigger_key (ANJUTA_SNIPPET (cur_object));
-	else
-		trigger = "";
-
 	trigger_markup = g_strconcat ("<b>", trigger, "</b>", NULL);
 	g_object_set (renderer, "markup", trigger_markup, NULL);
 
-	g_object_unref (cur_object);
+	g_free (trigger);
 	g_free (trigger_markup);
 }
 
@@ -339,7 +326,6 @@ snippets_view_languages_data_func (GtkTreeViewColumn *column,
                                   GtkTreeIter *iter,
                                   gpointer user_data)
 { 
-	GObject *cur_object = NULL;
 	gchar *languages = NULL;
 
 	/* Assertions */
@@ -347,17 +333,11 @@ snippets_view_languages_data_func (GtkTreeViewColumn *column,
 	g_return_if_fail (GTK_IS_TREE_MODEL (snippets_db_model));
 
 	gtk_tree_model_get (snippets_db_model, iter,
-	                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
+	                    SNIPPETS_DB_MODEL_COL_LANGUAGES, &languages,
 	                    -1);
-
-	if (ANJUTA_IS_SNIPPET (cur_object))
-		languages = snippet_get_languages_string (ANJUTA_SNIPPET (cur_object));
-	else
-		languages = g_strdup ("");
 
 	g_object_set (renderer, "text", languages, NULL);
 
-	g_object_unref (cur_object);
 	g_free (languages);
 }
 
