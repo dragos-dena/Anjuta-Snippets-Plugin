@@ -56,6 +56,7 @@ struct _SnippetsBrowserClass
 	void (*current_selection_changed) (SnippetsBrowser *snippets_browser,
 	                                   GObject *obj);
 	void (*maximize_request)          (SnippetsBrowser *snippets_browser);
+	void (*unmaximize_request)        (SnippetsBrowser *snippets_browser);
 };
 
 G_END_DECLS

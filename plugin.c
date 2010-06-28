@@ -220,6 +220,36 @@ on_removed_current_document (AnjutaPlugin *plugin,
 	snippets_manager_plugin->cur_editor = NULL;
 }
 
+static void
+on_snippets_browser_maximize_request (SnippetsBrowser *snippets_browser,
+                                      gpointer user_data)
+{
+	SnippetsManagerPlugin *snippets_manager_plugin = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (user_data));
+	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (user_data);
+
+	anjuta_shell_maximize_widget (ANJUTA_PLUGIN (snippets_manager_plugin)->shell,
+	                              "snippets_browser", NULL);
+	snippets_browser_show_editor (snippets_browser);
+}
+
+static void
+on_snippets_browser_unmaximize_request (SnippetsBrowser *snippets_browser,
+                                        gpointer user_data)
+{
+	SnippetsManagerPlugin *snippets_manager_plugin = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (user_data));
+	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (user_data);
+
+	anjuta_shell_unmaximize (ANJUTA_PLUGIN (snippets_manager_plugin)->shell,
+	                         NULL);
+	snippets_browser_hide_editor (snippets_browser);
+}
+
 static gboolean
 snippets_manager_activate (AnjutaPlugin * plugin)
 {
@@ -244,7 +274,15 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	                         GTK_STOCK_FILE,
 	                         ANJUTA_SHELL_PLACEMENT_LEFT,
 	                         NULL);
-	
+	g_signal_connect (GTK_OBJECT (snippets_manager_plugin->snippets_browser),
+	                  "maximize-request",
+	                  GTK_SIGNAL_FUNC (on_snippets_browser_maximize_request),
+	                  snippets_manager_plugin);
+	g_signal_connect (GTK_OBJECT (snippets_manager_plugin->snippets_browser),
+	                  "unmaximize-request",
+	                  GTK_SIGNAL_FUNC (on_snippets_browser_unmaximize_request),
+	                  snippets_manager_plugin);
+	                  
 	/* Initialize the Interaction Interpreter */
 	snippets_interaction_start (snippets_manager_plugin->snippets_interaction,
 	                            plugin->shell);
