@@ -22,6 +22,10 @@
 #include "snippets-browser.h"
 #include "snippets-group.h"
 #include "snippets-interaction-interpreter.h"
+#include <libanjuta/interfaces/ianjuta-document-manager.h>
+#include <libanjuta/interfaces/ianjuta-document.h>
+#include <libanjuta/interfaces/ianjuta-editor.h>
+#include <libanjuta/interfaces/ianjuta-editor-language.h>
 
 #define BROWSER_UI      PACKAGE_DATA_DIR"/glade/snippets-browser.ui"
 
@@ -43,6 +47,8 @@ struct _SnippetsBrowserPrivate
 	
 	GtkWidget *snippets_editor_frame;
 	GtkWidget *browser_hpaned;
+
+	GtkTreeModel *filter;
 
 	gboolean maximized;
 };
@@ -127,6 +133,8 @@ snippets_browser_init (SnippetsBrowser* snippets_browser)
 		/* Add the hbox as the child of the snippets browser */
 
 	snippets_browser->priv = priv;
+	snippets_browser->show_only_document_language_snippets = TRUE;
+	snippets_browser->anjuta_shell = NULL;
 	
 	/* Initialize the private field */
 	priv->snippets_view = NULL;
@@ -139,6 +147,7 @@ snippets_browser_init (SnippetsBrowser* snippets_browser)
 	priv->snippets_view_vbox = NULL;
 	priv->browser_hpaned = NULL;
 	priv->snippets_editor_frame = NULL;
+	priv->filter = NULL;
 	priv->maximized = FALSE;
 	
 }
@@ -250,7 +259,7 @@ init_browser_handlers (SnippetsBrowser *snippets_browser)
 static void
 snippets_view_name_text_data_func (GtkTreeViewColumn *column,
                                    GtkCellRenderer *renderer,
-                                   GtkTreeModel *snippets_db_model,
+                                   GtkTreeModel *tree_model,
                                    GtkTreeIter *iter,
                                    gpointer user_data)
 {
@@ -258,10 +267,10 @@ snippets_view_name_text_data_func (GtkTreeViewColumn *column,
 
 	/* Assertions */
 	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (renderer));
-	g_return_if_fail (GTK_IS_TREE_MODEL (snippets_db_model));
+	g_return_if_fail (GTK_IS_TREE_MODEL (tree_model));
 	
 	/* Get the name */
-	gtk_tree_model_get (snippets_db_model, iter,
+	gtk_tree_model_get (tree_model, iter,
 	                    SNIPPETS_DB_MODEL_COL_NAME, &name,
 	                    -1);
 	                    
@@ -272,7 +281,7 @@ snippets_view_name_text_data_func (GtkTreeViewColumn *column,
 static void
 snippets_view_name_pixbuf_data_func (GtkTreeViewColumn *column,
                                      GtkCellRenderer *renderer,
-                                     GtkTreeModel *snippets_db_model,
+                                     GtkTreeModel *tree_model,
                                      GtkTreeIter *iter,
                                      gpointer user_data)
 {
@@ -281,9 +290,9 @@ snippets_view_name_pixbuf_data_func (GtkTreeViewColumn *column,
 	
 	/* Assertions */
 	g_return_if_fail (GTK_IS_CELL_RENDERER_PIXBUF (renderer));
-	g_return_if_fail (GTK_IS_TREE_MODEL (snippets_db_model));
+	g_return_if_fail (GTK_IS_TREE_MODEL (tree_model));
 
-	gtk_tree_model_get (snippets_db_model, iter,
+	gtk_tree_model_get (tree_model, iter,
 	                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
 	                    -1);
 
@@ -299,7 +308,7 @@ snippets_view_name_pixbuf_data_func (GtkTreeViewColumn *column,
 static void
 snippets_view_trigger_data_func (GtkTreeViewColumn *column,
                                  GtkCellRenderer *renderer,
-                                 GtkTreeModel *snippets_db_model,
+                                 GtkTreeModel *tree_model,
                                  GtkTreeIter *iter,
                                  gpointer user_data)
 {
@@ -307,9 +316,9 @@ snippets_view_trigger_data_func (GtkTreeViewColumn *column,
 	
 	/* Assertions */
 	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (renderer));
-	g_return_if_fail (GTK_IS_TREE_MODEL (snippets_db_model));
+	g_return_if_fail (GTK_IS_TREE_MODEL (tree_model));
 
-	gtk_tree_model_get (snippets_db_model, iter,
+	gtk_tree_model_get (tree_model, iter,
 	                    SNIPPETS_DB_MODEL_COL_TRIGGER, &trigger,
 	                    -1);
 	trigger_markup = g_strconcat ("<b>", trigger, "</b>", NULL);
@@ -322,7 +331,7 @@ snippets_view_trigger_data_func (GtkTreeViewColumn *column,
 static void
 snippets_view_languages_data_func (GtkTreeViewColumn *column,
                                   GtkCellRenderer *renderer,
-                                  GtkTreeModel *snippets_db_model,
+                                  GtkTreeModel *tree_model,
                                   GtkTreeIter *iter,
                                   gpointer user_data)
 { 
@@ -330,15 +339,78 @@ snippets_view_languages_data_func (GtkTreeViewColumn *column,
 
 	/* Assertions */
 	g_return_if_fail (GTK_IS_CELL_RENDERER_TEXT (renderer));
-	g_return_if_fail (GTK_IS_TREE_MODEL (snippets_db_model));
+	g_return_if_fail (GTK_IS_TREE_MODEL (tree_model));
 
-	gtk_tree_model_get (snippets_db_model, iter,
+	gtk_tree_model_get (tree_model, iter,
 	                    SNIPPETS_DB_MODEL_COL_LANGUAGES, &languages,
 	                    -1);
 
 	g_object_set (renderer, "text", languages, NULL);
 
 	g_free (languages);
+}
+
+static gboolean
+snippets_db_language_filter_func (GtkTreeModel *tree_model,
+                                  GtkTreeIter *iter,
+                                  gpointer user_data)
+{
+	SnippetsBrowser *snippets_browser = NULL;
+	IAnjutaDocumentManager *docman = NULL;
+	IAnjutaDocument *doc = NULL;
+	const gchar *language = NULL;
+	GObject *cur_object = NULL;
+	SnippetsBrowserPrivate *priv = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (tree_model), FALSE);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (user_data), FALSE);
+	snippets_browser = ANJUTA_SNIPPETS_BROWSER (user_data);
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
+	
+	/* If we have the setting to show all snippets or if we are editing,
+	    we just return TRUE */
+	if (!snippets_browser->show_only_document_language_snippets ||
+	    priv->maximized)
+	{
+		return TRUE;
+	}
+
+	/* Get the current object */
+	gtk_tree_model_get (tree_model, iter,
+	                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
+	                    -1);
+
+	/* If it's a SnippetsGroup we render it */
+	if (ANJUTA_IS_SNIPPETS_GROUP (cur_object))
+	{
+		g_object_unref (cur_object);
+		return TRUE;
+	}
+	else 
+	if (!ANJUTA_IS_SNIPPET (cur_object))
+	{
+		g_return_val_if_reached (FALSE);
+	}
+
+	/* Get the current document manager. If it doesn't exist we show all snippets */
+	docman = anjuta_shell_get_interface (snippets_browser->anjuta_shell, 
+	                                     IAnjutaDocumentManager, 
+	                                     NULL);
+	if (docman == NULL)
+		return TRUE;
+	
+	/* Get the current doc and if it isn't an editor show all snippets */
+	doc = ianjuta_document_manager_get_current_document (docman, NULL);
+	if (!IANJUTA_IS_EDITOR (doc))
+		return TRUE;
+
+	/* Get the language */
+	language = ianjuta_editor_language_get_language (IANJUTA_EDITOR_LANGUAGE (doc), NULL);
+	if (language == NULL)
+		return TRUE;
+		
+	return snippet_has_language (ANJUTA_SNIPPET (cur_object), language);
 }
 
 static void
@@ -353,9 +425,14 @@ init_snippets_view (SnippetsBrowser *snippets_browser)
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
 	g_return_if_fail (GTK_IS_TREE_VIEW (priv->snippets_view));
 	g_return_if_fail (GTK_IS_TREE_MODEL (priv->snippets_db));
-	
-	gtk_tree_view_set_model (priv->snippets_view,
-	                         GTK_TREE_MODEL (priv->snippets_db));
+
+	/* Set up the filter */
+	priv->filter = gtk_tree_model_filter_new (GTK_TREE_MODEL (priv->snippets_db), NULL);
+	gtk_tree_model_filter_set_visible_func (GTK_TREE_MODEL_FILTER (priv->filter),
+	                                        snippets_db_language_filter_func,
+	                                        snippets_browser,
+	                                        NULL);
+	gtk_tree_view_set_model (priv->snippets_view, priv->filter);
 
 
 	/* Column 1 - Name */
@@ -493,6 +570,7 @@ snippets_browser_show_editor (SnippetsBrowser *snippets_browser)
 
 	priv->maximized = TRUE;
 
+	snippets_browser_refilter_snippets_view (snippets_browser);
 }
 
 
@@ -533,8 +611,29 @@ snippets_browser_hide_editor (SnippetsBrowser *snippets_browser)
 	                    0);
 
 	priv->maximized = FALSE;
+
+	snippets_browser_refilter_snippets_view (snippets_browser);
 }
 
+/**
+ * snippets_browser_refilter_snippets_view:
+ * @snippets_browser: A #SnippetsBrowser object.
+ *
+ * Refilters the Snippets View (if snippets_browser->show_only_document_language_snippets
+ * is TRUE), showing just the snippets of the current document. If the Snippets Browser
+ * has the editor shown, it will show all the snippets, regardless of the option.
+ */
+void                       
+snippets_browser_refilter_snippets_view (SnippetsBrowser *snippets_browser)
+{
+	SnippetsBrowserPrivate *priv = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
+
+	gtk_tree_model_filter_refilter (GTK_TREE_MODEL_FILTER (priv->filter));
+}
 
 /* Handlers definitions */
 
@@ -542,7 +641,7 @@ static void
 on_add_button_clicked (GtkButton *add_button,
                        gpointer user_data)
 {
-
+	/* TODO */
 }
 
 static void    
@@ -555,7 +654,6 @@ on_delete_button_clicked (GtkButton *delete_button,
 	gboolean has_selection = FALSE;
 	GObject *cur_object = NULL;
 	GtkTreeSelection *selection = NULL;
-	GtkTreeModel *snippets_db_model = NULL;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (user_data));
@@ -563,14 +661,12 @@ on_delete_button_clicked (GtkButton *delete_button,
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
 
 	selection = gtk_tree_view_get_selection (priv->snippets_view);
-	snippets_db_model = GTK_TREE_MODEL (priv->snippets_db);
 	has_selection = gtk_tree_selection_get_selected (selection,
-	                                                 &snippets_db_model,
+	                                                 &priv->filter,
 	                                                 &iter);
-
 	if (has_selection)
 	{
-		gtk_tree_model_get (GTK_TREE_MODEL (priv->snippets_db), &iter,
+		gtk_tree_model_get (GTK_TREE_MODEL (priv->filter), &iter,
 		                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
 		                    -1);
 

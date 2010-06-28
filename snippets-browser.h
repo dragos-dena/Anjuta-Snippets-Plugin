@@ -27,6 +27,7 @@
 #include <gtk/gtk.h>
 #include "snippets-db.h"
 #include "snippet.h"
+#include <libanjuta/anjuta-shell.h>
 
 G_BEGIN_DECLS
 
@@ -43,6 +44,9 @@ typedef struct _SnippetsBrowserClass SnippetsBrowserClass;
 struct _SnippetsBrowser
 {
 	GtkHBox parent;
+
+	gboolean show_only_document_language_snippets;
+	AnjutaShell *anjuta_shell;
 
 	/*< private >*/
 	SnippetsBrowserPrivate *priv;
@@ -71,6 +75,7 @@ void                       snippets_browser_unload                 (SnippetsBrow
 
 void                       snippets_browser_show_editor            (SnippetsBrowser *snippets_browser);
 void                       snippets_browser_hide_editor            (SnippetsBrowser *snippets_browser);
+void                       snippets_browser_refilter_snippets_view (SnippetsBrowser *snippets_browser);
 
 #endif /* __SNIPPETS_BROWSER_H__ */
 

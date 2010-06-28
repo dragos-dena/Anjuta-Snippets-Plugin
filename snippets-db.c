@@ -1075,6 +1075,7 @@ snippets_db_remove_snippet (SnippetsDB* snippets_db,
 
 	/* Emit the signal that the snippet was deleted */
 	path = get_tree_path_for_snippet (snippets_db, deleted_snippet);
+
 	g_signal_emit_by_name (G_OBJECT (snippets_db),
 	                       "row-deleted",
 	                       path, NULL);

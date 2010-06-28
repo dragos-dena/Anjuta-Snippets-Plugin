@@ -204,6 +204,8 @@ on_added_current_document (AnjutaPlugin *plugin,
 		return;
 	snippets_manager_plugin->cur_editor = IANJUTA_EDITOR (cur_editor);
 
+	/* Refilter the snippets shown in the browser */
+	snippets_browser_refilter_snippets_view (snippets_manager_plugin->snippets_browser);
 }
 
 static void
@@ -265,6 +267,7 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	snippets_db_load (snippets_manager_plugin->snippets_db);
 
 	/* Load the SnippetsBrowser with the snippets in the SnippetsDB */
+	snippets_manager_plugin->snippets_browser->anjuta_shell = plugin->shell;
 	snippets_browser_load (snippets_manager_plugin->snippets_browser,
 	                       snippets_manager_plugin->snippets_db);
 	anjuta_shell_add_widget (plugin->shell,
