@@ -21,7 +21,6 @@
 
 #include "snippets-browser.h"
 #include "snippets-group.h"
-#include "snippets-interaction-interpreter.h"
 #include <libanjuta/interfaces/ianjuta-document-manager.h>
 #include <libanjuta/interfaces/ianjuta-document.h>
 #include <libanjuta/interfaces/ianjuta-editor.h>
@@ -51,6 +50,8 @@ struct _SnippetsBrowserPrivate
 	GtkTreeModel *filter;
 
 	gboolean maximized;
+
+	SnippetsInteraction *snippets_interaction;
 };
 
 
@@ -149,6 +150,7 @@ snippets_browser_init (SnippetsBrowser* snippets_browser)
 	priv->snippets_editor_frame = NULL;
 	priv->filter = NULL;
 	priv->maximized = FALSE;
+	priv->snippets_interaction = NULL;
 	
 }
 
@@ -492,18 +494,21 @@ snippets_browser_new (void)
  * snippets_browser_load:
  * @snippets_browser: A #SnippetsBrowser object.
  * @snippets_db: A #SnippetsDB object from which the browser should be loaded.
+ * @snippets_interaction: A #SnippetsInteraction object which is used for interacting with the editor.
  *
  * Loads the #SnippetsBrowser with snippets that are found in the given database.
  */
 void                       
 snippets_browser_load (SnippetsBrowser *snippets_browser,
-                       SnippetsDB *snippets_db)
+                       SnippetsDB *snippets_db,
+                       SnippetsInteraction *snippets_interaction)
 {
 	SnippetsBrowserPrivate *priv = NULL;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_INTERACTION (snippets_interaction));
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
 	priv->snippets_db   = snippets_db;
 	
@@ -516,6 +521,8 @@ snippets_browser_load (SnippetsBrowser *snippets_browser,
 
 	/* Initialize the snippet handlers */
 	init_browser_handlers (snippets_browser);
+
+	priv->snippets_interaction = snippets_interaction;
 }
 
 /**
@@ -571,6 +578,8 @@ snippets_browser_show_editor (SnippetsBrowser *snippets_browser)
 	priv->maximized = TRUE;
 
 	snippets_browser_refilter_snippets_view (snippets_browser);
+	
+	gtk_widget_set_sensitive (GTK_WIDGET (priv->insert_button), FALSE);
 }
 
 
@@ -613,6 +622,8 @@ snippets_browser_hide_editor (SnippetsBrowser *snippets_browser)
 	priv->maximized = FALSE;
 
 	snippets_browser_refilter_snippets_view (snippets_browser);
+
+	gtk_widget_set_sensitive (GTK_WIDGET (priv->insert_button), TRUE);
 }
 
 /**
@@ -699,7 +710,36 @@ static void
 on_insert_button_clicked (GtkButton *insert_button,
                           gpointer user_data)
 {
+	SnippetsBrowser *snippets_browser = NULL;
+	SnippetsBrowserPrivate *priv = NULL;
+	GtkTreeSelection *selection = NULL;
+	GObject *cur_object = NULL;
+	GtkTreeIter iter;
+	gboolean has_selection = FALSE;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (user_data));
+	snippets_browser = ANJUTA_SNIPPETS_BROWSER (user_data);
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_INTERACTION (priv->snippets_interaction));
 
+	selection = gtk_tree_view_get_selection (priv->snippets_view);
+	has_selection = gtk_tree_selection_get_selected (selection,
+	                                                 &priv->filter,
+	                                                 &iter);
+	if (has_selection)
+	{
+		gtk_tree_model_get (GTK_TREE_MODEL (priv->filter), &iter,
+		                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
+		                    -1);
+
+		if (!ANJUTA_IS_SNIPPET (cur_object))
+			return;
+
+		snippets_interaction_insert_snippet (priv->snippets_interaction,
+		                                     G_OBJECT (priv->snippets_db),
+		                                     ANJUTA_SNIPPET (cur_object));
+	}
 }
 
 static void    

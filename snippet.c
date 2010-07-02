@@ -268,10 +268,28 @@ snippet_new (const gchar* trigger_key,
 const gchar*
 snippet_get_trigger_key (AnjutaSnippet* snippet)
 {
+	AnjutaSnippetPrivate *priv = NULL;
+
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
+	priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
+	
+	return priv->trigger_key;
+}
 
-	return snippet->priv->trigger_key;
+void
+snippet_set_trigger_key (AnjutaSnippet *snippet,
+                         const gchar *new_trigger_key)
+{
+	AnjutaSnippetPrivate *priv = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (new_trigger_key != NULL);
+	priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
+
+	g_free (priv->trigger_key);
+	priv->trigger_key = g_strdup (new_trigger_key);
 }
 
 /**
@@ -446,10 +464,32 @@ snippet_remove_language (AnjutaSnippet *snippet,
 const gchar*
 snippet_get_name (AnjutaSnippet* snippet)
 {
+	AnjutaSnippetPrivate *priv = NULL;
+	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
+	priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
+	
+	return priv->snippet_name;
+}
 
-	return snippet->priv->snippet_name;
+/**
+ * snippet_set_name:
+ * @snippet: An #AnjutaSnippet object
+ * @new_name: The new name assigned to the snippet.
+ */
+void
+snippet_set_name (AnjutaSnippet *snippet,
+                  const gchar *new_name)
+{
+	AnjutaSnippetPrivate *priv = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (new_name != NULL);
+	priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
+
+	priv->snippet_name = g_strdup (new_name);
 }
 
 /**
@@ -479,6 +519,40 @@ snippet_get_keywords_list (AnjutaSnippet* snippet)
 	}
 	
 	return keywords_copy;
+}
+
+/**
+ * snippet_set_keywords_list:
+ * @snippet: An #AnjutaSnippet object.
+ * @keywords_list: The new list of keywords for the snippet.
+ *
+ * Sets a new keywords list. 
+ */
+void
+snippet_set_keywords_list (AnjutaSnippet *snippet,
+                           const GList *keywords_list)
+{
+	GList *iter = NULL;
+	AnjutaSnippetPrivate *priv = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
+
+	/* Delete the old keywords list */
+	for (iter = g_list_first (priv->keywords); iter != NULL; iter = g_list_next (iter))
+	{
+		g_free (iter->data);
+	}
+	g_list_free (g_list_first (priv->keywords));
+	priv->keywords = NULL;
+
+	/* Copy over the new list */
+	for (iter = g_list_first ((GList *)keywords_list); iter != NULL; iter = g_list_next (iter))
+	{
+		priv->keywords = g_list_append (priv->keywords, iter->data);
+	}
+	
 }
 
 /**
@@ -565,6 +639,197 @@ snippet_get_variable_globals_list (AnjutaSnippet* snippet)
 	}
 	
 	return variable_globals;
+}
+
+static AnjutaSnippetVariable *
+get_snippet_variable (AnjutaSnippet *snippet,
+                      const gchar *variable_name)
+{
+	GList *iter = NULL;
+	AnjutaSnippetPrivate *priv = NULL;
+	AnjutaSnippetVariable *cur_var = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
+	priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
+
+	for (iter = g_list_first (priv->variables); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_var = (AnjutaSnippetVariable *)iter->data;
+		g_return_val_if_fail (cur_var != NULL, NULL);
+
+		if (!g_strcmp0 (cur_var->variable_name, variable_name))
+			return cur_var;
+	}
+
+	return NULL;	
+}
+
+gboolean        
+snippet_has_variable (AnjutaSnippet *snippet,
+                      const gchar *variable_name)
+{
+	return (get_snippet_variable (snippet, variable_name) != NULL);
+}
+
+/**
+ * snippet_add_variable:
+ * @snippet: An #AnjutaSnippet object.
+ * @variable_name: The added variable name.
+ * @default_value: The default value of the added snippet.
+ * @is_global: If the added variable is global.
+ *
+ * If there is a variable with the same name, it won't add the variable.
+ */
+void            
+snippet_add_variable (AnjutaSnippet *snippet,
+                      const gchar *variable_name,
+                      const gchar *default_value,
+                      gboolean is_global)
+{
+	AnjutaSnippetPrivate *priv = NULL;
+	AnjutaSnippetVariable *added_var = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (variable_name != NULL);
+	g_return_if_fail (default_value != NULL);	
+	priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
+
+	/* Check if we have a variable with the same name */
+	if (snippet_has_variable (snippet, variable_name))
+		return;
+
+	/* Create a new variable */
+	added_var = g_malloc (sizeof (AnjutaSnippetVariable));
+	added_var->variable_name      = g_strdup (variable_name);
+	added_var->default_value      = g_strdup (default_value);
+	added_var->is_global          = is_global;
+	added_var->cur_value_len      = 0;
+	added_var->relative_positions = g_ptr_array_new ();
+
+	priv->variables = g_list_prepend (priv->variables, added_var);
+}
+
+void            
+snippet_remove_variable (AnjutaSnippet *snippet,
+                         const gchar *variable_name)
+{
+	AnjutaSnippetPrivate *priv = NULL;
+	AnjutaSnippetVariable *cur_var = NULL;
+	GList *iter = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (variable_name != NULL);
+	priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
+
+	for (iter = g_list_first (priv->variables); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_var = (AnjutaSnippetVariable *)iter->data;
+		g_return_if_fail (cur_var != NULL);
+
+		if (!g_strcmp0 (cur_var->variable_name, variable_name))
+		{
+			g_free (cur_var->variable_name);
+			g_free (cur_var->default_value);
+			g_ptr_array_free (cur_var->relative_positions, TRUE);
+
+			g_free (cur_var);
+		}
+
+		priv->variables = g_list_remove_link (priv->variables, iter);
+
+		return;
+	}
+
+}
+
+void
+snippet_set_variable_name (AnjutaSnippet *snippet,
+                           const gchar *variable_name,
+                           const gchar *new_variable_name)
+{
+	AnjutaSnippetVariable *var = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (variable_name != NULL);
+	g_return_if_fail (new_variable_name != NULL);
+
+	var = get_snippet_variable (snippet, variable_name);
+	g_return_if_fail (var != NULL);
+
+	g_free (var->variable_name);
+	var->variable_name = g_strdup (new_variable_name);
+}
+
+const gchar*
+snippet_get_variable_default_value (AnjutaSnippet *snippet,
+                                    const gchar *variable_name)
+{
+	AnjutaSnippetVariable *var = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
+	g_return_val_if_fail (variable_name != NULL, NULL);
+
+	var = get_snippet_variable (snippet, variable_name);
+	g_return_val_if_fail (var != NULL, NULL);
+
+	return var->default_value;
+}
+
+void            
+snippet_set_variable_default_value (AnjutaSnippet *snippet,
+                                    const gchar *variable_name,
+                                    const gchar *default_value)
+{
+	AnjutaSnippetVariable *var = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (variable_name != NULL);
+	g_return_if_fail (default_value != NULL);
+
+	var = get_snippet_variable (snippet, variable_name);
+	g_return_if_fail (var != NULL);
+
+	g_free (var->default_value);
+	var->default_value = g_strdup (default_value);
+}
+
+gboolean        
+snippet_get_variable_global (AnjutaSnippet *snippet,
+                             const gchar *variable_name)
+{
+	AnjutaSnippetVariable *var = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
+	g_return_val_if_fail (variable_name != NULL, FALSE);
+
+	var = get_snippet_variable (snippet, variable_name);
+	g_return_val_if_fail (var != NULL, FALSE);
+
+	return var->is_global;
+}
+
+void            
+snippet_set_variable_global (AnjutaSnippet *snippet,
+                             const gchar *variable_name,
+                             gboolean global)
+{
+	AnjutaSnippetVariable *var = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (variable_name != NULL);
+
+	var = get_snippet_variable (snippet, variable_name);
+	g_return_if_fail (var != NULL);
+
+	var->is_global = global;	
 }
 
 /**

@@ -65,6 +65,8 @@ AnjutaSnippet*  snippet_new                             (const gchar *trigger_ke
                                                          GList *variable_globals,
                                                          GList *keywords);
 const gchar*    snippet_get_trigger_key                 (AnjutaSnippet *snippet);
+void            snippet_set_trigger_key                 (AnjutaSnippet *snippet,
+                                                         const gchar *new_trigger_key);
 const GList*    snippet_get_languages                   (AnjutaSnippet *snippet);
 gchar*          snippet_get_languages_string            (AnjutaSnippet *snippet);
 const gchar*    snippet_get_any_language                (AnjutaSnippet *snippet);
@@ -75,10 +77,35 @@ void            snippet_add_language                    (AnjutaSnippet *snippet,
 void            snippet_remove_language                 (AnjutaSnippet *snippet,
                                                          const gchar *language);
 const gchar*    snippet_get_name                        (AnjutaSnippet *snippet);
+void            snippet_set_name                        (AnjutaSnippet *snippet,
+                                                         const gchar *new_name);
 GList*          snippet_get_keywords_list               (AnjutaSnippet *snippet);
+void            snippet_set_keywords_list               (AnjutaSnippet *snippet,
+                                                         const GList *keywords_list);
 GList*          snippet_get_variable_names_list         (AnjutaSnippet *snippet);
 GList*          snippet_get_variable_defaults_list      (AnjutaSnippet *snippet);
 GList*          snippet_get_variable_globals_list       (AnjutaSnippet *snippet);
+gboolean        snippet_has_variable                    (AnjutaSnippet *snippet,
+                                                         const gchar *variable_name);
+void            snippet_add_variable                    (AnjutaSnippet *snippet,
+                                                         const gchar *variable_name,
+                                                         const gchar *default_value,
+                                                         gboolean is_global);
+void            snippet_remove_variable                 (AnjutaSnippet *snippet,
+                                                         const gchar *variable_name);
+void            snippet_set_variable_name               (AnjutaSnippet *snippet,
+                                                         const gchar *variable_name,
+                                                         const gchar *new_variable_name);
+const gchar*    snippet_get_variable_default_value      (AnjutaSnippet *snippet,
+                                                         const gchar *variable_name);
+void            snippet_set_variable_default_value      (AnjutaSnippet *snippet,
+                                                         const gchar *variable_name,
+                                                         const gchar *default_value);
+gboolean        snippet_get_variable_global             (AnjutaSnippet *snippet,
+                                                         const gchar *variable_name);
+void            snippet_set_variable_global             (AnjutaSnippet *snippet,
+                                                         const gchar *variable_name,
+                                                         gboolean global);
 const gchar*    snippet_get_content                     (AnjutaSnippet *snippet);
 gchar*          snippet_get_default_content             (AnjutaSnippet *snippet,
                                                          GObject *snippets_db_obj,

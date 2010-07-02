@@ -269,7 +269,8 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	/* Load the SnippetsBrowser with the snippets in the SnippetsDB */
 	snippets_manager_plugin->snippets_browser->anjuta_shell = plugin->shell;
 	snippets_browser_load (snippets_manager_plugin->snippets_browser,
-	                       snippets_manager_plugin->snippets_db);
+	                       snippets_manager_plugin->snippets_db,
+	                       snippets_manager_plugin->snippets_interaction);
 	anjuta_shell_add_widget (plugin->shell,
 	                         GTK_WIDGET (snippets_manager_plugin->snippets_browser),
 	                         "snippets_browser",

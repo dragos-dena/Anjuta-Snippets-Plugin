@@ -27,6 +27,7 @@
 #include <gtk/gtk.h>
 #include "snippets-db.h"
 #include "snippet.h"
+#include "snippets-interaction-interpreter.h"
 #include <libanjuta/anjuta-shell.h>
 
 G_BEGIN_DECLS
@@ -70,7 +71,8 @@ GType                      snippets_browser_get_type               (void) G_GNUC
 SnippetsBrowser*           snippets_browser_new	                   (void);
 
 void                       snippets_browser_load                   (SnippetsBrowser *snippets_browser,
-                                                                    SnippetsDB *snippets_db);
+                                                                    SnippetsDB *snippets_db,
+                                                                    SnippetsInteraction *snippets_interaction);
 void                       snippets_browser_unload                 (SnippetsBrowser *snippets_browser);
 
 void                       snippets_browser_show_editor            (SnippetsBrowser *snippets_browser);
