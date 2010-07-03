@@ -130,6 +130,15 @@ gboolean                   snippets_db_remove_snippet         (SnippetsDB* snipp
                                                                const gchar* trigger_key,
                                                                const gchar* language,
                                                                gboolean remove_all_languages_support);
+gboolean                   snippets_db_set_snippet_keywords   (SnippetsDB *snippets_db,
+                                                               AnjutaSnippet *snippet,
+                                                               const GList *new_keywords);
+gboolean                   snippets_db_set_snippet_trigger    (SnippetsDB *snippets_db,
+                                                               AnjutaSnippet *snippet,
+                                                               const gchar *new_trigger);
+gboolean                   snippets_db_add_snippet_language   (SnippetsDB *snippets_db,
+                                                               AnjutaSnippet *snippet,
+                                                               const gchar *language);
 
 /* SnippetsGroup handling methods */
 gboolean                   snippets_db_add_snippets_group     (SnippetsDB* snippets_db,

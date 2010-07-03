@@ -8,7 +8,6 @@
         <property name="visible">True</property>
         <child>
           <object class="GtkScrolledWindow" id="snippets_view_cont">
-            <property name="width_request">250</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="hscrollbar_policy">automatic</property>
@@ -86,6 +85,16 @@
               </packing>
             </child>
             <child>
+              <object class="GtkVSeparator" id="vseparator1">
+                <property name="visible">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="pack_type">end</property>
+                <property name="position">3</property>
+              </packing>
+            </child>
+            <child>
               <object class="GtkToggleButton" id="edit_button">
                 <property name="width_request">40</property>
                 <property name="height_request">25</property>
@@ -103,16 +112,6 @@
                 <property name="expand">False</property>
                 <property name="fill">False</property>
                 <property name="padding">5</property>
-                <property name="pack_type">end</property>
-                <property name="position">3</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkVSeparator" id="vseparator1">
-                <property name="visible">True</property>
-              </object>
-              <packing>
-                <property name="expand">False</property>
                 <property name="pack_type">end</property>
                 <property name="position">3</property>
               </packing>

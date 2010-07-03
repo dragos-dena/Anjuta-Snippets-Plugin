@@ -183,16 +183,6 @@ get_snippet_key_from_trigger_and_language (const gchar *trigger_key,
 	return snippet_key;
 }
 
-static gchar *
-get_snippet_key_from_snippet (AnjutaSnippet *snippet)
-{
-	/* Assertions */
-	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
-
-	return get_snippet_key_from_trigger_and_language (snippet_get_trigger_key (snippet),
-	                                                  snippet_get_any_language (snippet));
-}
-
 static void
 add_snippet_to_searching_trees (SnippetsDB *snippets_db,
                                 AnjutaSnippet *snippet)
@@ -1088,6 +1078,145 @@ snippets_db_remove_snippet (SnippetsDB* snippets_db,
 	                               trigger_key, 
 	                               language,
 	                               remove_all_languages_support);
+
+	return TRUE;
+}
+
+/**
+ * snippets_db_set_snippet_keywords:
+ * @snippets_db: A #SnippetsDB object.
+ * @snippet: An #AnjutaSnippet object.
+ * @new_keywords: The new list of keywords for the snippet.
+ *
+ * Changes the keywords of a snippet, modifying the internal structures as needed.
+ *
+ * Returns: TRUE on success.
+ */
+gboolean                   
+snippets_db_set_snippet_keywords (SnippetsDB *snippets_db,
+                                  AnjutaSnippet *snippet,
+                                  const GList *new_keywords)
+{
+	SnippetsDBPrivate *priv = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), FALSE);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
+	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
+
+	/* TODO - modify the keyword searching tree */
+
+	snippet_set_keywords_list (snippet, new_keywords);
+
+	return TRUE;
+}
+
+gboolean                   
+snippets_db_set_snippet_trigger (SnippetsDB *snippets_db,
+                                 AnjutaSnippet *snippet,
+                                 const gchar *new_trigger)
+{
+	SnippetsDBPrivate *priv = NULL;
+	const gchar *old_trigger = NULL;
+	gchar *cur_language = NULL, *cur_snippet_key = NULL;
+	GList *languages = NULL, *iter = NULL;
+	GtkTreePath *path = NULL;
+	GtkTreeIter tree_iter;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), FALSE);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
+	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
+
+	old_trigger = snippet_get_trigger_key (snippet);
+	languages = (GList *)snippet_get_languages (snippet);
+
+	/* If the old and new trigger keys are the same, we return TRUE and don't change
+	   anything */
+	if (!g_strcmp0 (old_trigger, new_trigger))
+		return TRUE;
+		
+	/* Check to see if we have any conflicts with the new trigger-key */
+	for (iter = g_list_first (languages); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_language = (gchar *)iter->data;
+		cur_snippet_key = get_snippet_key_from_trigger_and_language (old_trigger,
+		                                                             cur_language);
+
+		if (g_hash_table_lookup (priv->snippet_keys_map, cur_snippet_key))
+		{
+			g_free (cur_snippet_key);
+			return FALSE;
+		}
+		g_free (cur_snippet_key);
+	}
+
+	/* TODO - modify the trigger searching tree */
+
+
+	/* Remove the entries with the old trigger-key from the hashtable and
+	   add the entries with the new trigger-key */
+	for (iter = g_list_first (languages); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_language = (gchar *)iter->data;
+		cur_snippet_key = get_snippet_key_from_trigger_and_language (old_trigger, 
+		                                                             cur_language);
+		g_hash_table_remove (priv->snippet_keys_map, cur_snippet_key);
+
+		cur_snippet_key = get_snippet_key_from_trigger_and_language (new_trigger,
+		                                                             cur_language);
+		g_hash_table_insert (priv->snippet_keys_map, cur_snippet_key, snippet);
+	}
+
+	/* Modify the snippet */
+	snippet_set_trigger_key (snippet, new_trigger);
+
+	/* Emit the signal that the database was changed */
+	path = get_tree_path_for_snippet (snippets_db, snippet);
+	snippets_db_get_iter (GTK_TREE_MODEL (snippets_db), &tree_iter, path);
+	g_signal_emit_by_name (G_OBJECT (snippets_db),
+	                       "row-changed",
+	                       path, &tree_iter, NULL);
+	gtk_tree_path_free (path);
+
+	return TRUE;
+}
+
+gboolean                   
+snippets_db_add_snippet_language (SnippetsDB *snippets_db,
+                                  AnjutaSnippet *snippet,
+                                  const gchar *language)
+{
+	SnippetsDBPrivate *priv = NULL;
+	const gchar *trigger_key = NULL;
+	gchar *snippet_key = NULL;
+	GtkTreePath *path = NULL;
+	GtkTreeIter tree_iter;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), FALSE);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
+	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
+
+	/* Check for a conflict */
+	trigger_key = snippet_get_trigger_key (snippet);
+	snippet_key = get_snippet_key_from_trigger_and_language (trigger_key, language);
+	if (g_hash_table_lookup (priv->snippet_keys_map, snippet_key))
+	{
+		g_free (snippet_key);
+		return FALSE;
+	}
+	g_free (snippet_key);
+
+	snippet_add_language (snippet, language);
+
+	/* Emit the signal that the database was changed */
+	path = get_tree_path_for_snippet (snippets_db, snippet);
+	snippets_db_get_iter (GTK_TREE_MODEL (snippets_db), &tree_iter, path);
+	g_signal_emit_by_name (G_OBJECT (snippets_db),
+	                       "row-changed",
+	                       path, &tree_iter, NULL);
+	gtk_tree_path_free (path);
 
 	return TRUE;
 }
