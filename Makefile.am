@@ -60,7 +60,9 @@ libanjuta_snippets_manager_la_SOURCES = \
 	snippets-interaction-interpreter.c\
 	snippets-interaction-interpreter.h\
 	plugin.c\
-	plugin.h
+	plugin.h\
+	snippet-variables-store.c\
+	snippet-variables-store.h
 
 	
 EXTRA_DIST = \

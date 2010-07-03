@@ -1898,7 +1898,8 @@ snippets_db_remove_global_variable (SnippetsDB* snippets_db,
  * should be used for displaying the variables. At the moment, it's used for
  * displaying the variables in the preferences.
  *
- * Returns: The #GtkTreeModel of the global variables list.
+ * Returns: The #GtkTreeModel of the global variables list. 
+ *          Warning: This isn't a copy, shouldn't be freed or unrefed.
  */
 GtkTreeModel*
 snippets_db_get_global_vars_model (SnippetsDB* snippets_db)

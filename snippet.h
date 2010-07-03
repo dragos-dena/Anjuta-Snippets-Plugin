@@ -28,15 +28,15 @@
 
 G_BEGIN_DECLS
 
+typedef struct _AnjutaSnippet AnjutaSnippet;
+typedef struct _AnjutaSnippetPrivate AnjutaSnippetPrivate;
+typedef struct _AnjutaSnippetClass AnjutaSnippetClass;
+
 #define ANJUTA_TYPE_SNIPPET            (snippet_get_type ())
 #define ANJUTA_SNIPPET(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), ANJUTA_TYPE_SNIPPET, AnjutaSnippet))
 #define ANJUTA_SNIPPET_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), ANJUTA_TYPE_SNIPPET, AnjutaSnippetClass))
 #define ANJUTA_IS_SNIPPET(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), ANJUTA_TYPE_SNIPPET))
 #define ANJUTA_IS_SNIPPET_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), ANJUTA_TYPE_SNIPPET))
-
-typedef struct _AnjutaSnippet AnjutaSnippet;
-typedef struct _AnjutaSnippetPrivate AnjutaSnippetPrivate;
-typedef struct _AnjutaSnippetClass AnjutaSnippetClass;
 
 struct _AnjutaSnippet
 {
