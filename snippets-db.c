@@ -1497,8 +1497,8 @@ snippets_db_get_global_variable_text (SnippetsDB* snippets_db,
  * @snippets_db: A #SnippetsDB object.
  * @variable_name: The name of the global variable.
  *
- * Gets the value of a global variable. A global variable value can be static, or the output of a 
- * command.
+ * Gets the value of a global variable. A global variable value can be static,the output of a 
+ * command or internal.
  *
  * Returns: The value of the global variable, or NULL if the variable wasn't found.
  */

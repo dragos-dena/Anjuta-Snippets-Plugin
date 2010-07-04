@@ -43,23 +43,31 @@ typedef struct _SnippetVarsStoreClass SnippetVarsStoreClass;
 typedef enum
 {
 	SNIPPET_VAR_TYPE_LOCAL = 0,
-	SNIPPET_VAR_TYPE_GLOBAL
+	SNIPPET_VAR_TYPE_GLOBAL,
+	SNIPPET_VAR_TYPE_ANY
 } SnippetVariableType;
 
 /**
  * @VARS_STORE_COL_NAME: A #gchar * representing the name of the variable
  * @VARS_STORE_COL_TYPE: If the variable is global or local. See #SnippetVariableType.
  * @VARS_STORE_COL_DEFAULT_VALUE: The default value for a local or inserted global variable,
- *                                or the instant value for a non-inserted global variable.
+ *                                or an empty string.
+ * @VARS_STORE_COL_INSTANT_VALUE: The instant value for a global variable or the default value
+ *                                for a local variable.
  * @VARS_STORE_COL_IN_SNIPPET: A #gboolean. If TRUE then the variable is inserted in the snippet.
  *                             This is always TRUE for local variables.
+ * @VARS_STORE_COL_UNDEFINED: If the variable type is global and the database doesn't store an entry
+ *                            for it, this field is TRUE.
  */
 enum
 {
 	VARS_STORE_COL_NAME = 0,
 	VARS_STORE_COL_TYPE,
 	VARS_STORE_COL_DEFAULT_VALUE,
-	VARS_STORE_COL_IN_SNIPPET
+	VARS_STORE_COL_INSTANT_VALUE,
+	VARS_STORE_COL_IN_SNIPPET,
+	VARS_STORE_COL_UNDEFINED,
+	VARS_STORE_COL_N
 };
 
 struct _SnippetVarsStore
@@ -76,27 +84,28 @@ struct _SnippetVarsStoreClass
 
 };
 
-GType                      snippet_vars_store_get_type             (void) G_GNUC_CONST;
-SnippetVarsStore *         snippet_vars_store_new                  (void);
+GType               snippet_vars_store_get_type                     (void) G_GNUC_CONST;
+SnippetVarsStore *  snippet_vars_store_new                          (void);
 
-void                       snippet_vars_store_load                 (SnippetVarsStore *vars_store,
-                                                                    SnippetsDB *snippets_db,
-                                                                    AnjutaSnippet *snippet);
-void                       snippet_vars_store_unload               (SnippetVarsStore *vars_store);
-void                       snippet_vars_store_set_variable_name    (SnippetVarsStore *vars_store,
-                                                                    const gchar *old_variable_name,
-                                                                    const gchar *new_variable_name);
-void                       snippet_vars_store_set_variable_type    (SnippetVarsStore *vars_store,
-                                                                    const gchar *variable_name,
-                                                                    SnippetVariableType old_type,
-                                                                    SnippetVariableType new_type);
-void                       snippet_vars_store_set_variable_default (SnippetVarsStore *vars_store,
-                                                                    const gchar *variable_name,
-                                                                    const gchar *default_value);
-void                       snippet_vars_store_add_variable         (SnippetVarsStore *vars_store,
-                                                                    const gchar *variable_name);
-void                       snippet_vars_store_remove_variable      (SnippetVarsStore *vars_store,
-                                                                    const gchar *variable_name);
+void                snippet_vars_store_load                         (SnippetVarsStore *vars_store,
+                                                                     SnippetsDB *snippets_db,
+                                                                     AnjutaSnippet *snippet);
+void                snippet_vars_store_unload                       (SnippetVarsStore *vars_store);
+void                snippet_vars_store_set_variable_name            (SnippetVarsStore *vars_store,
+                                                                     const gchar *old_variable_name,
+                                                                     const gchar *new_variable_name);
+void                snippet_vars_store_set_variable_type            (SnippetVarsStore *vars_store,
+                                                                     const gchar *variable_name,
+                                                                     SnippetVariableType old_type,
+                                                                     SnippetVariableType new_type);
+void                snippet_vars_store_set_variable_default         (SnippetVarsStore *vars_store,
+                                                                     const gchar *variable_name,
+                                                                     const gchar *default_value);
+void                snippet_vars_store_add_variable_to_snippet      (SnippetVarsStore *vars_store,
+                                                                     const gchar *variable_name,
+                                                                     gboolean get_global);
+void                snippet_vars_store_remove_variable_from_snippet (SnippetVarsStore *vars_store,
+                                                                     const gchar *variable_name);
 G_END_DECLS
 
 #endif /* __SNIPPET_VARIABLES_STORE_H__ */
