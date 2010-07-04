@@ -131,7 +131,6 @@ static void
 snippets_browser_init (SnippetsBrowser* snippets_browser)
 {
 	SnippetsBrowserPrivate* priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
-		/* Add the hbox as the child of the snippets browser */
 
 	snippets_browser->priv = priv;
 	snippets_browser->show_only_document_language_snippets = TRUE;
