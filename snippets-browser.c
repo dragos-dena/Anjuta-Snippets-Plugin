@@ -54,7 +54,7 @@ struct _SnippetsBrowserPrivate
 	gboolean maximized;
 
 	SnippetsInteraction *snippets_interaction;
-
+	
 	/* Handlers ids */
 	gulong add_button_handler_id;
 	gulong delete_button_handler_id;
@@ -68,35 +68,11 @@ struct _SnippetsBrowserPrivate
 G_DEFINE_TYPE (SnippetsBrowser, snippets_browser, GTK_TYPE_HBOX);
 
 static void
-snippets_browser_destroy (GtkObject *gtk_object)
-{
-	/* TODO */
-}
-
-static void
-snippets_browser_dispose (GObject *object)
-{
-	/* Assertions */
-	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (object));
-
-	GTK_OBJECT_CLASS (snippets_browser_parent_class)->destroy (GTK_OBJECT (object));
-	G_OBJECT_CLASS (snippets_browser_parent_class)->dispose (G_OBJECT (object));
-}
-
-static void
 snippets_browser_class_init (SnippetsBrowserClass* klass)
 {
-	GObjectClass *g_object_class = NULL;
-	GtkObjectClass *gtk_object_class = NULL;
 
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER_CLASS (klass));
-
-	gtk_object_class = GTK_OBJECT_CLASS (klass);
-	gtk_object_class->destroy = snippets_browser_destroy;
-
-	g_object_class = G_OBJECT_CLASS (klass);
-	g_object_class->dispose = snippets_browser_dispose;
 
 	/* When the selection of the TreeView changes. The object passed here can be an
 	   AnjutaSnippet or AnjutaSnippetsGroup depending on the selection. */
@@ -185,7 +161,7 @@ init_browser_layout (SnippetsBrowser *snippets_browser)
 	GError *error = NULL;
 	SnippetsBrowserPrivate *priv = NULL;
 	GtkBuilder *bxml = NULL;
-	
+	GObject *window = NULL;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
@@ -220,20 +196,24 @@ init_browser_layout (SnippetsBrowser *snippets_browser)
 	                   GTK_WIDGET (priv->snippets_view));
 	                   
 	/* Add the hbox as the child of the snippets browser */
-	gtk_widget_unparent (GTK_WIDGET (priv->snippets_view_vbox));
+	window = gtk_builder_get_object (bxml, "builder_window");
+	g_object_ref (priv->snippets_view_vbox);
+	gtk_container_remove (GTK_CONTAINER (window), GTK_WIDGET (priv->snippets_view_vbox));
 	gtk_box_pack_start (GTK_BOX (snippets_browser),
 	                    GTK_WIDGET (priv->snippets_view_vbox),
 	                    TRUE,
 	                    TRUE,
 	                    0);
-
+	g_object_unref (priv->snippets_view_vbox);
+	
 	/* Init the HPaned and the Frame which are hidden until the editor is shown */
 	priv->browser_hpaned = gtk_hpaned_new ();
 	priv->snippets_editor_frame = gtk_frame_new (_("Snippets Editor"));
 	gtk_paned_pack2 (GTK_PANED (priv->browser_hpaned),
 	                 priv->snippets_editor_frame,
 	                 TRUE, FALSE);
-
+	g_object_ref_sink (priv->browser_hpaned);
+	
 	/* Initialize the snippets editor */
 	priv->snippets_editor = snippets_editor_new (priv->snippets_db);
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (priv->snippets_editor));
@@ -546,7 +526,8 @@ snippets_browser_new (void)
  * @snippets_db: A #SnippetsDB object from which the browser should be loaded.
  * @snippets_interaction: A #SnippetsInteraction object which is used for interacting with the editor.
  *
- * Loads the #SnippetsBrowser with snippets that are found in the given database.
+ * Loads the #SnippetsBrowser with snippets that are found in the given database. Before this method
+ * is called, the snippets browser will be an empty box.
  */
 void                       
 snippets_browser_load (SnippetsBrowser *snippets_browser,
@@ -576,6 +557,7 @@ snippets_browser_load (SnippetsBrowser *snippets_browser,
 	/* Initialize the snippet handlers */
 	init_browser_handlers (snippets_browser);
 
+	priv->maximized = FALSE;
 }
 
 /**
@@ -593,23 +575,27 @@ snippets_browser_unload (SnippetsBrowser *snippets_browser)
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
 
+	disconnect_browser_handlers (snippets_browser);
+
 	g_object_unref (priv->snippets_db);
 	g_object_unref (priv->snippets_interaction);
 	priv->snippets_db = NULL;
 	priv->snippets_interaction = NULL;
 
-	disconnect_browser_handlers (snippets_browser);
-
 	if (priv->maximized)
+	{
 		gtk_container_remove (GTK_CONTAINER (snippets_browser),
 		                      GTK_WIDGET (priv->browser_hpaned));
+	}
 	else
 	{
 		gtk_container_remove (GTK_CONTAINER (snippets_browser),
-			                  GTK_WIDGET (priv->snippets_view_vbox));
-		gtk_object_destroy (GTK_OBJECT (priv->snippets_editor));
+		                      GTK_WIDGET (priv->snippets_view_vbox));
+		g_object_unref (priv->browser_hpaned);
 	}
-	
+
+	g_object_unref (priv->filter);
+
 }
 
 /**
@@ -627,7 +613,9 @@ snippets_browser_show_editor (SnippetsBrowser *snippets_browser)
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
-	g_return_if_fail (priv->maximized == FALSE);
+
+	if (priv->maximized)
+		return;
 
 	/* Unparent the SnippetsView from the SnippetsBrowser */
 	g_object_ref (priv->snippets_view_vbox);
@@ -638,6 +626,7 @@ snippets_browser_show_editor (SnippetsBrowser *snippets_browser)
 	gtk_paned_pack1 (GTK_PANED (priv->browser_hpaned),
 	                 GTK_WIDGET (priv->snippets_view_vbox),
 	                 TRUE, FALSE);
+	g_object_unref (priv->snippets_view_vbox);
 
 	/* Add the HPaned in the SnippetsBrowser */
 	gtk_box_pack_start (GTK_BOX (snippets_browser),
@@ -645,7 +634,7 @@ snippets_browser_show_editor (SnippetsBrowser *snippets_browser)
 	                    TRUE,
 	                    TRUE,
 	                    0);
-
+	
 	/* Show the editor widgets */
 	gtk_widget_show (priv->browser_hpaned);
 	gtk_widget_show (priv->snippets_editor_frame);
@@ -673,7 +662,9 @@ snippets_browser_hide_editor (SnippetsBrowser *snippets_browser)
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
-	g_return_if_fail (priv->maximized == TRUE);
+
+	if (!priv->maximized)
+		return;
 	
 	/* Hide the editor widgets */
 	gtk_widget_hide (GTK_WIDGET (priv->snippets_editor)); 
@@ -684,19 +675,21 @@ snippets_browser_hide_editor (SnippetsBrowser *snippets_browser)
 	g_object_ref (priv->snippets_view_vbox);
 	gtk_container_remove (GTK_CONTAINER (priv->browser_hpaned),
 	                      GTK_WIDGET (priv->snippets_view_vbox));
-
+	
 	/* Remove the HPaned from the SnippetsBrowser */
 	g_object_ref (priv->browser_hpaned);
 	gtk_container_remove (GTK_CONTAINER (snippets_browser),
 	                      GTK_WIDGET (priv->browser_hpaned));
-
+	g_object_unref (priv->browser_hpaned);
+	
 	/* Add the SnippetsView to the SnippetsBrowser */
 	gtk_box_pack_start (GTK_BOX (snippets_browser),
 	                    GTK_WIDGET (priv->snippets_view_vbox),
 	                    TRUE,
 	                    TRUE,
 	                    0);
-
+	g_object_unref (priv->snippets_view_vbox);
+	
 	priv->maximized = FALSE;
 
 	snippets_browser_refilter_snippets_view (snippets_browser);

@@ -85,7 +85,7 @@ snippet_dispose (GObject* snippet)
 	GList* iter = NULL;
 	gpointer p;
 	AnjutaSnippetVariable* cur_snippet_var;
-	printf ("=== Disposing snippet %s === \n", anjuta_snippet->priv->snippet_name);
+
 	/* Delete the trigger_key, snippet_language, snippet_name and snippet_content fields */
 	g_free (anjuta_snippet->priv->trigger_key);
 	anjuta_snippet->priv->trigger_key = NULL;
@@ -255,6 +255,39 @@ snippet_new (const gchar* trigger_key,
 	}
 	
 	return snippet;
+}
+
+AnjutaSnippet *
+snippet_copy (AnjutaSnippet *snippet)
+{
+	GList *languages = NULL, *keywords = NULL, *variable_names = NULL, *variable_defaults = NULL,
+	      *variable_globals = NULL;
+	const gchar *trigger = NULL, *name = NULL, *content = NULL;
+	AnjutaSnippet *copied_snippet = NULL;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), NULL);
+
+	trigger = snippet_get_trigger_key (snippet);
+	name    = snippet_get_name (snippet);
+	content = snippet_get_content (snippet);
+
+	keywords          = snippet_get_keywords_list (snippet);
+	languages         = (GList *)snippet_get_languages (snippet);
+	variable_names    = snippet_get_variable_names_list (snippet);
+	variable_defaults = snippet_get_variable_defaults_list (snippet);
+	variable_globals  = snippet_get_variable_globals_list (snippet);
+
+	copied_snippet = snippet_new (trigger, languages, name, content,
+	                              variable_names, variable_defaults, variable_globals,
+	                              keywords);
+
+	g_list_free (keywords);
+	g_list_free (variable_names);
+	g_list_free (variable_defaults);
+	g_list_free (variable_globals);
+	
+	return copied_snippet;
 }
 
 /**

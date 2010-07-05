@@ -64,6 +64,7 @@ AnjutaSnippet*  snippet_new                             (const gchar *trigger_ke
                                                          GList *variable_default_values,
                                                          GList *variable_globals,
                                                          GList *keywords);
+AnjutaSnippet*  snippet_copy                            (AnjutaSnippet *snippet);
 const gchar*    snippet_get_trigger_key                 (AnjutaSnippet *snippet);
 void            snippet_set_trigger_key                 (AnjutaSnippet *snippet,
                                                          const gchar *new_trigger_key);

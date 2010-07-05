@@ -73,22 +73,8 @@ struct _SnippetsManagerPlugin
 	GtkActionGroup *action_group;
 	gint uiid;
 
-	/* Preferences UI items */
-	GtkObject *name_cell;
-	GtkObject *type_cell;
-	GtkObject *text_cell;
-	GtkObject *add_var_b;
-	GtkObject *del_var_b;
+	gboolean browser_maximized;
 
-	/* Handlers id's */
-	gulong maximize_request_handler_id;
-	gulong unmaximize_request_handler_id;
-	gulong name_cell_handler_id;
-	gulong type_cell_handler_id;
-	gulong text_cell_handler_id;
-	gulong add_var_b_handler_id;
-	gulong del_var_b_handler_id;
-	
 };
 
 
