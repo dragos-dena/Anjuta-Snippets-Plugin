@@ -2,7 +2,8 @@
 # Snippet Browser and Snippet Editor UI files here
 snippets_manager_gladedir = $(anjuta_glade_dir)
 snippets_manager_glade_DATA = snippets-manager-preferences.ui \
-                              snippets-browser.ui
+                              snippets-browser.ui \
+                              snippets-editor.ui
 
 
 # Plugin default data

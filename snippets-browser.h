@@ -67,17 +67,17 @@ struct _SnippetsBrowserClass
 G_END_DECLS
 
 
-GType                      snippets_browser_get_type               (void) G_GNUC_CONST;
-SnippetsBrowser*           snippets_browser_new	                   (void);
+GType                  snippets_browser_get_type               (void) G_GNUC_CONST;
+SnippetsBrowser*       snippets_browser_new	                   (void);
 
-void                       snippets_browser_load                   (SnippetsBrowser *snippets_browser,
-                                                                    SnippetsDB *snippets_db,
-                                                                    SnippetsInteraction *snippets_interaction);
-void                       snippets_browser_unload                 (SnippetsBrowser *snippets_browser);
+void                   snippets_browser_load                   (SnippetsBrowser *snippets_browser,
+                                                                SnippetsDB *snippets_db,
+                                                                SnippetsInteraction *snippets_interaction);
+void                   snippets_browser_unload                 (SnippetsBrowser *snippets_browser);
 
-void                       snippets_browser_show_editor            (SnippetsBrowser *snippets_browser);
-void                       snippets_browser_hide_editor            (SnippetsBrowser *snippets_browser);
-void                       snippets_browser_refilter_snippets_view (SnippetsBrowser *snippets_browser);
+void                   snippets_browser_show_editor            (SnippetsBrowser *snippets_browser);
+void                   snippets_browser_hide_editor            (SnippetsBrowser *snippets_browser);
+void                   snippets_browser_refilter_snippets_view (SnippetsBrowser *snippets_browser);
 
 #endif /* __SNIPPETS_BROWSER_H__ */
 

@@ -42,7 +42,7 @@ snippets_group_dispose (GObject* snippets_group)
 	AnjutaSnippetsGroup *anjuta_snippets_group = ANJUTA_SNIPPETS_GROUP (snippets_group);
 	AnjutaSnippet *cur_snippet = NULL;
 	GList *iter = NULL;
-
+	printf ("### Disposing snippets group %s ###\n", anjuta_snippets_group->priv->name);
 	/* Delete the name and description fields */
 	g_free (anjuta_snippets_group->priv->name);
 	anjuta_snippets_group->priv->name = NULL;

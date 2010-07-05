@@ -27,6 +27,11 @@ struct _SnippetVarsStorePrivate
 {
 	SnippetsDB *snippets_db;
 	AnjutaSnippet *snippet;
+
+	/* Handler id's */
+	gulong row_inserted_handler_id;
+	gulong row_changed_handler_id;
+	gulong row_deleted_handler_id;
 	
 };
 
@@ -299,28 +304,40 @@ snippet_vars_store_load (SnippetVarsStore *vars_store,
 
 	/* We connect to the signals that change the GtkTreeModel of the global variables.
 	   This is to make sure our store is synced with the global variables model. */
-	g_signal_connect (GTK_OBJECT (snippets_db_get_global_vars_model (snippets_db)),
-	                  "row-inserted",
-	                  GTK_SIGNAL_FUNC (on_global_vars_model_row_inserted),
-	                  vars_store);
-	g_signal_connect (GTK_OBJECT (snippets_db_get_global_vars_model (snippets_db)),
-	                  "row-changed",
-	                  GTK_SIGNAL_FUNC (on_global_vars_model_row_changed),
-	                  vars_store);
-	g_signal_connect (GTK_OBJECT (snippets_db_get_global_vars_model (snippets_db)),
-	                  "row-deleted",
-	                  GTK_SIGNAL_FUNC (on_global_vars_model_row_deleted),
-	                  vars_store);
+	priv->row_inserted_handler_id = 
+		g_signal_connect (GTK_OBJECT (snippets_db_get_global_vars_model (snippets_db)),
+		                  "row-inserted",
+		                  GTK_SIGNAL_FUNC (on_global_vars_model_row_inserted),
+		                  vars_store);
+	priv->row_changed_handler_id =
+		g_signal_connect (GTK_OBJECT (snippets_db_get_global_vars_model (snippets_db)),
+		                  "row-changed",
+		                  GTK_SIGNAL_FUNC (on_global_vars_model_row_changed),
+		                  vars_store);
+	priv->row_deleted_handler_id =
+		g_signal_connect (GTK_OBJECT (snippets_db_get_global_vars_model (snippets_db)),
+		                  "row-deleted",
+		                  GTK_SIGNAL_FUNC (on_global_vars_model_row_deleted),
+		                  vars_store);
 }
 
 void
 snippet_vars_store_unload (SnippetVarsStore *vars_store)
 {
 	SnippetVarsStorePrivate *priv = NULL;
-
+	GtkTreeModel *global_vars_model = NULL;
+	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPET_VARS_STORE (vars_store));
 	priv = ANJUTA_SNIPPET_VARS_STORE_GET_PRIVATE (vars_store);
+	global_vars_model = snippets_db_get_global_vars_model (priv->snippets_db);
+	g_return_if_fail (GTK_IS_TREE_MODEL (global_vars_model));
+
+	/* Disconnect the handlers */
+	g_signal_handler_disconnect (global_vars_model, priv->row_inserted_handler_id);
+	g_signal_handler_disconnect (global_vars_model, priv->row_changed_handler_id);
+	g_signal_handler_disconnect (global_vars_model, priv->row_deleted_handler_id);
+	
 
 	if (ANJUTA_IS_SNIPPETS_DB (priv->snippets_db))
 	{	
@@ -332,6 +349,7 @@ snippet_vars_store_unload (SnippetVarsStore *vars_store)
 		g_object_unref (priv->snippet);
 		priv->snippet = NULL;
 	}
+
 
 	/* This will clear the GtkListStore */
 	reload_vars_store (vars_store);

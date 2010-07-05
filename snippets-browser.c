@@ -21,6 +21,7 @@
 
 #include "snippets-browser.h"
 #include "snippets-group.h"
+#include "snippets-editor.h"
 #include <libanjuta/interfaces/ianjuta-document-manager.h>
 #include <libanjuta/interfaces/ianjuta-document.h>
 #include <libanjuta/interfaces/ianjuta-editor.h>
@@ -32,6 +33,7 @@
 
 struct _SnippetsBrowserPrivate
 {
+	SnippetsEditor *snippets_editor;
 	GtkTreeView *snippets_view;
 
 	SnippetsDB *snippets_db;
@@ -52,6 +54,14 @@ struct _SnippetsBrowserPrivate
 	gboolean maximized;
 
 	SnippetsInteraction *snippets_interaction;
+
+	/* Handlers ids */
+	gulong add_button_handler_id;
+	gulong delete_button_handler_id;
+	gulong insert_button_handler_id;
+	gulong edit_button_handler_id;
+	gulong snippets_view_handler_id;
+
 };
 
 
@@ -185,7 +195,7 @@ init_browser_layout (SnippetsBrowser *snippets_browser)
 	bxml = gtk_builder_new ();
 	if (!gtk_builder_add_from_file (bxml, BROWSER_UI, &error))
 	{
-		g_warning ("Couldn't load preferences ui file: %s", error->message);
+		g_warning ("Couldn't load browser ui file: %s", error->message);
 		g_error_free (error);
 	}
 
@@ -204,7 +214,7 @@ init_browser_layout (SnippetsBrowser *snippets_browser)
 	g_return_if_fail (GTK_IS_TOGGLE_BUTTON (priv->edit_button));
 	g_return_if_fail (GTK_IS_SCROLLED_WINDOW (priv->snippets_view_cont));
 	g_return_if_fail (GTK_IS_VBOX (priv->snippets_view_vbox));
-	
+
 	/* Add the Snippets View to the scrolled window */
 	gtk_container_add (GTK_CONTAINER (priv->snippets_view_cont),
 	                   GTK_WIDGET (priv->snippets_view));
@@ -224,6 +234,13 @@ init_browser_layout (SnippetsBrowser *snippets_browser)
 	                 priv->snippets_editor_frame,
 	                 TRUE, FALSE);
 
+	/* Initialize the snippets editor */
+	priv->snippets_editor = snippets_editor_new (priv->snippets_db);
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (priv->snippets_editor));
+	gtk_container_add (GTK_CONTAINER (priv->snippets_editor_frame),
+	                   GTK_WIDGET (priv->snippets_editor));
+	                   
+	g_object_unref (bxml);
 }
 
 static void
@@ -235,26 +252,47 @@ init_browser_handlers (SnippetsBrowser *snippets_browser)
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
 
-	g_signal_connect (GTK_OBJECT (priv->snippets_view),
-	                  "key-press-event",
-	                  GTK_SIGNAL_FUNC (on_snippets_view_key_press),
-	                  snippets_browser);
-	g_signal_connect (GTK_OBJECT (priv->add_button),
-	                  "clicked",
-	                  GTK_SIGNAL_FUNC (on_add_button_clicked),
-	                  snippets_browser);
-	g_signal_connect (GTK_OBJECT (priv->delete_button),
-	                  "clicked",
-	                  GTK_SIGNAL_FUNC (on_delete_button_clicked),
-	                  snippets_browser);
-	g_signal_connect (GTK_OBJECT (priv->insert_button),
-	                  "clicked",
-	                  GTK_SIGNAL_FUNC (on_insert_button_clicked),
-	                  snippets_browser);
-	g_signal_connect (GTK_OBJECT (priv->edit_button),
-	                  "toggled",
-	                  GTK_SIGNAL_FUNC (on_edit_button_toggled),
-	                  snippets_browser);
+	priv->snippets_view_handler_id =
+		g_signal_connect (GTK_OBJECT (priv->snippets_view),
+		                  "key-press-event",
+		                  GTK_SIGNAL_FUNC (on_snippets_view_key_press),
+		                  snippets_browser);
+	priv->add_button_handler_id =
+		g_signal_connect (GTK_OBJECT (priv->add_button),
+		                  "clicked",
+		                  GTK_SIGNAL_FUNC (on_add_button_clicked),
+		                  snippets_browser);
+	priv->delete_button_handler_id =
+		g_signal_connect (GTK_OBJECT (priv->delete_button),
+		                  "clicked",
+		                  GTK_SIGNAL_FUNC (on_delete_button_clicked),
+		                  snippets_browser);
+	priv->insert_button_handler_id =
+		g_signal_connect (GTK_OBJECT (priv->insert_button),
+		                  "clicked",
+		                  GTK_SIGNAL_FUNC (on_insert_button_clicked),
+		                  snippets_browser);
+	priv->edit_button_handler_id =
+		g_signal_connect (GTK_OBJECT (priv->edit_button),
+		                  "toggled",
+		                  GTK_SIGNAL_FUNC (on_edit_button_toggled),
+		                  snippets_browser);
+}
+
+static void
+disconnect_browser_handlers (SnippetsBrowser *snippets_browser)
+{
+	SnippetsBrowserPrivate *priv = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
+
+	g_signal_handler_disconnect (priv->snippets_view, priv->snippets_view_handler_id);
+	g_signal_handler_disconnect (priv->add_button, priv->add_button_handler_id);
+	g_signal_handler_disconnect (priv->delete_button, priv->delete_button_handler_id);
+	g_signal_handler_disconnect (priv->insert_button, priv->insert_button_handler_id);
+	g_signal_handler_disconnect (priv->edit_button, priv->edit_button_handler_id);
 }
 
 static void
@@ -362,7 +400,8 @@ snippets_db_language_filter_func (GtkTreeModel *tree_model,
 	const gchar *language = NULL;
 	GObject *cur_object = NULL;
 	SnippetsBrowserPrivate *priv = NULL;
-
+	gboolean has_language = FALSE;
+	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (tree_model), FALSE);
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (user_data), FALSE);
@@ -393,25 +432,37 @@ snippets_db_language_filter_func (GtkTreeModel *tree_model,
 	{
 		g_return_val_if_reached (FALSE);
 	}
-
+	
 	/* Get the current document manager. If it doesn't exist we show all snippets */
 	docman = anjuta_shell_get_interface (snippets_browser->anjuta_shell, 
 	                                     IAnjutaDocumentManager, 
 	                                     NULL);
 	if (docman == NULL)
+	{
+		g_object_unref (cur_object);
 		return TRUE;
+	}
 	
 	/* Get the current doc and if it isn't an editor show all snippets */
 	doc = ianjuta_document_manager_get_current_document (docman, NULL);
 	if (!IANJUTA_IS_EDITOR (doc))
+	{
+		g_object_unref (cur_object);
 		return TRUE;
+	}
 
 	/* Get the language */
 	language = ianjuta_editor_language_get_language (IANJUTA_EDITOR_LANGUAGE (doc), NULL);
 	if (language == NULL)
+	{
+		g_object_unref (cur_object);
 		return TRUE;
-		
-	return snippet_has_language (ANJUTA_SNIPPET (cur_object), language);
+	}
+
+	has_language = snippet_has_language (ANJUTA_SNIPPET (cur_object), language);
+
+	g_object_unref (cur_object);
+	return has_language;
 }
 
 static void
@@ -509,7 +560,11 @@ snippets_browser_load (SnippetsBrowser *snippets_browser,
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_INTERACTION (snippets_interaction));
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
-	priv->snippets_db   = snippets_db;
+
+	priv->snippets_db = snippets_db;
+	priv->snippets_interaction = snippets_interaction;
+	g_object_ref (priv->snippets_db);
+	g_object_ref (priv->snippets_interaction);
 	
 	/* Set up the Snippets View */
 	priv->snippets_view = GTK_TREE_VIEW (gtk_tree_view_new ());
@@ -521,7 +576,6 @@ snippets_browser_load (SnippetsBrowser *snippets_browser,
 	/* Initialize the snippet handlers */
 	init_browser_handlers (snippets_browser);
 
-	priv->snippets_interaction = snippets_interaction;
 }
 
 /**
@@ -533,7 +587,29 @@ snippets_browser_load (SnippetsBrowser *snippets_browser,
 void                       
 snippets_browser_unload (SnippetsBrowser *snippets_browser)
 {
-	/* TODO */
+	SnippetsBrowserPrivate *priv = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
+
+	g_object_unref (priv->snippets_db);
+	g_object_unref (priv->snippets_interaction);
+	priv->snippets_db = NULL;
+	priv->snippets_interaction = NULL;
+
+	disconnect_browser_handlers (snippets_browser);
+
+	if (priv->maximized)
+		gtk_container_remove (GTK_CONTAINER (snippets_browser),
+		                      GTK_WIDGET (priv->browser_hpaned));
+	else
+	{
+		gtk_container_remove (GTK_CONTAINER (snippets_browser),
+			                  GTK_WIDGET (priv->snippets_view_vbox));
+		gtk_object_destroy (GTK_OBJECT (priv->snippets_editor));
+	}
+	
 }
 
 /**
@@ -554,6 +630,7 @@ snippets_browser_show_editor (SnippetsBrowser *snippets_browser)
 	g_return_if_fail (priv->maximized == FALSE);
 
 	/* Unparent the SnippetsView from the SnippetsBrowser */
+	g_object_ref (priv->snippets_view_vbox);
 	gtk_container_remove (GTK_CONTAINER (snippets_browser),
 	                      GTK_WIDGET (priv->snippets_view_vbox));
 
@@ -569,11 +646,11 @@ snippets_browser_show_editor (SnippetsBrowser *snippets_browser)
 	                    TRUE,
 	                    0);
 
-	/* TODO - add the SnippetsEditor in the frame */
-	
+	/* Show the editor widgets */
 	gtk_widget_show (priv->browser_hpaned);
 	gtk_widget_show (priv->snippets_editor_frame);
-
+	gtk_widget_show (GTK_WIDGET (priv->snippets_editor)); 
+	
 	priv->maximized = TRUE;
 
 	snippets_browser_refilter_snippets_view (snippets_browser);
@@ -598,11 +675,13 @@ snippets_browser_hide_editor (SnippetsBrowser *snippets_browser)
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
 	g_return_if_fail (priv->maximized == TRUE);
 	
-	/* TODO - hide the editor */
+	/* Hide the editor widgets */
+	gtk_widget_hide (GTK_WIDGET (priv->snippets_editor)); 
 	gtk_widget_hide (priv->browser_hpaned);
 	gtk_widget_hide (priv->snippets_editor_frame);
 
 	/* Remove the SnippetsView from the HPaned */
+	g_object_ref (priv->snippets_view_vbox);
 	gtk_container_remove (GTK_CONTAINER (priv->browser_hpaned),
 	                      GTK_WIDGET (priv->snippets_view_vbox));
 
@@ -739,6 +818,7 @@ on_insert_button_clicked (GtkButton *insert_button,
 		                                     G_OBJECT (priv->snippets_db),
 		                                     ANJUTA_SNIPPET (cur_object));
 	}
+
 }
 
 static void    
@@ -760,7 +840,6 @@ on_edit_button_toggled (GtkToggleButton *edit_button,
 	else
 		g_signal_emit_by_name (G_OBJECT (snippets_browser),
 		                       "unmaximize-request");
-	
 }
 
 static void    

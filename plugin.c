@@ -60,7 +60,7 @@ static GtkActionEntry actions_snippets[] = {
 		NULL,
 		N_("_Insert Snippet"),
 		"<control>e",
-		N_("Insert a macro using the trigger-key"),
+		N_("Insert a snippet using the trigger-key"),
 		G_CALLBACK (on_menu_insert_snippet)}
 };
 
@@ -265,7 +265,7 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	/* Link the AnjutaShell to the SnippetsDB and load the SnippetsDB*/
 	snippets_manager_plugin->snippets_db->anjuta_shell = plugin->shell;
 	snippets_db_load (snippets_manager_plugin->snippets_db);
-
+	
 	/* Load the SnippetsBrowser with the snippets in the SnippetsDB */
 	snippets_manager_plugin->snippets_browser->anjuta_shell = plugin->shell;
 	snippets_browser_load (snippets_manager_plugin->snippets_browser,
@@ -278,14 +278,16 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	                         GTK_STOCK_FILE,
 	                         ANJUTA_SHELL_PLACEMENT_LEFT,
 	                         NULL);
-	g_signal_connect (GTK_OBJECT (snippets_manager_plugin->snippets_browser),
-	                  "maximize-request",
-	                  GTK_SIGNAL_FUNC (on_snippets_browser_maximize_request),
-	                  snippets_manager_plugin);
-	g_signal_connect (GTK_OBJECT (snippets_manager_plugin->snippets_browser),
-	                  "unmaximize-request",
-	                  GTK_SIGNAL_FUNC (on_snippets_browser_unmaximize_request),
-	                  snippets_manager_plugin);
+	snippets_manager_plugin->maximize_request_handler_id = 
+		g_signal_connect (GTK_OBJECT (snippets_manager_plugin->snippets_browser),
+	    	              "maximize-request",
+	    	              GTK_SIGNAL_FUNC (on_snippets_browser_maximize_request),
+	    	              snippets_manager_plugin);
+	snippets_manager_plugin->unmaximize_request_handler_id =
+		g_signal_connect (GTK_OBJECT (snippets_manager_plugin->snippets_browser),
+		                  "unmaximize-request",
+		                  GTK_SIGNAL_FUNC (on_snippets_browser_unmaximize_request),
+		                  snippets_manager_plugin);
 	                  
 	/* Initialize the Interaction Interpreter */
 	snippets_interaction_start (snippets_manager_plugin->snippets_interaction,
@@ -342,10 +344,15 @@ snippets_manager_deactivate (AnjutaPlugin *plugin)
 
 	/* Unload the SnippetsBrowser */
 	snippets_browser_unload (snippets_manager_plugin->snippets_browser);
+	g_object_ref (snippets_manager_plugin->snippets_browser); /* TODO - delete this later on */
 	anjuta_shell_remove_widget (plugin->shell,
 	                            GTK_WIDGET (snippets_manager_plugin->snippets_browser),
 	                            NULL);
-	
+	g_signal_handler_disconnect (snippets_manager_plugin->snippets_browser,
+	                             snippets_manager_plugin->maximize_request_handler_id);
+	g_signal_handler_disconnect (snippets_manager_plugin->snippets_browser,
+	                             snippets_manager_plugin->unmaximize_request_handler_id);
+
 	/* Destroy the SnippetsDB */
 	snippets_db_close (snippets_manager_plugin->snippets_db);
 
@@ -387,12 +394,6 @@ snippets_manager_dispose (GObject * obj)
 		g_object_unref (snippets_manager->snippets_browser);
 		snippets_manager->snippets_browser = NULL;
 	}
-	
-	if (snippets_manager->snippets_editor != NULL)
-	{
-		g_object_unref (snippets_manager->snippets_editor);
-		snippets_manager->snippets_editor = NULL;
-	}
 		
 	G_OBJECT_CLASS (parent_class)->dispose (obj);
 }
@@ -416,7 +417,6 @@ snippets_manager_plugin_instance_init (GObject * obj)
 	snippets_manager->snippets_db = snippets_db_new ();
 	snippets_manager->snippets_interaction = snippets_interaction_new ();
 	snippets_manager->snippets_browser = snippets_browser_new ();
-	snippets_manager->snippets_editor = NULL;
 
 }
 
@@ -697,7 +697,7 @@ global_vars_view_value_data_func (GtkTreeViewColumn *col,
 }
 
 static void
-set_up_global_variables_view (SnippetsDB *snippets_db, 
+set_up_global_variables_view (SnippetsManagerPlugin *snippets_manager_plugin, 
                               GtkTreeView *global_vars_view)
 {
 	GtkCellRenderer *cell = NULL;
@@ -705,7 +705,7 @@ set_up_global_variables_view (SnippetsDB *snippets_db,
 	GtkTreeModel *global_vars_model = NULL;
 
 	/* Assertions */
-	global_vars_model = snippets_db_get_global_vars_model (snippets_db);
+	global_vars_model = snippets_db_get_global_vars_model (snippets_manager_plugin->snippets_db);
 	g_return_if_fail (GTK_IS_TREE_MODEL (global_vars_model));
 	g_return_if_fail (GTK_IS_TREE_VIEW (global_vars_view));
 
@@ -724,10 +724,13 @@ set_up_global_variables_view (SnippetsDB *snippets_db,
 	                                         global_vars_view_name_data_func,
 	                                         NULL, NULL);
 	gtk_tree_view_append_column (global_vars_view, col);
-	g_signal_connect (GTK_OBJECT (cell), 
-	                  "edited",
-	                  GTK_SIGNAL_FUNC (on_global_vars_name_changed),
-	                  snippets_db);
+
+	snippets_manager_plugin->name_cell = GTK_OBJECT (cell);
+	snippets_manager_plugin->name_cell_handler_id = 
+		g_signal_connect (GTK_OBJECT (cell), 
+		                  "edited",
+		                  GTK_SIGNAL_FUNC (on_global_vars_name_changed),
+		                  snippets_manager_plugin->snippets_db);
 	
 	/* Set up the type cell */
 	cell = gtk_cell_renderer_toggle_new ();
@@ -740,10 +743,13 @@ set_up_global_variables_view (SnippetsDB *snippets_db,
 	                                         global_vars_view_type_data_func,
 	                                         NULL, NULL);
 	gtk_tree_view_append_column (global_vars_view, col);
-	g_signal_connect (GTK_OBJECT (cell), 
-	                  "toggled", 
-	                  GTK_SIGNAL_FUNC (on_global_vars_type_toggled), 
-	                  snippets_db);
+	
+	snippets_manager_plugin->type_cell = GTK_OBJECT (cell);
+	snippets_manager_plugin->type_cell_handler_id = 
+		g_signal_connect (GTK_OBJECT (cell), 
+		                  "toggled", 
+		                  GTK_SIGNAL_FUNC (on_global_vars_type_toggled), 
+		                  snippets_manager_plugin->snippets_db);
 
 	/* Set up the text cell */
 	cell = gtk_cell_renderer_text_new ();
@@ -754,12 +760,16 @@ set_up_global_variables_view (SnippetsDB *snippets_db,
 	gtk_tree_view_column_pack_start (col, cell, FALSE);
 	gtk_tree_view_column_set_cell_data_func (col, cell,
 	                                         global_vars_view_text_data_func,
-	                                         snippets_db, NULL);
+	                                         snippets_manager_plugin->snippets_db, 
+	                                         NULL);
 	gtk_tree_view_append_column (global_vars_view, col);
-	g_signal_connect (GTK_OBJECT (cell), 
-	                  "edited",
-	                  GTK_SIGNAL_FUNC (on_global_vars_text_changed),
-	                  snippets_db);
+	
+	snippets_manager_plugin->text_cell = GTK_OBJECT (cell);
+	snippets_manager_plugin->text_cell_handler_id = 
+		g_signal_connect (GTK_OBJECT (cell), 
+		                  "edited",
+		                  GTK_SIGNAL_FUNC (on_global_vars_text_changed),
+		                  snippets_manager_plugin->snippets_db);
 
 	/* Set up the instant value cell */
 	cell = gtk_cell_renderer_text_new ();
@@ -771,7 +781,8 @@ set_up_global_variables_view (SnippetsDB *snippets_db,
 	gtk_tree_view_column_pack_start (col, cell, FALSE);
 	gtk_tree_view_column_set_cell_data_func (col, cell,
 	                                         global_vars_view_value_data_func,
-	                                         snippets_db, NULL);
+	                                         snippets_manager_plugin->snippets_db, 
+	                                         NULL);
 	gtk_tree_view_append_column (global_vars_view, col);
 
 }
@@ -907,20 +918,26 @@ ipreferences_merge (IAnjutaPreferences* ipref,
 	g_return_if_fail (GTK_IS_FILE_CHOOSER_BUTTON (default_folder_b));
 
 	/* Set up the Global Variables GtkTreeView */
-	set_up_global_variables_view (snippets_manager_plugin->snippets_db, global_vars_view);
+	set_up_global_variables_view (snippets_manager_plugin, global_vars_view);
 
 	/* Connect the addition/deletion buttons */
 	global_vars_update_data = g_malloc (sizeof (GlobalVariablesUpdateData));
 	global_vars_update_data->snippets_db = snippets_manager_plugin->snippets_db;
 	global_vars_update_data->global_vars_view = global_vars_view;
-	g_signal_connect (GTK_OBJECT (add_variable_b),
-	                  "clicked",
-	                  GTK_SIGNAL_FUNC (on_add_variable_b_clicked),
-	                  global_vars_update_data);
-	g_signal_connect (GTK_OBJECT (delete_variable_b),
-	                  "clicked",
-	                  GTK_SIGNAL_FUNC (on_delete_variable_b_clicked),
-	                  global_vars_update_data);
+
+	snippets_manager_plugin->add_var_b = GTK_OBJECT (add_variable_b);
+	snippets_manager_plugin->add_var_b_handler_id =
+		g_signal_connect (GTK_OBJECT (add_variable_b),
+		                  "clicked",
+		                  GTK_SIGNAL_FUNC (on_add_variable_b_clicked),
+		                  global_vars_update_data);
+
+	snippets_manager_plugin->del_var_b = GTK_OBJECT (delete_variable_b);
+	snippets_manager_plugin->del_var_b_handler_id =
+		g_signal_connect (GTK_OBJECT (delete_variable_b),
+		                  "clicked",
+		                  GTK_SIGNAL_FUNC (on_delete_variable_b_clicked),
+		                  global_vars_update_data);
 	
 	g_object_unref (bxml);
 }
@@ -930,6 +947,23 @@ ipreferences_unmerge (IAnjutaPreferences* ipref,
 					  AnjutaPreferences* prefs,
 					  GError** e)
 {
+	SnippetsManagerPlugin *snippets_manager_plugin = NULL;
+	
+	/* Assertions */
+	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (ipref);
+	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (snippets_manager_plugin));	
+
+	g_signal_handler_disconnect (snippets_manager_plugin->name_cell,
+	                             snippets_manager_plugin->name_cell_handler_id);
+	g_signal_handler_disconnect (snippets_manager_plugin->type_cell,
+	                             snippets_manager_plugin->type_cell_handler_id);
+	g_signal_handler_disconnect (snippets_manager_plugin->text_cell,
+	                             snippets_manager_plugin->text_cell_handler_id);
+	g_signal_handler_disconnect (snippets_manager_plugin->add_var_b,
+	                             snippets_manager_plugin->add_var_b_handler_id);
+	g_signal_handler_disconnect (snippets_manager_plugin->del_var_b,
+	                             snippets_manager_plugin->del_var_b_handler_id);
+
 	anjuta_preferences_remove_page (prefs, _("Snippets Manager"));
 }
 
