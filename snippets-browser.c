@@ -54,13 +54,6 @@ struct _SnippetsBrowserPrivate
 	gboolean maximized;
 
 	SnippetsInteraction *snippets_interaction;
-	
-	/* Handlers ids */
-	gulong add_button_handler_id;
-	gulong delete_button_handler_id;
-	gulong insert_button_handler_id;
-	gulong edit_button_handler_id;
-	gulong snippets_view_handler_id;
 
 };
 
@@ -232,47 +225,26 @@ init_browser_handlers (SnippetsBrowser *snippets_browser)
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
 
-	priv->snippets_view_handler_id =
-		g_signal_connect (GTK_OBJECT (priv->snippets_view),
-		                  "key-press-event",
-		                  GTK_SIGNAL_FUNC (on_snippets_view_key_press),
-		                  snippets_browser);
-	priv->add_button_handler_id =
-		g_signal_connect (GTK_OBJECT (priv->add_button),
-		                  "clicked",
-		                  GTK_SIGNAL_FUNC (on_add_button_clicked),
-		                  snippets_browser);
-	priv->delete_button_handler_id =
-		g_signal_connect (GTK_OBJECT (priv->delete_button),
-		                  "clicked",
-		                  GTK_SIGNAL_FUNC (on_delete_button_clicked),
-		                  snippets_browser);
-	priv->insert_button_handler_id =
-		g_signal_connect (GTK_OBJECT (priv->insert_button),
-		                  "clicked",
-		                  GTK_SIGNAL_FUNC (on_insert_button_clicked),
-		                  snippets_browser);
-	priv->edit_button_handler_id =
-		g_signal_connect (GTK_OBJECT (priv->edit_button),
-		                  "toggled",
-		                  GTK_SIGNAL_FUNC (on_edit_button_toggled),
-		                  snippets_browser);
-}
-
-static void
-disconnect_browser_handlers (SnippetsBrowser *snippets_browser)
-{
-	SnippetsBrowserPrivate *priv = NULL;
-
-	/* Assertions */
-	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
-	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
-
-	g_signal_handler_disconnect (priv->snippets_view, priv->snippets_view_handler_id);
-	g_signal_handler_disconnect (priv->add_button, priv->add_button_handler_id);
-	g_signal_handler_disconnect (priv->delete_button, priv->delete_button_handler_id);
-	g_signal_handler_disconnect (priv->insert_button, priv->insert_button_handler_id);
-	g_signal_handler_disconnect (priv->edit_button, priv->edit_button_handler_id);
+	g_signal_connect (GTK_OBJECT (priv->snippets_view),
+	                  "key-press-event",
+	                  GTK_SIGNAL_FUNC (on_snippets_view_key_press),
+	                  snippets_browser);
+	g_signal_connect (GTK_OBJECT (priv->add_button),
+	                  "clicked",
+	                  GTK_SIGNAL_FUNC (on_add_button_clicked),
+	                  snippets_browser);
+	g_signal_connect (GTK_OBJECT (priv->delete_button),
+	                  "clicked",
+	                  GTK_SIGNAL_FUNC (on_delete_button_clicked),
+	                  snippets_browser);
+	g_signal_connect (GTK_OBJECT (priv->insert_button),
+	                  "clicked",
+	                  GTK_SIGNAL_FUNC (on_insert_button_clicked),
+	                  snippets_browser);
+	g_signal_connect (GTK_OBJECT (priv->edit_button),
+	                  "toggled",
+	                  GTK_SIGNAL_FUNC (on_edit_button_toggled),
+	                  snippets_browser);
 }
 
 static void
@@ -526,8 +498,7 @@ snippets_browser_new (void)
  * @snippets_db: A #SnippetsDB object from which the browser should be loaded.
  * @snippets_interaction: A #SnippetsInteraction object which is used for interacting with the editor.
  *
- * Loads the #SnippetsBrowser with snippets that are found in the given database. Before this method
- * is called, the snippets browser will be an empty box.
+ * Loads the #SnippetsBrowser with snippets that are found in the given database.
  */
 void                       
 snippets_browser_load (SnippetsBrowser *snippets_browser,
@@ -575,8 +546,6 @@ snippets_browser_unload (SnippetsBrowser *snippets_browser)
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
 
-	disconnect_browser_handlers (snippets_browser);
-
 	g_object_unref (priv->snippets_db);
 	g_object_unref (priv->snippets_interaction);
 	priv->snippets_db = NULL;
@@ -596,6 +565,16 @@ snippets_browser_unload (SnippetsBrowser *snippets_browser)
 
 	g_object_unref (priv->filter);
 
+	if (GTK_IS_WIDGET (priv->snippets_editor)) printf ("aici1\n");
+	if (GTK_IS_WIDGET (priv->snippets_view)) printf ("aici2\n");
+	if (GTK_IS_WIDGET (priv->add_button)) printf ("aici3\n");
+	if (GTK_IS_WIDGET (priv->insert_button)) printf ("aici4\n");
+	if (GTK_IS_WIDGET (priv->edit_button)) printf ("aici5\n");
+	if (GTK_IS_WIDGET (priv->snippets_view_vbox)) printf ("aici6\n");
+	if (GTK_IS_WIDGET (priv->snippets_view_cont)) printf ("aici7\n");
+	if (GTK_IS_WIDGET (priv->snippets_editor_frame)) printf ("aici8\n");
+	if (GTK_IS_WIDGET (priv->browser_hpaned)) printf ("aici9\n");
+	if (G_IS_OBJECT (priv->filter)) printf ("aici10\n");
 }
 
 /**
