@@ -599,17 +599,6 @@ snippets_browser_unload (SnippetsBrowser *snippets_browser)
 	}
 
 	g_object_unref (priv->filter);
-
-	if (GTK_IS_WIDGET (priv->snippets_editor)) printf ("aici1\n");
-	if (GTK_IS_WIDGET (priv->snippets_view)) printf ("aici2\n");
-	if (GTK_IS_WIDGET (priv->add_button)) printf ("aici3\n");
-	if (GTK_IS_WIDGET (priv->insert_button)) printf ("aici4\n");
-	if (GTK_IS_WIDGET (priv->edit_button)) printf ("aici5\n");
-	if (GTK_IS_WIDGET (priv->snippets_view_vbox)) printf ("aici6\n");
-	if (GTK_IS_WIDGET (priv->snippets_view_cont)) printf ("aici7\n");
-	if (GTK_IS_WIDGET (priv->snippets_editor_frame)) printf ("aici8\n");
-	if (GTK_IS_WIDGET (priv->browser_hpaned)) printf ("aici9\n");
-	if (G_IS_OBJECT (priv->filter)) printf ("aici10\n");
 }
 
 /**
