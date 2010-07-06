@@ -28,7 +28,6 @@
 struct _AnjutaSnippetsGroupPrivate
 {
 	gchar* name;
-	gchar* description;
 	
 	GList* snippets;
 };
@@ -46,8 +45,6 @@ snippets_group_dispose (GObject* snippets_group)
 	/* Delete the name and description fields */
 	g_free (anjuta_snippets_group->priv->name);
 	anjuta_snippets_group->priv->name = NULL;
-	g_free (anjuta_snippets_group->priv->description);
-	anjuta_snippets_group->priv->description = NULL;
 	
 	/* Delete the snippets in the group */
 	for (iter = g_list_first (anjuta_snippets_group->priv->snippets); iter != NULL; iter = g_list_next (iter))
@@ -91,7 +88,6 @@ snippets_group_init (AnjutaSnippetsGroup* snippets_group)
 
 	/* Initialize the private field */
 	snippets_group->priv->name = NULL;
-	snippets_group->priv->description = NULL;
 	snippets_group->priv->snippets = NULL;
 }
 
@@ -99,7 +95,6 @@ snippets_group_init (AnjutaSnippetsGroup* snippets_group)
  * snippets_group_new:
  * @snippets_filename: The filename from which the snippet group was loaded.
  * @snippets_group_name: A name for the group. It's unique.
- * @snippets_group_description: A short description of the snippet.
  *
  * Makes a new #AnjutaSnippetsGroup object.
  *
@@ -107,21 +102,18 @@ snippets_group_init (AnjutaSnippetsGroup* snippets_group)
  **/
 AnjutaSnippetsGroup* 
 snippets_group_new (const gchar* snippets_file_path,
-                    const gchar* snippets_group_name,
-                    const gchar* snippets_group_description)
+                    const gchar* snippets_group_name)
 {
 	AnjutaSnippetsGroup* snippets_group = NULL;
 	
 	/* Assertions */
 	g_return_val_if_fail (snippets_group_name != NULL, NULL);
-	g_return_val_if_fail (snippets_group_description != NULL, NULL);
 	
 	/* Initialize the object */
 	snippets_group = ANJUTA_SNIPPETS_GROUP (g_object_new (snippets_group_get_type (), NULL));
 	
 	/* Copy the name, description and filename */
 	snippets_group->priv->name = g_strdup (snippets_group_name);
-	snippets_group->priv->description = g_strdup (snippets_group_description);
 	snippets_group->file_path = g_strdup (snippets_file_path);
 	
 	return snippets_group;
@@ -146,25 +138,6 @@ snippets_group_set_name (AnjutaSnippetsGroup* snippets_group,
 
 	g_free (snippets_group->priv->name);
 	snippets_group->priv->name = g_strdup (new_group_name);
-}
-
-const gchar*
-snippets_group_get_description (AnjutaSnippetsGroup* snippets_group)
-{
-	/* Assertions */
-	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group), NULL);
-
-	return snippets_group->priv->description;
-}
-
-void snippets_group_set_description (AnjutaSnippetsGroup* snippets_group,
-                                     const gchar* new_group_description)
-{
-	/* Assertions */
-	g_return_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group));
-
-	g_free (snippets_group->priv->description);
-	snippets_group->priv->description = g_strdup (new_group_description);
 }
 
 static gint

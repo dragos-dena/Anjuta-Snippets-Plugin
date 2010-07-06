@@ -56,14 +56,10 @@ struct _AnjutaSnippetsGroupClass
 
 GType                 snippets_group_get_type          (void) G_GNUC_CONST;
 AnjutaSnippetsGroup*  snippets_group_new               (const gchar* snippets_file_path,
-                                                        const gchar* snippets_group_name,
-                                                        const gchar* snippets_group_description);
+                                                        const gchar* snippets_group_name);
 const gchar*          snippets_group_get_name          (AnjutaSnippetsGroup* snippets_group);
 void                  snippets_group_set_name          (AnjutaSnippetsGroup* snippets_group,
                                                         const gchar* new_group_name);
-const gchar*          snippets_group_get_description   (AnjutaSnippetsGroup* snippets_group);
-void                  snippets_group_set_description   (AnjutaSnippetsGroup* snippets_group,
-                                                        const gchar* new_group_description);
 gboolean              snippets_group_add_snippet       (AnjutaSnippetsGroup* snippets_group,
                                                         AnjutaSnippet* snippet,
                                                         gboolean overwrite);

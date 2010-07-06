@@ -27,8 +27,9 @@
 #include <libanjuta/interfaces/ianjuta-editor.h>
 #include <libanjuta/interfaces/ianjuta-editor-language.h>
 
-#define BROWSER_UI      PACKAGE_DATA_DIR"/glade/snippets-browser.ui"
-#define TOOLTIP_SIZE    200
+#define BROWSER_UI               PACKAGE_DATA_DIR"/glade/snippets-browser.ui"
+#define TOOLTIP_SIZE             200
+#define NEW_SNIPPETS_GROUP_NAME  "New Snippets Group"
 
 #define ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ANJUTA_TYPE_SNIPPETS_BROWSER, SnippetsBrowserPrivate))
 
@@ -56,6 +57,13 @@ struct _SnippetsBrowserPrivate
 
 	SnippetsInteraction *snippets_interaction;
 
+};
+
+enum
+{
+	SNIPPETS_VIEW_COL_NAME = 0,
+	SNIPPETS_VIEW_COL_TRIGGER,
+	SNIPPETS_VIEW_COL_LANGUAGES
 };
 
 
@@ -135,27 +143,32 @@ snippets_browser_init (SnippetsBrowser* snippets_browser)
 
 /* Handlers */
 
-static void     on_add_button_clicked          (GtkButton *add_button,
-                                                gpointer user_data);
-static void     on_delete_button_clicked       (GtkButton *delete_button,
-                                                gpointer user_data);
-static void     on_insert_button_clicked       (GtkButton *insert_button,
-                                                gpointer user_data);
-static void     on_edit_button_toggled         (GtkToggleButton *edit_button,
-                                                gpointer user_data);
-static void     on_snippets_view_key_press     (GtkWidget *snippets_view,
-                                                GdkEventKey *event_key,
-                                                gpointer user_data);
-static gboolean on_snippets_view_query_tooltip (GtkWidget *snippets_view,
-                                                gint x, 
-                                                gint y,
-                                                gboolean keyboard_mode,
-                                                GtkTooltip *tooltip,
-                                                gpointer user_data);
-static void     on_name_changed                (GtkCellRendererText *renderer,
-                                                gchar *path_string,
-                                                gchar *new_text,
-                                                gpointer user_data);
+static void     on_add_button_clicked                     (GtkButton *add_button,
+                                                           gpointer user_data);
+static void     on_delete_button_clicked                  (GtkButton *delete_button,
+                                                           gpointer user_data);
+static void     on_insert_button_clicked                  (GtkButton *insert_button,
+                                                           gpointer user_data);
+static void     on_edit_button_toggled                    (GtkToggleButton *edit_button,
+                                                           gpointer user_data);
+static void     on_snippets_view_key_press                (GtkWidget *snippets_view,
+                                                           GdkEventKey *event_key,
+                                                           gpointer user_data);
+static gboolean on_snippets_view_query_tooltip            (GtkWidget *snippets_view,
+                                                           gint x, 
+                                                           gint y,
+                                                           gboolean keyboard_mode,
+                                                           GtkTooltip *tooltip,
+                                                           gpointer user_data);
+static void     on_name_changed                           (GtkCellRendererText *renderer,
+                                                           gchar *path_string,
+                                                           gchar *new_text,
+                                                           gpointer user_data);
+static void     on_add_snippet_menu_item_activated        (GtkMenuItem *menu_item,
+                                                           gpointer user_data);
+static void     on_add_snippets_group_menu_item_activated (GtkMenuItem *menu_item,
+                                                           gpointer user_data);
+
 /* Private methods */
 
 static void
@@ -726,7 +739,43 @@ static void
 on_add_button_clicked (GtkButton *add_button,
                        gpointer user_data)
 {
-	/* TODO */
+	GtkWidget *menu = NULL, *add_snippet_menu_item = NULL, 
+	          *add_snippets_group_menu_item = NULL;
+	SnippetsBrowser *snippets_browser = NULL;
+	SnippetsBrowserPrivate *priv = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (user_data));
+	snippets_browser = ANJUTA_SNIPPETS_BROWSER (user_data);
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
+
+	menu = gtk_menu_new ();
+
+	/* Insert the Add Snippet menu item */
+	add_snippet_menu_item = gtk_menu_item_new_with_label (_("Add Snippet …"));
+	g_signal_connect (GTK_OBJECT (add_snippet_menu_item),
+	                  "activate",
+	                  GTK_SIGNAL_FUNC (on_add_snippet_menu_item_activated),
+	                  snippets_browser);
+	gtk_menu_shell_append (GTK_MENU_SHELL (menu), 
+	                       GTK_WIDGET (add_snippet_menu_item));
+	gtk_widget_show (GTK_WIDGET (add_snippet_menu_item));
+	
+	/* Insert the Add Snippets Group menu item */
+	add_snippets_group_menu_item = gtk_menu_item_new_with_label (_("Add Snippets Group …"));
+	g_signal_connect (GTK_OBJECT (add_snippets_group_menu_item),
+	                  "activate",
+	                  GTK_SIGNAL_FUNC (on_add_snippets_group_menu_item_activated),
+	                  snippets_browser);
+	gtk_menu_shell_append (GTK_MENU_SHELL (menu), 
+	                       GTK_WIDGET (add_snippets_group_menu_item));
+	gtk_widget_show (GTK_WIDGET (add_snippets_group_menu_item));
+	
+	//gtk_menu_attach_to_widget (GTK_MENU (menu), GTK_WIDGET (add_button), NULL); 
+	gtk_menu_popup (GTK_MENU (menu),
+	                NULL, NULL, NULL, NULL, 0,
+	                gtk_get_current_event_time ());
+
 }
 
 static void    
@@ -931,4 +980,61 @@ on_name_changed (GtkCellRendererText *renderer,
 	
 	gtk_tree_path_free (path);
 	g_free (old_name);
+}
+
+
+static void     
+on_add_snippet_menu_item_activated (GtkMenuItem *menu_item,
+                                    gpointer user_data)
+{
+	/* TODO */
+}
+
+static void     
+on_add_snippets_group_menu_item_activated (GtkMenuItem *menu_item,
+                                           gpointer user_data)
+{
+	SnippetsBrowser *snippets_browser = NULL;
+	SnippetsBrowserPrivate *priv = NULL;
+	GtkTreeIter iter;
+	AnjutaSnippetsGroup *snippets_group = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (user_data));
+	snippets_browser = ANJUTA_SNIPPETS_BROWSER (user_data);
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (priv->snippets_db));
+
+	snippets_group = snippets_group_new (NULL, NEW_SNIPPETS_GROUP_NAME);
+	snippets_db_add_snippets_group (priv->snippets_db, snippets_group, FALSE, FALSE);
+
+	/* The snippets database shouldn't be empty here */
+	if (!gtk_tree_model_get_iter_first (priv->filter, &iter))
+		g_return_if_reached ();
+
+	do
+	{
+		gchar *name = NULL;
+		
+		gtk_tree_model_get (priv->filter, &iter,
+		                    SNIPPETS_DB_MODEL_COL_NAME, &name,
+		                    -1);
+		if (!g_strcmp0 (name, NEW_SNIPPETS_GROUP_NAME))
+		{
+			GtkTreePath *path = gtk_tree_model_get_path (priv->filter, &iter);
+			GtkTreeViewColumn *col = gtk_tree_view_get_column (priv->snippets_view, 
+			                                                   SNIPPETS_VIEW_COL_NAME);
+			gtk_tree_view_set_cursor (priv->snippets_view, path, col, TRUE);
+
+			gtk_tree_path_free (path);
+			g_free (name);
+			return;
+		}
+		
+		g_free (name);
+		
+	} while (gtk_tree_model_iter_next (priv->filter, &iter));
+
+	/* We should have found the newly added group */
+	g_return_if_reached ();
 }

@@ -156,12 +156,15 @@ snippets_interaction_insert_snippet (SnippetsInteraction *snippets_interaction,
 	g_return_if_fail (snippet_default_content != NULL);
 	
 	/* Insert the default content into the editor */
+	ianjuta_document_begin_undo_action (IANJUTA_DOCUMENT (cur_editor), NULL);
 	ianjuta_editor_insert (cur_editor, 
 	                       cur_pos, 
 	                       snippet_default_content, 
 	                       -1,
 	                       NULL);
-
+	ianjuta_document_end_undo_action (IANJUTA_DOCUMENT (cur_editor), NULL);
+	ianjuta_document_grab_focus (IANJUTA_DOCUMENT (cur_editor), NULL);
+	
 	/* TODO -- init the snippet editing session */
 	priv->cur_snippet = snippet;
 	priv->cur_editor  = cur_editor;

@@ -827,6 +827,7 @@ on_add_variable_b_clicked (GtkButton *button,
 			                          gtk_tree_view_get_column (global_vars_view, 0),
 			                          TRUE);
 
+			gtk_tree_path_free (path);
 			g_free (name);
 			return;
 		}

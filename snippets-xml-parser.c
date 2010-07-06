@@ -231,7 +231,7 @@ snippets_manager_parse_native_xml_file (const gchar *snippet_packet_path)
 	AnjutaSnippet* cur_snippet = NULL;
 	xmlDocPtr snippet_packet_doc = NULL;
 	xmlNodePtr cur_node = NULL, cur_snippet_node = NULL;
-	gchar *group_name = NULL, *group_description = NULL;
+	gchar *group_name = NULL;
 	
 	/* Parse the XML file and load it into a xmlDoc */
 	snippet_packet_doc = xmlParseFile (snippet_packet_path);
@@ -255,22 +255,14 @@ snippets_manager_parse_native_xml_file (const gchar *snippet_packet_path)
 		{
 			group_name = g_strdup ((gchar *)xmlNodeGetContent (cur_node));
 		}
-
-		/* Get the SnippetsGroup description */
-		if (!g_strcmp0 ((gchar*)cur_node->name, NATIVE_XML_DESCRIPTION_TAG))
-		{
-			group_description = g_strdup ((gchar *)xmlNodeGetContent (cur_node));
-		}
 		
 		cur_node = cur_node->next;
 	}
 
 	/* Make a new AnjutaSnippetsGroup object */
 	snippets_group = snippets_group_new (snippet_packet_path, 
-	                                     group_name, 
-	                                     group_description);
+	                                     group_name);
 	g_free (group_name);
-	g_free (group_description);
 
 	/* Parse the snippets in the XML file */
 	cur_node = xmlDocGetRootElement (snippet_packet_doc);
@@ -312,33 +304,6 @@ snippets_manager_parse_native_xml_file (const gchar *snippet_packet_path)
 	
 	xmlFreeDoc (snippet_packet_doc);
 
-	/* Uncomment for debugging */
-	/* TODO - delete this when it will be stable */
-	/*
-	const GList* snippets = snippets_group_get_snippets_list (snippets_group);
-	GList *var_names, *defaults, *globals;
-	gchar *crt_name, *crt_default;
-	int iter, iter2;
-	for (iter = 0; iter < g_list_length (snippets); iter ++)
-	{
-		AnjutaSnippet* crt_snippet = (AnjutaSnippet*)g_list_nth_data (snippets, iter);
-		printf ("\n+++ Debugging Snippet +++\n");
-		printf ("Name: %s\n", snippet_get_name (crt_snippet));
-		printf ("Trigger-key: %s\n", snippet_get_trigger_key (crt_snippet));
-		printf ("Snippet-key: %s\n", snippet_get_key (crt_snippet));
-		printf ("Language: %s\n", snippet_get_language (crt_snippet));
-		printf ("#Content#\n%s\n", snippet_get_content (crt_snippet));
-		printf ("Variables.\n");
-		var_names = snippet_get_variable_names_list (crt_snippet); 
-		defaults = snippet_get_variable_defaults_list (crt_snippet);
-		globals = snippet_get_variable_globals_list (crt_snippet);
-		for (iter2 = 0; iter2 < g_list_length (var_names); iter2 ++)
-		{
-			printf ("[Name:%s; Default:%s; Is global:%d]\n", (gchar*)g_list_nth_data(var_names, iter2),
-			                        (gchar*)g_list_nth_data(defaults, iter2),
-			                        GPOINTER_TO_INT (g_list_nth_data (globals, iter2)));
-		}
-	}*/
 	
 	return snippets_group;
 }
