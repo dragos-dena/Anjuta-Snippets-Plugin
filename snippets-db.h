@@ -123,7 +123,7 @@ gboolean                   snippets_db_add_snippet            (SnippetsDB* snipp
                                                                AnjutaSnippet* added_snippet,
                                                                const gchar* group_name,
                                                                gboolean overwrite);
-const AnjutaSnippet*       snippets_db_get_snippet            (SnippetsDB* snippets_db,
+AnjutaSnippet*             snippets_db_get_snippet            (SnippetsDB* snippets_db,
                                                                const gchar* trigger_key,
                                                                const gchar* language);
 gboolean                   snippets_db_remove_snippet         (SnippetsDB* snippets_db,
@@ -141,14 +141,19 @@ gboolean                   snippets_db_add_snippet_language   (SnippetsDB *snipp
                                                                const gchar *language);
 
 /* SnippetsGroup handling methods */
-gboolean                   snippets_db_add_snippets_group     (SnippetsDB* snippets_db,
-                                                               AnjutaSnippetsGroup* snippets_group,
-                                                               gboolean overwrite_group,
-                                                               gboolean overwrite_snippets);
-const AnjutaSnippetsGroup* snippets_db_get_snippets_group     (SnippetsDB* snippets_db,
-                                                               const gchar* group_name);
-gboolean                   snippets_db_remove_snippets_group  (SnippetsDB* snippets_db,
-                                                               const gchar* group_name);
+gboolean                   snippets_db_add_snippets_group      (SnippetsDB* snippets_db,
+                                                                AnjutaSnippetsGroup* snippets_group,
+                                                                gboolean overwrite_group,
+                                                                gboolean overwrite_snippets);
+AnjutaSnippetsGroup*      snippets_db_get_snippets_group       (SnippetsDB* snippets_db,
+                                                                const gchar* group_name);
+gboolean                   snippets_db_remove_snippets_group   (SnippetsDB* snippets_db,
+                                                                const gchar* group_name);
+void                       snippets_db_set_snippets_group_name (SnippetsDB *snippets_db,
+                                                                const gchar *old_group_name,
+                                                                const gchar *new_group_name);
+gboolean                   snippets_db_has_snippets_group_name (SnippetsDB *snippets_db,
+                                                                const gchar *group_name);
 
 /* Global variables handling methods */
 gboolean                   snippets_db_add_global_variable       (SnippetsDB* snippets_db,

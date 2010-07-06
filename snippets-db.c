@@ -996,7 +996,7 @@ snippets_db_add_snippet (SnippetsDB* snippets_db,
  *
  * Returns: The requested snippet (not a copy, should not be freed) or NULL if not found.
  **/
-const AnjutaSnippet*	
+AnjutaSnippet*	
 snippets_db_get_snippet (SnippetsDB* snippets_db,
                          const gchar* trigger_key,
                          const gchar* language)
@@ -1433,7 +1433,7 @@ snippets_db_remove_snippets_group (SnippetsDB* snippets_db,
  *
  * Returns: The requested #AnjutaSnippetsGroup object or NULL on failure.
  */
-const AnjutaSnippetsGroup*
+AnjutaSnippetsGroup*
 snippets_db_get_snippets_group (SnippetsDB* snippets_db,
                                 const gchar* group_name)
 {
@@ -1456,6 +1456,40 @@ snippets_db_get_snippets_group (SnippetsDB* snippets_db,
 	}
 	
 	return NULL;
+}
+
+
+void
+snippets_db_set_snippets_group_name (SnippetsDB *snippets_db,
+                                     const gchar *old_group_name,
+                                     const gchar *new_group_name)
+{
+	AnjutaSnippetsGroup *snippets_group = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
+
+	/* Make sure the new name doesen't cause a conflict */
+	if (snippets_db_has_snippets_group_name (snippets_db, new_group_name))
+		return;
+
+	snippets_group = snippets_db_get_snippets_group (snippets_db, old_group_name);
+	if (!ANJUTA_IS_SNIPPETS_GROUP (snippets_group))
+		return;
+
+	/* Remove the group, but don't destroy it and add it with the new name */
+	g_object_ref (snippets_group);
+	snippets_db_remove_snippets_group (snippets_db, old_group_name);
+	snippets_group_set_name (snippets_group, new_group_name);
+	snippets_db_add_snippets_group (snippets_db, snippets_group, TRUE, TRUE);
+	g_object_unref (snippets_group);
+}
+
+gboolean
+snippets_db_has_snippets_group_name (SnippetsDB *snippets_db,
+                                     const gchar *group_name)
+{
+	return ANJUTA_IS_SNIPPETS_GROUP (snippets_db_get_snippets_group (snippets_db, group_name));
 }
 
 /**
@@ -2207,7 +2241,6 @@ snippets_db_iter_has_child (GtkTreeModel *tree_model,
 	{
 		snippets_group = ANJUTA_SNIPPETS_GROUP (iter_get_data (iter));
 		snippets_list = (GList *)snippets_group_get_snippets_list (snippets_group);
-
 		return (g_list_length (snippets_list) != 0);
 	}
 	else
