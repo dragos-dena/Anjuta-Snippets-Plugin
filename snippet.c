@@ -85,7 +85,7 @@ snippet_dispose (GObject* snippet)
 	GList* iter = NULL;
 	gpointer p;
 	AnjutaSnippetVariable* cur_snippet_var;
-
+	printf ("Snippet disposed: %s\n", anjuta_snippet->priv->snippet_name);
 	/* Delete the trigger_key, snippet_language, snippet_name and snippet_content fields */
 	g_free (anjuta_snippet->priv->trigger_key);
 	anjuta_snippet->priv->trigger_key = NULL;
@@ -286,6 +286,8 @@ snippet_copy (AnjutaSnippet *snippet)
 	g_list_free (variable_names);
 	g_list_free (variable_defaults);
 	g_list_free (variable_globals);
+
+	copied_snippet->parent_snippets_group = snippet->parent_snippets_group;
 	
 	return copied_snippet;
 }
@@ -768,12 +770,11 @@ snippet_remove_variable (AnjutaSnippet *snippet,
 			g_free (cur_var->default_value);
 			g_ptr_array_free (cur_var->relative_positions, TRUE);
 
+			priv->variables = g_list_remove_link (priv->variables, iter);
+
 			g_free (cur_var);
+			return;
 		}
-
-		priv->variables = g_list_remove_link (priv->variables, iter);
-
-		return;
 	}
 
 }
@@ -791,7 +792,8 @@ snippet_set_variable_name (AnjutaSnippet *snippet,
 	g_return_if_fail (new_variable_name != NULL);
 
 	var = get_snippet_variable (snippet, variable_name);
-	g_return_if_fail (var != NULL);
+	if (var == NULL)
+		return;
 
 	g_free (var->variable_name);
 	var->variable_name = g_strdup (new_variable_name);
@@ -882,6 +884,22 @@ snippet_get_content (AnjutaSnippet* snippet)
 	return snippet->priv->snippet_content;
 }
 
+
+void
+snippet_set_content (AnjutaSnippet *snippet,
+                     const gchar *new_content)
+{
+	AnjutaSnippetPrivate *priv = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (new_content != NULL);
+	priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
+	
+	g_free (priv->snippet_content);
+	priv->snippet_content = g_strdup (new_content);
+}
+
 static void
 reset_variables (AnjutaSnippet *snippet)
 {
@@ -960,10 +978,10 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 					break;
 			}
 
-			/* If iter is NULL, then we reached the end so the snippet is corrupt */
+			/* If iter is NULL, then we didn't found the variable name */
 			if (!iter)
 			{
-				g_return_val_if_reached (NULL);
+				cur_var_value = g_strconcat ("${", cur_var_name->str, "}", NULL);
 			}
 			else
 			{
@@ -1154,24 +1172,30 @@ snippet_get_variable_cur_values_len (AnjutaSnippet *snippet)
  *
  * Compares @snippet with @snippet2 and returns TRUE if they have the same identifier.
  *
- * Returns: TRUE if the snippets have the same identifier.
+ * Returns: TRUE if the snippets have at least one common identifier.
  */
 gboolean        
 snippet_is_equal (AnjutaSnippet *snippet,
                   AnjutaSnippet *snippet2)
 {
-	const gchar *trigger = NULL, *trigger2 = NULL;
+	const gchar *trigger = NULL, *trigger2 = NULL, *cur_lang = NULL;
+	GList *iter = NULL;
+	AnjutaSnippetPrivate *priv = NULL;
 	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
-
+	priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
 	trigger  = snippet_get_trigger_key (snippet);
 	trigger2 = snippet_get_trigger_key (snippet2);
 
 	if (!g_strcmp0 (trigger, trigger2))
-		return snippet_has_language (snippet,
-		                             snippet_get_any_language (snippet2));
-	else
-		return FALSE;	
+		for (iter = g_list_first (priv->snippet_languages); iter != NULL; iter = g_list_next (iter))
+		{
+			cur_lang = (gchar *)iter->data;
+			if (snippet_has_language (snippet2, cur_lang))
+				return TRUE;
+		}
+
+	return FALSE;
 }

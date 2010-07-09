@@ -159,81 +159,34 @@ compare_snippets_by_name (gconstpointer a,
  * snippets_group_add_snippet:
  * @snippets_group: A #AnjutaSnippetsGroup object.
  * @snippet: A snippet to be added.
- * @overwrite: If on a conflict the conflicting old snippet should be overwrited.
  *
- * Adds a new #AnjutaSnippet to the snippet group.
+ * Adds a new #AnjutaSnippet to the snippet group, checking for conflicts.
  *
  * Returns: TRUE on success.
  **/
 gboolean 
 snippets_group_add_snippet (AnjutaSnippetsGroup* snippets_group,
-                            AnjutaSnippet* snippet,
-                            gboolean overwrite)
+                            AnjutaSnippet* snippet)
 {
-	GList *iter = NULL, *to_be_replaced_node = NULL, *languages = NULL, *iter2 = NULL;
-	AnjutaSnippet *cur_snippet = NULL, *to_be_replaced_snippet = NULL;
+	AnjutaSnippetsGroupPrivate *priv = NULL;
 	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group), FALSE);
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
-	languages = (GList *)snippet_get_languages (snippet);
-	
+	priv = ANJUTA_SNIPPETS_GROUP_GET_PRIVATE (snippets_group);
+
+
 	/* Check if there is a snippet with the same key */
-	for (iter = g_list_first (snippets_group->priv->snippets); iter != NULL; iter = g_list_next (iter))
-	{
-		cur_snippet = (AnjutaSnippet *)iter->data;
-		g_return_val_if_fail (ANJUTA_IS_SNIPPET (cur_snippet), FALSE);
-
-		if (!g_strcmp0 (snippet_get_trigger_key (cur_snippet), snippet_get_trigger_key (snippet)))
-		{
-			/* We test if any language conflict occurs */
-			gboolean conflict = FALSE;
-			for (iter2 = g_list_first (languages); iter2 != NULL; iter2 = g_list_next (iter2))
-				if (snippet_has_language (cur_snippet, (gchar *)iter2->data))
-				{
-					conflict = TRUE;
-					break;
-				}
-
-			/* If we have a conflict it means we need to overwrite it (if we have permissions)
-			   or the adding will fail (if we don't) */
-			if (conflict)
-			{
-				to_be_replaced_snippet = cur_snippet;
-				 /* Could of used iter here, but just to be clear */
-				to_be_replaced_node = iter;
-				break;
-			}
-		}
-		
-	}
+	if (snippets_group_has_snippet (snippets_group, snippet))
+		return FALSE;
 	
-	/* If we found a snippet with the same name */
-	if (to_be_replaced_snippet)
-	{
-		if (overwrite)
-		{
-			snippets_group->priv->snippets = g_list_insert_before (snippets_group->priv->snippets,
-			                                                       to_be_replaced_node,
-			                                                       snippet);
-			snippets_group->priv->snippets = g_list_remove (snippets_group->priv->snippets, to_be_replaced_snippet);
-			g_object_unref (to_be_replaced_snippet);
-		}
-		else
-		{
-			return FALSE;
-		}
-	}
-	/* If we didn't found a snippet with the same name we just append it to the end */
-	else
-	{
-		snippets_group->priv->snippets = g_list_insert_sorted (snippets_group->priv->snippets,
-		                                                       snippet,
-		                                                       compare_snippets_by_name);
-	}
-	
+	/* Add the new snippet to the group */
+	priv->snippets = g_list_insert_sorted (snippets_group->priv->snippets,
+	                                       snippet,
+	                                       compare_snippets_by_name);
 	snippet->parent_snippets_group = G_OBJECT (snippets_group);
-	
+
+	printf ("{%s added to %s}\n", snippet_get_name (snippet), priv->name);
 	return TRUE;
 }
 
@@ -254,19 +207,22 @@ snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
                                const gchar* language,
                                gboolean remove_all_languages_support)
 {
+
 	GList *iter = NULL;
 	AnjutaSnippet *to_be_deleted_snippet = NULL, *cur_snippet;
 	const gchar *cur_snippet_trigger = NULL;
+	AnjutaSnippetsGroupPrivate *priv = NULL;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group));
 	g_return_if_fail (trigger_key != NULL);
 	g_return_if_fail (language != NULL);
-
+	priv = ANJUTA_SNIPPETS_GROUP_GET_PRIVATE (snippets_group);
+	
 	/* Check if there is a snippet with the same key */
-	for (iter = g_list_first (snippets_group->priv->snippets); iter != NULL; iter = g_list_next (iter))
+	for (iter = g_list_first (priv->snippets); iter != NULL; iter = g_list_next (iter))
 	{
-		cur_snippet = (AnjutaSnippet *)iter->data;
+		cur_snippet = ANJUTA_SNIPPET (iter->data);
 		if (!ANJUTA_IS_SNIPPET (cur_snippet))
 			g_return_if_reached ();
 		cur_snippet_trigger = snippet_get_trigger_key (cur_snippet);
@@ -287,14 +243,39 @@ snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
 		}
 		
 	}
-	
+
 	/* If we found a snippet that should be deleted we remove it from the list and unref it */
 	if (to_be_deleted_snippet)
 	{
-		snippets_group->priv->snippets = g_list_remove (snippets_group->priv->snippets, to_be_deleted_snippet);
+		printf ("{%s removed from %s}\n", snippet_get_name (to_be_deleted_snippet), priv->name);
+		priv->snippets = g_list_remove (priv->snippets, to_be_deleted_snippet);
 		g_object_unref (to_be_deleted_snippet);
 
 	}
+	
+}
+
+gboolean
+snippets_group_has_snippet (AnjutaSnippetsGroup *snippets_group,
+                            AnjutaSnippet *snippet)
+{
+	AnjutaSnippetsGroupPrivate *priv = NULL;
+	GList *iter = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group), FALSE);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
+	priv = ANJUTA_SNIPPETS_GROUP_GET_PRIVATE (snippets_group);
+
+	for (iter = g_list_first (priv->snippets); iter != NULL; iter = g_list_next (iter))
+	{
+		if (!ANJUTA_IS_SNIPPET (iter->data))
+			continue;
+		if (snippet_is_equal (snippet, ANJUTA_SNIPPET (iter->data)))
+			return TRUE;
+	}
+
+	return FALSE;
 }
 
 /**
@@ -306,7 +287,7 @@ snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
  *
  * Returns: A #GList with entries of type #AnjutaSnippet.
  **/
-const GList* 
+GList* 
 snippets_group_get_snippets_list (AnjutaSnippetsGroup* snippets_group)
 {
 	return snippets_group->priv->snippets;

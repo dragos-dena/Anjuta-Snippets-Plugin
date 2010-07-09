@@ -108,6 +108,8 @@ void            snippet_set_variable_global             (AnjutaSnippet *snippet,
                                                          const gchar *variable_name,
                                                          gboolean global);
 const gchar*    snippet_get_content                     (AnjutaSnippet *snippet);
+void            snippet_set_content                     (AnjutaSnippet *snippet,
+                                                         const gchar *new_content);
 gchar*          snippet_get_default_content             (AnjutaSnippet *snippet,
                                                          GObject *snippets_db_obj,
                                                          const gchar *indent);

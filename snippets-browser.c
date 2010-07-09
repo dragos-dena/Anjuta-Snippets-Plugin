@@ -76,19 +76,6 @@ snippets_browser_class_init (SnippetsBrowserClass* klass)
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER_CLASS (klass));
 
-	/* When the selection of the TreeView changes. The object passed here can be an
-	   AnjutaSnippet or AnjutaSnippetsGroup depending on the selection. */
-	g_signal_new ("current-selection-changed",
-	              ANJUTA_TYPE_SNIPPETS_BROWSER,
-	              G_SIGNAL_RUN_LAST,
-	              G_STRUCT_OFFSET (SnippetsBrowserClass, current_selection_changed),
-	              NULL, NULL,
-	              g_cclosure_marshal_VOID__OBJECT,
-	              G_TYPE_NONE,
-	              1,
-	              G_TYPE_OBJECT,
-	              NULL);
-
 	/* The SnippetsBrowser asks for a maximize. If a maximize is possible,
 	   the snippets_browser_show_editor should be called. */
 	g_signal_new ("maximize-request",
@@ -151,8 +138,9 @@ static void     on_insert_button_clicked                  (GtkButton *insert_but
                                                            gpointer user_data);
 static void     on_edit_button_toggled                    (GtkToggleButton *edit_button,
                                                            gpointer user_data);
-static void     on_snippets_view_key_press                (GtkWidget *snippets_view,
-                                                           GdkEventKey *event_key,
+static void     on_snippets_view_row_activated            (GtkTreeView *snippets_view,
+                                                           GtkTreePath *path,
+                                                           GtkTreeViewColumn *col,
                                                            gpointer user_data);
 static gboolean on_snippets_view_query_tooltip            (GtkWidget *snippets_view,
                                                            gint x, 
@@ -167,6 +155,13 @@ static void     on_name_changed                           (GtkCellRendererText *
 static void     on_add_snippet_menu_item_activated        (GtkMenuItem *menu_item,
                                                            gpointer user_data);
 static void     on_add_snippets_group_menu_item_activated (GtkMenuItem *menu_item,
+                                                           gpointer user_data);
+static void     on_snippets_view_selection_changed        (GtkTreeSelection *tree_selection,
+                                                           gpointer user_data);
+static void     on_snippets_editor_snippet_saved          (SnippetsEditor *snippets_editor,
+                                                           GObject *snippet,
+                                                           gpointer user_data);
+static void     on_snippets_editor_close_request          (SnippetsEditor *snippets_editor,
                                                            gpointer user_data);
 
 /* Private methods */
@@ -249,12 +244,16 @@ init_browser_handlers (SnippetsBrowser *snippets_browser)
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
 
 	g_signal_connect (GTK_OBJECT (priv->snippets_view),
-	                  "key-press-event",
-	                  GTK_SIGNAL_FUNC (on_snippets_view_key_press),
+	                  "row-activated",
+	                  GTK_SIGNAL_FUNC (on_snippets_view_row_activated),
 	                  snippets_browser);
 	g_signal_connect (GTK_OBJECT (priv->snippets_view),
 	                  "query-tooltip",
 	                  GTK_SIGNAL_FUNC (on_snippets_view_query_tooltip),
+	                  snippets_browser);
+	g_signal_connect (G_OBJECT (gtk_tree_view_get_selection (priv->snippets_view)),
+	                  "changed",
+	                  G_CALLBACK (on_snippets_view_selection_changed),
 	                  snippets_browser);
 	g_signal_connect (GTK_OBJECT (priv->add_button),
 	                  "clicked",
@@ -271,6 +270,14 @@ init_browser_handlers (SnippetsBrowser *snippets_browser)
 	g_signal_connect (GTK_OBJECT (priv->edit_button),
 	                  "toggled",
 	                  GTK_SIGNAL_FUNC (on_edit_button_toggled),
+	                  snippets_browser);
+	g_signal_connect (GTK_OBJECT (priv->snippets_editor),
+	                  "snippet-saved",
+	                  GTK_SIGNAL_FUNC (on_snippets_editor_snippet_saved),
+	                  snippets_browser);
+	g_signal_connect (GTK_OBJECT (priv->snippets_editor),
+	                  "close-request",
+	                  GTK_SIGNAL_FUNC (on_snippets_editor_close_request),
 	                  snippets_browser);
 
 	/* Set the has-tooltip property for the query-tooltip signal */
@@ -306,6 +313,7 @@ snippets_view_name_text_data_func (GtkTreeViewColumn *column,
 	}
 	else
 	{
+		g_return_if_fail (ANJUTA_IS_SNIPPET (cur_object));
 		g_object_set (renderer, "editable", FALSE, NULL);
 	}
 	
@@ -332,9 +340,14 @@ snippets_view_name_pixbuf_data_func (GtkTreeViewColumn *column,
 	                    -1);
 
 	if (ANJUTA_IS_SNIPPET (cur_object))
+	{
 		stock_id = GTK_STOCK_FILE;
+	}
 	else
+	{
+		g_return_if_fail (ANJUTA_IS_SNIPPETS_GROUP (cur_object));
 		stock_id = GTK_STOCK_DIRECTORY;
+	}
 
 	g_object_unref (cur_object);
 	g_object_set (renderer, "stock-id", stock_id, NULL);
@@ -625,6 +638,7 @@ void
 snippets_browser_show_editor (SnippetsBrowser *snippets_browser)
 {
 	SnippetsBrowserPrivate *priv = NULL;
+	GtkTreeSelection *selection = NULL;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
@@ -661,8 +675,12 @@ snippets_browser_show_editor (SnippetsBrowser *snippets_browser)
 	snippets_browser_refilter_snippets_view (snippets_browser);
 	
 	gtk_widget_set_sensitive (GTK_WIDGET (priv->insert_button), FALSE);
-}
 
+	/* Set the current snippet for the editor */
+	selection = gtk_tree_view_get_selection (priv->snippets_view);
+	on_snippets_view_selection_changed (selection, snippets_browser);
+	
+}
 
 /**
  * snippets_browser_hide_editor:
@@ -771,7 +789,6 @@ on_add_button_clicked (GtkButton *add_button,
 	                       GTK_WIDGET (add_snippets_group_menu_item));
 	gtk_widget_show (GTK_WIDGET (add_snippets_group_menu_item));
 	
-	//gtk_menu_attach_to_widget (GTK_MENU (menu), GTK_WIDGET (add_button), NULL); 
 	gtk_menu_popup (GTK_MENU (menu),
 	                NULL, NULL, NULL, NULL, 0,
 	                gtk_get_current_event_time ());
@@ -793,8 +810,10 @@ on_delete_button_clicked (GtkButton *delete_button,
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (user_data));
 	snippets_browser = ANJUTA_SNIPPETS_BROWSER (user_data);
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
-
+	g_return_if_fail (GTK_IS_TREE_MODEL (priv->filter));
+	
 	selection = gtk_tree_view_get_selection (priv->snippets_view);
+	g_return_if_fail (GTK_IS_TREE_SELECTION (selection));
 	has_selection = gtk_tree_selection_get_selected (selection,
 	                                                 &priv->filter,
 	                                                 &iter);
@@ -824,9 +843,10 @@ on_delete_button_clicked (GtkButton *delete_button,
 			g_return_if_fail (name != NULL);
 			snippets_db_remove_snippets_group (priv->snippets_db, name);
 		}
+		
+		g_object_unref (cur_object);
 	}
 	
-	g_object_unref (cur_object);
 }
 
 static void    
@@ -888,11 +908,34 @@ on_edit_button_toggled (GtkToggleButton *edit_button,
 }
 
 static void    
-on_snippets_view_key_press (GtkWidget *snippets_view,
-                            GdkEventKey *event_key,
-                            gpointer user_data)
+on_snippets_view_row_activated (GtkTreeView *snippets_view,
+                                GtkTreePath *path,
+                                GtkTreeViewColumn *col,
+                                gpointer user_data)
 {
+	GtkTreeIter iter;
+	SnippetsBrowser *snippets_browser = NULL;
+	SnippetsBrowserPrivate *priv = NULL;
+	GObject *cur_object = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (user_data));
+	snippets_browser = ANJUTA_SNIPPETS_BROWSER (user_data);
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_INTERACTION (priv->snippets_interaction));
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (priv->snippets_db));
+	
+	gtk_tree_model_get_iter (priv->filter, &iter, path);
+	gtk_tree_model_get (priv->filter, &iter,
+	                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
+	                    -1);
 
+	if (ANJUTA_IS_SNIPPET (cur_object))
+		snippets_interaction_insert_snippet (priv->snippets_interaction,
+		                                     G_OBJECT (priv->snippets_db),
+		                                     ANJUTA_SNIPPET (cur_object));
+
+	g_object_unref (cur_object);
 }
 
 
@@ -1006,7 +1049,7 @@ on_add_snippets_group_menu_item_activated (GtkMenuItem *menu_item,
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (priv->snippets_db));
 
 	snippets_group = snippets_group_new (NULL, NEW_SNIPPETS_GROUP_NAME);
-	snippets_db_add_snippets_group (priv->snippets_db, snippets_group, FALSE, FALSE);
+	snippets_db_add_snippets_group (priv->snippets_db, snippets_group, FALSE);
 
 	/* The snippets database shouldn't be empty here */
 	if (!gtk_tree_model_get_iter_first (priv->filter, &iter))
@@ -1037,4 +1080,69 @@ on_add_snippets_group_menu_item_activated (GtkMenuItem *menu_item,
 
 	/* We should have found the newly added group */
 	g_return_if_reached ();
+}
+
+
+static void
+on_snippets_view_selection_changed (GtkTreeSelection *tree_selection,
+                                    gpointer user_data)
+{
+	SnippetsBrowser *snippets_browser = NULL;
+	SnippetsBrowserPrivate *priv = NULL;
+	GtkTreeIter iter;
+	GObject *cur_object = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (user_data));
+	snippets_browser = ANJUTA_SNIPPETS_BROWSER (user_data);
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
+	g_return_if_fail (GTK_IS_TREE_MODEL (priv->filter));
+	
+	if (!gtk_tree_selection_get_selected (tree_selection, &priv->filter, &iter))
+		return;
+	
+	gtk_tree_model_get (priv->filter, &iter,
+	                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
+	                    -1);
+
+	/* We only change the snippet of the editor if the browser has the editor shown */
+	if (ANJUTA_IS_SNIPPET (cur_object) && priv->maximized)
+		snippets_editor_set_snippet (priv->snippets_editor, 
+		                             ANJUTA_SNIPPET (cur_object));
+	g_object_unref (cur_object);
+}
+
+
+static void
+on_snippets_editor_snippet_saved (SnippetsEditor *snippets_editor,
+                                  GObject *snippet,
+                                  gpointer user_data)
+{
+	SnippetsBrowserPrivate *priv = NULL;
+	GtkTreePath *path = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (user_data));
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (user_data);
+
+	/* Focus on the newly inserted snippet (the path is valid because when the editor
+	   is shown, all snippets are visibile.)*/
+	gtk_tree_model_filter_refilter (GTK_TREE_MODEL_FILTER (priv->filter)); 
+	path = snippets_db_get_path_at_object (priv->snippets_db, snippet);
+	gtk_tree_view_set_cursor (priv->snippets_view, path, NULL, FALSE);
+}
+
+
+static void
+on_snippets_editor_close_request (SnippetsEditor *snippets_editor,
+                                  gpointer user_data)
+{
+	SnippetsBrowserPrivate *priv = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (user_data));
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (user_data);
+
+	gtk_toggle_button_set_active (priv->edit_button, FALSE);
 }

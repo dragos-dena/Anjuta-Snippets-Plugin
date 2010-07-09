@@ -93,7 +93,7 @@ add_snippet_variable (SnippetVarsStore *vars_store,
 	gboolean undefined = FALSE;
 	GtkTreeIter iter;
 	SnippetVariableType type;
-	
+
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPET_VARS_STORE (vars_store));
 	g_return_if_fail (variable_name != NULL);
@@ -118,6 +118,7 @@ add_snippet_variable (SnippetVarsStore *vars_store,
 	}
 
 	gtk_list_store_append (GTK_LIST_STORE (vars_store), &iter);
+
 	gtk_list_store_set (GTK_LIST_STORE (vars_store), &iter,
 	                    VARS_STORE_COL_NAME, variable_name,
 	                    VARS_STORE_COL_TYPE, type,
@@ -221,7 +222,7 @@ reload_vars_store (SnippetVarsStore *vars_store)
 
 		iter1 = g_list_first (snippet_vars_names);
 		iter2 = g_list_first (snippet_vars_defaults);
-		iter2 = g_list_first (snippet_vars_globals);
+		iter3 = g_list_first (snippet_vars_globals);
 		while (iter1 != NULL && iter2 != NULL && iter3 != NULL)
 		{
 			cur_var_name    = (gchar *)iter1->data;
@@ -293,8 +294,6 @@ snippet_vars_store_load (SnippetVarsStore *vars_store,
 	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
 	priv = ANJUTA_SNIPPET_VARS_STORE_GET_PRIVATE (vars_store);
 	
-	g_object_ref (snippets_db);
-	g_object_unref (snippet);
 	priv->snippets_db = snippets_db;
 	priv->snippet = snippet;
 
@@ -305,19 +304,19 @@ snippet_vars_store_load (SnippetVarsStore *vars_store,
 	/* We connect to the signals that change the GtkTreeModel of the global variables.
 	   This is to make sure our store is synced with the global variables model. */
 	priv->row_inserted_handler_id = 
-		g_signal_connect (GTK_OBJECT (snippets_db_get_global_vars_model (snippets_db)),
+		g_signal_connect (G_OBJECT (snippets_db_get_global_vars_model (snippets_db)),
 		                  "row-inserted",
-		                  GTK_SIGNAL_FUNC (on_global_vars_model_row_inserted),
+		                  G_CALLBACK (on_global_vars_model_row_inserted),
 		                  vars_store);
 	priv->row_changed_handler_id =
-		g_signal_connect (GTK_OBJECT (snippets_db_get_global_vars_model (snippets_db)),
+		g_signal_connect (G_OBJECT (snippets_db_get_global_vars_model (snippets_db)),
 		                  "row-changed",
-		                  GTK_SIGNAL_FUNC (on_global_vars_model_row_changed),
+		                  G_CALLBACK (on_global_vars_model_row_changed),
 		                  vars_store);
 	priv->row_deleted_handler_id =
-		g_signal_connect (GTK_OBJECT (snippets_db_get_global_vars_model (snippets_db)),
+		g_signal_connect (G_OBJECT (snippets_db_get_global_vars_model (snippets_db)),
 		                  "row-deleted",
-		                  GTK_SIGNAL_FUNC (on_global_vars_model_row_deleted),
+		                  G_CALLBACK (on_global_vars_model_row_deleted),
 		                  vars_store);
 }
 
@@ -330,6 +329,11 @@ snippet_vars_store_unload (SnippetVarsStore *vars_store)
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPET_VARS_STORE (vars_store));
 	priv = ANJUTA_SNIPPET_VARS_STORE_GET_PRIVATE (vars_store);
+
+	/* If we don't have a snippet or a snippets-db we just return */
+	if (!ANJUTA_IS_SNIPPET (priv->snippet) || !ANJUTA_IS_SNIPPETS_DB (priv->snippets_db))
+		return;
+
 	global_vars_model = snippets_db_get_global_vars_model (priv->snippets_db);
 	g_return_if_fail (GTK_IS_TREE_MODEL (global_vars_model));
 
@@ -338,18 +342,8 @@ snippet_vars_store_unload (SnippetVarsStore *vars_store)
 	g_signal_handler_disconnect (global_vars_model, priv->row_changed_handler_id);
 	g_signal_handler_disconnect (global_vars_model, priv->row_deleted_handler_id);
 	
-
-	if (ANJUTA_IS_SNIPPETS_DB (priv->snippets_db))
-	{	
-		g_object_unref (priv->snippets_db);
-		priv->snippets_db = NULL;
-	}
-	if (ANJUTA_IS_SNIPPET (priv->snippet))
-	{
-		g_object_unref (priv->snippet);
-		priv->snippet = NULL;
-	}
-
+	priv->snippets_db = NULL;
+	priv->snippet = NULL;
 
 	/* This will clear the GtkListStore */
 	reload_vars_store (vars_store);
@@ -430,6 +424,10 @@ snippet_vars_store_set_variable_name (SnippetVarsStore *vars_store,
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (priv->snippets_db));
 	g_return_if_fail (ANJUTA_IS_SNIPPET (priv->snippet));
 
+	/* We check that the new name isn't already in the snippet */
+	if (snippet_has_variable (priv->snippet, new_variable_name))
+		return;
+
 	/* We get the iter at the requested variable */
 	if (!get_iter_at_variable (vars_store, &iter, old_variable_name, SNIPPET_VAR_TYPE_ANY, TRUE))
 		return;
@@ -468,18 +466,20 @@ snippet_vars_store_set_variable_name (SnippetVarsStore *vars_store,
 	                    VARS_STORE_COL_INSTANT_VALUE, instant_value,
 	                    -1);
 
+	/* Save the change to the snippet */
+	snippet_set_variable_name (priv->snippet, old_variable_name, new_variable_name);
+	snippet_set_variable_default_value (priv->snippet, new_variable_name, default_value);
+	snippet_set_variable_global (priv->snippet, new_variable_name, type == SNIPPET_VAR_TYPE_GLOBAL);
+	
 	g_free (default_value);
 	g_free (instant_value);
 
-	/* Save the change to the snippet */
-	snippet_set_variable_name (priv->snippet, old_variable_name, new_variable_name);
 }
 
 /**
  * snippet_vars_store_set_variable_type:
  * @vars_store: A #SnippetVarsStore object.
  * @variable_name: The name of the variable to have it's type changed.
- * @old_type: The old type of the variable.
  * @new_type: The new type of the variable.
  *
  * Sets a new type for a varible that already is in the snippet (so you can't set
@@ -493,12 +493,12 @@ snippet_vars_store_set_variable_name (SnippetVarsStore *vars_store,
 void 
 snippet_vars_store_set_variable_type (SnippetVarsStore *vars_store,
                                       const gchar *variable_name,
-                                      SnippetVariableType old_type,
                                       SnippetVariableType new_type)
 {
 	SnippetVarsStorePrivate *priv = NULL;
 	GtkTreeIter iter;
 	gchar *default_value = NULL;
+	SnippetVariableType old_type;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPET_VARS_STORE (vars_store));
@@ -507,9 +507,7 @@ snippet_vars_store_set_variable_type (SnippetVarsStore *vars_store,
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (priv->snippets_db));
 	g_return_if_fail (ANJUTA_IS_SNIPPET (priv->snippet));
 
-	/* So we won't make any useless computing */
-	if (old_type == new_type)
-		return;
+	old_type = (new_type == SNIPPET_VAR_TYPE_LOCAL) ? SNIPPET_VAR_TYPE_GLOBAL : SNIPPET_VAR_TYPE_LOCAL;
 
 	/* We get the iter at the requested variable */
 	if (!get_iter_at_variable (vars_store, &iter, variable_name, old_type, TRUE))
@@ -534,6 +532,8 @@ snippet_vars_store_set_variable_type (SnippetVarsStore *vars_store,
 	                    VARS_STORE_COL_DEFAULT_VALUE, default_value,
 	                    -1);
 
+	snippet_set_variable_global (priv->snippet, variable_name, new_type == SNIPPET_VAR_TYPE_GLOBAL);
+
 	g_free (default_value);
 
 }
@@ -554,6 +554,7 @@ snippet_vars_store_set_variable_default (SnippetVarsStore *vars_store,
 {
 	SnippetVarsStorePrivate *priv = NULL;
 	GtkTreeIter iter;
+	SnippetVariableType type;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPET_VARS_STORE (vars_store));
@@ -570,6 +571,20 @@ snippet_vars_store_set_variable_default (SnippetVarsStore *vars_store,
 	gtk_list_store_set (GTK_LIST_STORE (vars_store), &iter,
 	                    VARS_STORE_COL_DEFAULT_VALUE, default_value,
 	                    -1);
+
+	/* If the variable is local, we also set the instant value */
+	gtk_tree_model_get (GTK_TREE_MODEL (vars_store), &iter,
+	                    VARS_STORE_COL_TYPE, &type,
+	                    -1);
+	if (type == SNIPPET_VAR_TYPE_LOCAL)
+	{
+		gtk_list_store_set (GTK_LIST_STORE (vars_store), &iter,
+		                    VARS_STORE_COL_INSTANT_VALUE, default_value,
+		                    -1);
+	}
+
+	/* Save the changes to the snippet */
+	snippet_set_variable_default_value (priv->snippet, variable_name, default_value);
 }
 
 /**
@@ -685,7 +700,7 @@ snippet_vars_store_remove_variable_from_snippet (SnippetVarsStore *vars_store,
 	/* If it's global we just set it's in_snippet field to FALSE */
 	else
 	{
-		g_return_if_fail (type != SNIPPET_VAR_TYPE_GLOBAL);
+		g_return_if_fail (type == SNIPPET_VAR_TYPE_GLOBAL);
 		
 		gtk_list_store_set (GTK_LIST_STORE (vars_store), &iter,
 		                    VARS_STORE_COL_IN_SNIPPET, FALSE,

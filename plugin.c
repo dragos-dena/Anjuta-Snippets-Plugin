@@ -254,11 +254,11 @@ on_snippets_browser_unmaximize_request (SnippetsBrowser *snippets_browser,
 
 	if (!snippets_manager_plugin->browser_maximized)
 		return;
-		
+
 	anjuta_shell_unmaximize (ANJUTA_PLUGIN (snippets_manager_plugin)->shell,
 	                         NULL);
 	snippets_browser_hide_editor (snippets_browser);
-	
+
 	snippets_manager_plugin->browser_maximized = FALSE;
 }
 

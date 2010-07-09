@@ -96,7 +96,6 @@ void                snippet_vars_store_set_variable_name            (SnippetVars
                                                                      const gchar *new_variable_name);
 void                snippet_vars_store_set_variable_type            (SnippetVarsStore *vars_store,
                                                                      const gchar *variable_name,
-                                                                     SnippetVariableType old_type,
                                                                      SnippetVariableType new_type);
 void                snippet_vars_store_set_variable_default         (SnippetVarsStore *vars_store,
                                                                      const gchar *variable_name,

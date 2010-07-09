@@ -289,9 +289,7 @@ snippets_manager_parse_native_xml_file (const gchar *snippet_packet_path)
 				/* If we have a valid snippet, add it to the snippet group */
 				if (cur_snippet != NULL)
 				{
-					snippets_group_add_snippet (snippets_group, 
-					                            cur_snippet, 
-					                            TRUE);
+					snippets_group_add_snippet (snippets_group, cur_snippet);
 				}
 				
 				cur_snippet_node = cur_snippet_node->next;

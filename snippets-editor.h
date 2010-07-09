@@ -51,7 +51,11 @@ struct _SnippetsEditor
 struct _SnippetsEditorClass
 {
 	GtkHBoxClass parent_class;
-	
+
+	/* Signals */
+	void (*snippet_saved)    (SnippetsEditor *snippets_editor,
+	                          GObject *snippet);
+	void (*close_request)    (SnippetsEditor *snippets_editor);
 };
 
 
@@ -59,8 +63,9 @@ GType            snippets_editor_get_type               (void) G_GNUC_CONST;
 SnippetsEditor*  snippets_editor_new                    (SnippetsDB *snippets_db);
 
 void             snippets_editor_set_snippet            (SnippetsEditor *snippets_editor,
-                                                         AnjutaSnippet *snippet);               
-
+                                                         AnjutaSnippet *snippet);    
+void             snippets_editor_set_snippet_new        (SnippetsEditor *snippets_editor);
+void             snippets_editor_delete_current_snippet (SnippetsEditor *snippets_editor);
 G_END_DECLS
 
 #endif /* __SNIPPETS_EDITOR_H__ */

@@ -61,13 +61,14 @@ const gchar*          snippets_group_get_name          (AnjutaSnippetsGroup* sni
 void                  snippets_group_set_name          (AnjutaSnippetsGroup* snippets_group,
                                                         const gchar* new_group_name);
 gboolean              snippets_group_add_snippet       (AnjutaSnippetsGroup* snippets_group,
-                                                        AnjutaSnippet* snippet,
-                                                        gboolean overwrite);
+                                                        AnjutaSnippet* snippet);
 void                  snippets_group_remove_snippet    (AnjutaSnippetsGroup* snippets_group,
                                                         const gchar* trigger_key,
                                                         const gchar* language,
                                                         gboolean remove_all_languages_support);
-const GList*          snippets_group_get_snippets_list (AnjutaSnippetsGroup* snippets_group);
+gboolean              snippets_group_has_snippet       (AnjutaSnippetsGroup *snippets_group,
+                                                        AnjutaSnippet *snippet);
+GList*                snippets_group_get_snippets_list (AnjutaSnippetsGroup* snippets_group);
 
 G_END_DECLS
 
