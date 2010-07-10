@@ -959,14 +959,14 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 			cur_var_name = g_string_new ("");
 			for (j = i + 2; j < snippet_text_size && !SNIPPET_VARIABLE_END (snippet_text, j); j ++)
 				cur_var_name = g_string_append_c (cur_var_name, snippet_text[j]);
-			i = j;
 
 			/* We first see if it's the END_CURSOR_POSITION variable */
 			if (!g_strcmp0 (cur_var_name->str, END_CURSOR_VARIABLE_NAME))
 			{
 				snippet->priv->cur_value_end_position = STRING_CUR_POSITION (buffer);
-
 				g_string_free (cur_var_name, TRUE);
+
+				i = j;
 				continue;
 			}
 			
@@ -981,7 +981,11 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 			/* If iter is NULL, then we didn't found the variable name */
 			if (!iter)
 			{
-				cur_var_value = g_strconcat ("${", cur_var_name->str, "}", NULL);
+				//cur_var_value = g_strconcat ("${", cur_var_name->str, "}", NULL);
+				buffer = g_string_append_c (buffer, snippet_text[i]);
+
+				g_string_free (cur_var_name, TRUE);
+				continue;
 			}
 			else
 			{
@@ -994,6 +998,8 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 				   global, we get the default value. */
 				if (cur_var_value == NULL)
 					cur_var_value = g_strdup (cur_var->default_value);
+
+				i = j;
 			}
 
 			/* Update the variable data */

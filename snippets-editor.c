@@ -26,16 +26,19 @@
 
 #define ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ANJUTA_TYPE_SNIPPETS_EDITOR, SnippetsEditorPrivate))
 
-#define LOCAL_TYPE_STR          "Local"
-#define GLOBAL_TYPE_STR         "Global"
-#define GLOBAL_UNDEFINED_MARKUP "Global <i>(Undefined)</i>"
-#define UNDEFINED_BG_COLOR      "#ba0000"
-#define UNDEFINED_FG_COLOR      "#ffffff"
+#define LOCAL_TYPE_STR          "Snippet"
+#define GLOBAL_TYPE_STR         "Anjuta"
 
-#define NAME_COL_TITLE     _("Name")
-#define TYPE_COL_TITLE     _("Type")
-#define DEFAULT_COL_TITLE  _("Default value")
-#define INSTANT_COL_TITLE  _("Instant value")
+#define UNDEFINED_BG_COLOR      "#ffbaba"
+
+#define NAME_COL_TITLE          _("Name")
+#define TYPE_COL_TITLE          _("Type")
+#define DEFAULT_COL_TITLE       _("Default value")
+#define INSTANT_COL_TITLE       _("Instant value")
+
+#define MIN_NAME_COL_WIDTH  120
+
+#define NEW_VAR_NAME            "new_variable"
 
 
 struct _SnippetsEditorPrivate
@@ -44,6 +47,10 @@ struct _SnippetsEditorPrivate
 	AnjutaSnippet *snippet;
 	AnjutaSnippet *backup_snippet;
 
+	/* A tree model with 2 entries: LOCAL_TYPE_STR and GLOBAL_TYPE_STR to be used
+	   by the variables view on the type column */
+	GtkListStore *type_model;
+	
 	/* Snippet Content editor widgets */
 	GtkTextView *content_text_view; /* TODO - this should be changed later with GtkSourceView */
 	GtkToggleButton *preview_button;
@@ -51,6 +58,7 @@ struct _SnippetsEditorPrivate
 	/* Snippet properties widgets */
 	GtkEntry *name_entry;
 	GtkEntry *trigger_entry;
+	GtkEntry *keywords_entry;
 	GtkComboBox *languages_combo_box;
 	GtkComboBox *snippets_group_combo_box;
 	GtkImage *languages_warning;
@@ -67,8 +75,8 @@ struct _SnippetsEditorPrivate
 	GtkTreeModel *vars_store_sorted;
 
 	/* Variables view cell renderers */
-	GtkCellRenderer *name_text_cell;
-	GtkCellRenderer *type_text_cell;
+	GtkCellRenderer *name_combo_cell;
+	GtkCellRenderer *type_combo_cell;
 	GtkCellRenderer *type_pixbuf_cell;
 	GtkCellRenderer *default_text_cell;
 	GtkCellRenderer *instant_text_cell;
@@ -80,6 +88,45 @@ struct _SnippetsEditorPrivate
 
 };
 
+enum
+{
+	VARS_VIEW_COL_NAME = 0,
+	VARS_VIEW_COL_TYPE,
+	VARS_VIEW_COL_DEFAULT,
+	VARS_VIEW_COL_INSTANT
+};
+
+/* Handlers */
+static void  on_preview_button_toggled           (GtkToggleButton *preview_button,
+                                                  gpointer user_data);
+static void  on_save_button_clicked              (GtkButton *save_button,
+                                                  gpointer user_data);
+static void  on_close_button_clicked             (GtkButton *close_button,
+                                                  gpointer user_data);
+static void  on_name_combo_cell_edited           (GtkCellRendererText *cell,
+                                                  gchar *path_string,
+                                                  gchar *new_string,
+                                                  gpointer user_data);
+static void  on_type_combo_cell_changed          (GtkCellRendererCombo *cell,
+                                                  gchar *path_string,
+                                                  gchar *new_string,
+                                                  gpointer user_data);
+static void  on_default_text_cell_edited         (GtkCellRendererText *cell,
+                                                  gchar *path_string,
+                                                  gchar *new_string,
+                                                  gpointer user_data);
+static void  on_variables_view_row_activated     (GtkTreeView *tree_view,
+                                                  GtkTreePath *path,
+                                                  GtkTreeViewColumn *col,
+                                                  gpointer user_data);
+static void  on_variable_add_button_clicked      (GtkButton *variable_add_button,
+                                                  gpointer user_data);
+static void  on_variable_remove_button_clicked   (GtkButton *variable_remove_button,
+                                                  gpointer user_data);
+static void  on_variable_insert_button_clicked   (GtkButton *variable_insert_button,
+                                                  gpointer user_data);
+static void  on_variables_view_selection_changed (GtkTreeSelection *selection,
+                                                  gpointer user_data);
 
 G_DEFINE_TYPE (SnippetsEditor, snippets_editor, GTK_TYPE_HBOX);
 
@@ -146,6 +193,8 @@ snippets_editor_init (SnippetsEditor* snippets_editor)
 	priv->snippet = NULL;	
 	priv->backup_snippet = NULL;
 
+	priv->type_model = NULL;
+
 	priv->content_text_view = NULL;
 	priv->preview_button = NULL;
 
@@ -153,6 +202,7 @@ snippets_editor_init (SnippetsEditor* snippets_editor)
 	priv->trigger_entry = NULL;
 	priv->languages_combo_box = NULL;
 	priv->snippets_group_combo_box = NULL;
+	priv->keywords_entry = NULL;
 	priv->languages_warning = NULL;
 	priv->group_warning = NULL;
 	
@@ -164,8 +214,8 @@ snippets_editor_init (SnippetsEditor* snippets_editor)
 	priv->vars_store = NULL;
 	priv->vars_store_sorted = NULL;
 
-	priv->name_text_cell = NULL;
-	priv->type_text_cell = NULL;
+	priv->name_combo_cell = NULL;
+	priv->type_combo_cell = NULL;
 	priv->type_pixbuf_cell = NULL;
 	priv->default_text_cell = NULL;
 	priv->instant_text_cell = NULL;
@@ -174,26 +224,6 @@ snippets_editor_init (SnippetsEditor* snippets_editor)
 	priv->close_button = NULL;
 	priv->editor_alignment = NULL;
 }
-
-/* Handlers */
-static void  on_preview_button_toggled       (GtkToggleButton *preview_button,
-                                              gpointer user_data);
-static void  on_save_button_clicked          (GtkButton *save_button,
-                                              gpointer user_data);
-static void  on_close_button_clicked         (GtkButton *close_button,
-                                              gpointer user_data);
-static void  on_name_text_cell_edited        (GtkCellRendererText *cell,
-                                              gchar *path_string,
-                                              gchar *new_string,
-                                              gpointer user_data);
-static void  on_variables_view_row_activated (GtkTreeView *tree_view,
-                                              GtkTreePath *path,
-                                              GtkTreeViewColumn *col,
-                                              gpointer user_data);
-static void  on_default_text_cell_edited     (GtkCellRendererText *cell,
-                                              gchar *path_string,
-                                              gchar *new_string,
-                                              gpointer user_data);
 
 static void
 load_snippets_editor_ui (SnippetsEditor *snippets_editor)
@@ -227,13 +257,15 @@ load_snippets_editor_ui (SnippetsEditor *snippets_editor)
 	priv->snippets_group_combo_box = GTK_COMBO_BOX (gtk_builder_get_object (bxml, "snippets_group_combo_box"));
 	priv->languages_warning = GTK_IMAGE (gtk_builder_get_object (bxml, "languages_warning"));
 	priv->group_warning = GTK_IMAGE (gtk_builder_get_object (bxml, "group_warning"));
+	priv->keywords_entry = GTK_ENTRY (gtk_builder_get_object (bxml, "keywords_entry"));
 	g_return_if_fail (GTK_IS_ENTRY (priv->name_entry));
 	g_return_if_fail (GTK_IS_ENTRY (priv->trigger_entry));
 	g_return_if_fail (GTK_IS_COMBO_BOX (priv->languages_combo_box));
 	g_return_if_fail (GTK_IS_COMBO_BOX (priv->snippets_group_combo_box));
 	g_return_if_fail (GTK_IS_IMAGE (priv->languages_warning));
 	g_return_if_fail (GTK_IS_IMAGE (priv->group_warning));
-
+	g_return_if_fail (GTK_IS_ENTRY (priv->keywords_entry));
+	
 	/* Edit variables widgets */
 	priv->variables_view = GTK_TREE_VIEW (gtk_builder_get_object (bxml, "variables_view"));
 	priv->variable_add_button = GTK_BUTTON (gtk_builder_get_object (bxml, "variable_add_button"));
@@ -253,7 +285,6 @@ load_snippets_editor_ui (SnippetsEditor *snippets_editor)
 	g_return_if_fail (GTK_IS_ALIGNMENT (priv->editor_alignment));
 
 	/* Add the gtk_alignment as the child of the snippets editor */
-	gtk_widget_unparent (GTK_WIDGET (priv->editor_alignment));
 	gtk_box_pack_start (GTK_BOX (snippets_editor),
 	                    GTK_WIDGET (priv->editor_alignment),
 	                    TRUE,
@@ -264,17 +295,6 @@ load_snippets_editor_ui (SnippetsEditor *snippets_editor)
 }
 
 /* Variables View cell data functions and the sort function	*/
-
-static gint
-compare_var_type (SnippetVariableType type1, SnippetVariableType type2)
-{
-	/* Local goes before global */
-	if (type1 == type2)
-		return 0;
-	if (type1 == SNIPPET_VAR_TYPE_LOCAL)
-		return -1;
-	return 1;
-}
 
 static gint
 compare_var_in_snippet (gboolean in_snippet1, gboolean in_snippet2)
@@ -295,28 +315,21 @@ vars_store_sort_func (GtkTreeModel *vars_store,
 {
 	gboolean in_snippet1 = FALSE, in_snippet2 = FALSE;
 	gchar *name1 = NULL, *name2 = NULL;
-	SnippetVariableType type1, type2;
 	gint compare_value = 0;
 	
 	/* Get the values from the model */
 	gtk_tree_model_get (vars_store, iter1,
 	                    VARS_STORE_COL_NAME, &name1,
-	                    VARS_STORE_COL_TYPE, &type1,
 	                    VARS_STORE_COL_IN_SNIPPET, &in_snippet1,
 	                    -1);
 	gtk_tree_model_get (vars_store, iter2,
 	                    VARS_STORE_COL_NAME, &name2,
-	                    VARS_STORE_COL_TYPE, &type2,
 	                    VARS_STORE_COL_IN_SNIPPET, &in_snippet2,
 	                    -1);
 
 	/* We first check if both variables are in the snippet */
 	compare_value = compare_var_in_snippet (in_snippet1, in_snippet2);
-
-	/* If there are both in snippet we compare by type */
-	if (!compare_value && in_snippet1)
-		compare_value = compare_var_type (type1, type2);
-
+	
 	/* If we didn't got a compare_value until this point, we compare by name */
 	if (!compare_value)
 		compare_value = g_strcmp0 (name1, name2);
@@ -328,28 +341,66 @@ vars_store_sort_func (GtkTreeModel *vars_store,
 }
 
 static void
-set_text_cell_colors (GtkCellRenderer *cell, 
-                      SnippetVariableType type,
-                      gboolean undefined)
+set_cell_colors (GtkCellRenderer *cell, 
+                 SnippetVariableType type,
+                 gboolean undefined)
 {
 	if (undefined && type == SNIPPET_VAR_TYPE_GLOBAL)
-	{
-		g_object_set (cell, "background", UNDEFINED_BG_COLOR, NULL);
-		g_object_set (cell, "foreground", UNDEFINED_FG_COLOR, NULL);
-	}
+		g_object_set (cell, "cell-background", UNDEFINED_BG_COLOR, NULL);
 	else
-	{
-		g_object_set (cell, "background-set", FALSE, NULL);
-		g_object_set (cell, "foreground-set", FALSE, NULL);
-	}
+		g_object_set (cell, "cell-background-set", FALSE, NULL);
 }
 
 static void
-variables_view_name_text_data_func (GtkTreeViewColumn *column,
-                                    GtkCellRenderer *cell,
-                                    GtkTreeModel *tree_model,
-                                    GtkTreeIter *iter,
-                                    gpointer user_data)
+focus_on_in_snippet_variable (GtkTreeView *vars_view,
+                              GtkTreeModel *vars_model,
+                              const gchar *var_name,
+                              GtkTreeViewColumn *col,
+                              gboolean start_editing)
+{
+	GtkTreeIter iter;
+	gchar *name = NULL;
+	gboolean in_snippet = FALSE;
+	
+	/* Assertions */
+	g_return_if_fail (GTK_IS_TREE_VIEW (vars_view));
+	g_return_if_fail (GTK_IS_TREE_MODEL (vars_model));
+
+	if (!gtk_tree_model_get_iter_first (vars_model, &iter))
+		return;
+
+	/* We search for a variable which is in the snippet with the given name. If we find
+	   it, we focus the cursor on it. */
+	do
+	{
+		gtk_tree_model_get (vars_model, &iter,
+		                    VARS_STORE_COL_NAME, &name,
+		                    VARS_STORE_COL_IN_SNIPPET, &in_snippet,
+		                    -1);
+
+		if (!g_strcmp0 (var_name, name) && in_snippet)
+		{
+			GtkTreePath *path = gtk_tree_model_get_path (vars_model, &iter);
+
+			gtk_tree_view_set_cursor (vars_view, path, col, start_editing);
+
+			gtk_tree_path_free (path);
+
+			g_free (name);
+			return;
+		}
+
+		g_free (name);
+
+	} while (gtk_tree_model_iter_next (vars_model, &iter));
+}
+
+static void
+variables_view_name_combo_data_func (GtkTreeViewColumn *column,
+                                     GtkCellRenderer *cell,
+                                     GtkTreeModel *tree_model,
+                                     GtkTreeIter *iter,
+                                     gpointer user_data)
 {
 	gboolean in_snippet = FALSE, undefined = FALSE;
 	gchar *name = NULL, *name_with_markup = NULL;
@@ -368,21 +419,20 @@ variables_view_name_text_data_func (GtkTreeViewColumn *column,
 		name_with_markup = g_strdup (name);
 
 	g_object_set (cell, "editable", in_snippet, NULL);
-	g_object_set (cell, "sensitive", in_snippet, NULL);
 	g_object_set (cell, "markup", name_with_markup, NULL);
 
-	set_text_cell_colors (cell, type, undefined);
+	set_cell_colors (cell, type, undefined);
 
 	g_free (name);
 	g_free (name_with_markup);
 }
 
 static void
-variables_view_type_text_data_func (GtkTreeViewColumn *column,
-                                    GtkCellRenderer *cell,
-                                    GtkTreeModel *tree_model,
-                                    GtkTreeIter *iter,
-                                    gpointer user_data)
+variables_view_type_combo_data_func (GtkTreeViewColumn *column,
+                                     GtkCellRenderer *cell,
+                                     GtkTreeModel *tree_model,
+                                     GtkTreeIter *iter,
+                                     gpointer user_data)
 {
 	SnippetVariableType type;
 	gboolean in_snippet = FALSE;
@@ -397,17 +447,15 @@ variables_view_type_text_data_func (GtkTreeViewColumn *column,
 	if (type == SNIPPET_VAR_TYPE_LOCAL)
 		g_object_set (cell, "text", LOCAL_TYPE_STR, NULL);
 	else
-	if (type == SNIPPET_VAR_TYPE_GLOBAL && !undefined)
+	if (type == SNIPPET_VAR_TYPE_GLOBAL)
 		g_object_set (cell, "text", GLOBAL_TYPE_STR, NULL);
-	else
-	if (type == SNIPPET_VAR_TYPE_GLOBAL && undefined)
-		g_object_set (cell, "markup", GLOBAL_UNDEFINED_MARKUP, NULL);
 	else
 		g_return_if_reached ();
 
-	set_text_cell_colors (cell, type, undefined);
+	set_cell_colors (cell, type, undefined);
 
 	g_object_set (cell, "sensitive", in_snippet, NULL);
+	g_object_set (cell, "editable", in_snippet, NULL);
 }
 
 static void
@@ -430,12 +478,7 @@ variables_view_type_pixbuf_data_func (GtkTreeViewColumn *column,
 	else
 		g_object_set (cell, "visible", FALSE, NULL);
 
-	if (undefined && type == SNIPPET_VAR_TYPE_GLOBAL)
-		g_object_set (cell, "cell-background", UNDEFINED_BG_COLOR, NULL);
-	else
-		g_object_set (cell, "cell-background-set", FALSE, NULL);
-	
-	g_object_set (cell, "stock-id", GTK_STOCK_DIALOG_WARNING, NULL);
+	set_cell_colors (cell, type, undefined);
 }
 
 static void
@@ -459,7 +502,7 @@ variables_view_default_text_data_func (GtkTreeViewColumn *column,
 	g_object_set (cell, "text", default_value, NULL);
 	g_object_set (cell, "editable", in_snippet, NULL);
 	
-	set_text_cell_colors (cell, type, undefined);
+	set_cell_colors (cell, type, undefined);
 
 	g_free (default_value);
 }
@@ -479,7 +522,7 @@ variables_view_instant_text_data_func (GtkTreeViewColumn *column,
 	                    VARS_STORE_COL_TYPE, &type,
 	                    -1);
 
-	set_text_cell_colors (cell, type, undefined);
+	set_cell_colors (cell, type, undefined);
 
 }
 
@@ -488,10 +531,23 @@ init_variables_view (SnippetsEditor *snippets_editor)
 {
 	SnippetsEditorPrivate *priv = NULL;
 	GtkTreeViewColumn *col = NULL;
+	GtkTreeIter iter;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor));
 	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	/* Initialize the type model */
+	priv->type_model = gtk_list_store_new (1, G_TYPE_STRING);
+	gtk_list_store_append (priv->type_model, &iter);
+	gtk_list_store_set (priv->type_model, &iter,
+	                    0, LOCAL_TYPE_STR,
+	                    -1);
+	gtk_list_store_append (priv->type_model, &iter);
+	gtk_list_store_set (priv->type_model, &iter,
+	                    0, GLOBAL_TYPE_STR,
+	                    -1);
+	                       
 
 	/* Initialize the sorted model */
 	priv->vars_store_sorted = gtk_tree_model_sort_new_with_model (GTK_TREE_MODEL (priv->vars_store));
@@ -502,29 +558,38 @@ init_variables_view (SnippetsEditor *snippets_editor)
 
 	/* Column 1 - Name */
 	col = gtk_tree_view_column_new ();
-	priv->name_text_cell = gtk_cell_renderer_text_new ();
+	priv->name_combo_cell = gtk_cell_renderer_combo_new ();
 	gtk_tree_view_column_set_title (col, NAME_COL_TITLE);
-	gtk_tree_view_column_pack_start (col, priv->name_text_cell, FALSE);
-	gtk_tree_view_column_set_cell_data_func (col, priv->name_text_cell,
-	                                         variables_view_name_text_data_func,
+	gtk_tree_view_column_pack_start (col, priv->name_combo_cell, FALSE);
+	gtk_tree_view_column_set_cell_data_func (col, priv->name_combo_cell,
+	                                         variables_view_name_combo_data_func,
 	                                         snippets_editor, NULL);
-	g_object_set (G_OBJECT (col), "resizable", TRUE, NULL);
+	g_object_set (col, "resizable", TRUE, NULL);
+	g_object_set (col, "min-width", MIN_NAME_COL_WIDTH, NULL);
+	g_object_set (priv->name_combo_cell, "has-entry", TRUE, NULL);
+	g_object_set (priv->name_combo_cell, "model", 
+	              snippets_db_get_global_vars_model (priv->snippets_db), NULL);
+	g_object_set (priv->name_combo_cell, "text-column",
+	              GLOBAL_VARS_MODEL_COL_NAME, NULL);
 	gtk_tree_view_insert_column (priv->variables_view, col, -1);
 
 	/* Column 2 - Type */
 	col = gtk_tree_view_column_new ();
-	priv->type_text_cell = gtk_cell_renderer_text_new ();
+	priv->type_combo_cell = gtk_cell_renderer_combo_new ();
 	priv->type_pixbuf_cell = gtk_cell_renderer_pixbuf_new ();
 	gtk_tree_view_column_set_title (col, TYPE_COL_TITLE);
-	gtk_tree_view_column_pack_start (col, priv->type_text_cell, FALSE);
+	gtk_tree_view_column_pack_start (col, priv->type_combo_cell, FALSE);
 	gtk_tree_view_column_pack_end (col, priv->type_pixbuf_cell, FALSE);
-	gtk_tree_view_column_set_cell_data_func (col, priv->type_text_cell,
-	                                         variables_view_type_text_data_func,
+	g_object_set (priv->type_combo_cell, "model", priv->type_model, NULL);
+	g_object_set (priv->type_combo_cell, "text-column", 0, NULL);
+	g_object_set (priv->type_combo_cell, "has-entry", FALSE, NULL);
+	gtk_tree_view_column_set_cell_data_func (col, priv->type_combo_cell,
+	                                         variables_view_type_combo_data_func,
 	                                         snippets_editor, NULL);
+	g_object_set (priv->type_pixbuf_cell, "stock-id", GTK_STOCK_DIALOG_WARNING, NULL);
 	gtk_tree_view_column_set_cell_data_func (col, priv->type_pixbuf_cell,
 	                                         variables_view_type_pixbuf_data_func,
 	                                         snippets_editor, NULL);
-	g_object_set (G_OBJECT (col), "resizable", TRUE, NULL);
 	gtk_tree_view_insert_column (priv->variables_view, col, -1);
 	
 	/* Column 3 - Default Value (just for those variables that are in the snippet) */
@@ -535,7 +600,7 @@ init_variables_view (SnippetsEditor *snippets_editor)
 	gtk_tree_view_column_set_cell_data_func (col, priv->default_text_cell,
 	                                         variables_view_default_text_data_func,
 	                                         snippets_editor, NULL);
-	g_object_set (G_OBJECT (col), "resizable", TRUE, NULL);
+	g_object_set (col, "resizable", TRUE, NULL);
 	gtk_tree_view_insert_column (priv->variables_view, col, -1);
 
 	/* Column 4 - Instant value */
@@ -547,7 +612,7 @@ init_variables_view (SnippetsEditor *snippets_editor)
 	gtk_tree_view_column_set_cell_data_func (col, priv->instant_text_cell,
 	                                         variables_view_instant_text_data_func,
 	                                         snippets_editor, NULL);
-	g_object_set (G_OBJECT (col), "resizable", TRUE, NULL);
+	g_object_set (col, "resizable", TRUE, NULL);
 	g_object_set (G_OBJECT (priv->instant_text_cell), "editable", FALSE, NULL);
 	gtk_tree_view_insert_column (priv->variables_view, col, -1);
 
@@ -574,19 +639,38 @@ init_editor_handlers (SnippetsEditor *snippets_editor)
 	                  "clicked",
 	                  GTK_SIGNAL_FUNC (on_close_button_clicked),
 	                  snippets_editor);
-	g_signal_connect (G_OBJECT (priv->name_text_cell),
+	g_signal_connect (G_OBJECT (priv->name_combo_cell),
 	                  "edited",
-	                  G_CALLBACK (on_name_text_cell_edited),
+	                  G_CALLBACK (on_name_combo_cell_edited),
 	                  snippets_editor);
-	g_signal_connect (GTK_OBJECT (priv->variables_view),
-	                  "row-activated",
-	                  GTK_SIGNAL_FUNC (on_variables_view_row_activated),
+	g_signal_connect (G_OBJECT (priv->type_combo_cell),
+	                  "changed",
+	                  G_CALLBACK (on_type_combo_cell_changed),
 	                  snippets_editor);
 	g_signal_connect (G_OBJECT (priv->default_text_cell),
 	                  "edited",
 	                  G_CALLBACK (on_default_text_cell_edited),
 	                  snippets_editor);
-	
+	g_signal_connect (GTK_OBJECT (priv->variables_view),
+	                  "row-activated",
+	                  GTK_SIGNAL_FUNC (on_variables_view_row_activated),
+	                  snippets_editor);
+	g_signal_connect (GTK_OBJECT (priv->variable_add_button),
+	                  "clicked",
+	                  GTK_SIGNAL_FUNC (on_variable_add_button_clicked),
+	                  snippets_editor);
+	g_signal_connect (GTK_OBJECT (priv->variable_remove_button),
+	                  "clicked",
+	                  GTK_SIGNAL_FUNC (on_variable_remove_button_clicked),
+	                  snippets_editor);
+	g_signal_connect (GTK_OBJECT (priv->variable_insert_button),
+	                  "clicked",
+	                  GTK_SIGNAL_FUNC (on_variable_insert_button_clicked),
+	                  snippets_editor);
+	g_signal_connect (G_OBJECT (gtk_tree_view_get_selection (priv->variables_view)),
+	                  "changed",
+	                  G_CALLBACK (on_variables_view_selection_changed),
+	                  snippets_editor);
 }
 
 SnippetsEditor *
@@ -736,14 +820,22 @@ on_preview_button_toggled (GtkToggleButton *preview_button,
                            gpointer user_data)
 {
 	SnippetsEditor *snippets_editor = NULL;
+	SnippetsEditorPrivate *priv = NULL;
+	gboolean preview_mode = FALSE;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (user_data));
 	snippets_editor = ANJUTA_SNIPPETS_EDITOR (user_data);
-
-	/* If we go in the preview mode, we should save the content */
-	if (gtk_toggle_button_get_active (preview_button))
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+	
+	/* If we go in the preview mode, we should save the content and disallow removing
+	   and inserting variables */
+	preview_mode = gtk_toggle_button_get_active (preview_button);
+	if (preview_mode)
 		save_content_from_editor (snippets_editor);
+
+	g_object_set (priv->variable_insert_button, "sensitive", !preview_mode, NULL);
+	g_object_set (priv->content_text_view, "editable", !preview_mode, NULL);
 
 	load_content_to_editor (snippets_editor);
 }
@@ -807,10 +899,10 @@ on_close_button_clicked (GtkButton *close_button,
 }
 
 static void 
-on_name_text_cell_edited (GtkCellRendererText *cell,
-                          gchar *path_string,
-                          gchar *new_string,
-                          gpointer user_data)
+on_name_combo_cell_edited (GtkCellRendererText *cell,
+                           gchar *path_string,
+                           gchar *new_string,
+                           gpointer user_data)
 {
 	SnippetsEditorPrivate *priv = NULL;
 	GtkTreePath *path = NULL;
@@ -842,45 +934,58 @@ on_name_text_cell_edited (GtkCellRendererText *cell,
 
 	/* Set the new name */
 	snippet_vars_store_set_variable_name (priv->vars_store, old_name, new_string);
+
+	/* If there is a global variable with the given name, treat it as global */
+	if (snippets_db_has_global_variable (priv->snippets_db, new_string))
+		snippet_vars_store_set_variable_type (priv->vars_store, 
+		                                      new_string, 
+		                                      SNIPPET_VAR_TYPE_GLOBAL);
+
+	focus_on_in_snippet_variable (priv->variables_view, 
+	                              GTK_TREE_MODEL (priv->vars_store_sorted), 
+	                              new_string,
+	                              NULL, FALSE);
 	
 	g_free (old_name);
 }
 
+
 static void
-on_variables_view_row_activated (GtkTreeView *tree_view,
-                                 GtkTreePath *path,
-                                 GtkTreeViewColumn *col,
-                                 gpointer user_data)
+on_type_combo_cell_changed (GtkCellRendererCombo *cell,
+                            gchar *path_string,
+                            gchar *new_string,
+                            gpointer user_data)
 {
 	SnippetsEditorPrivate *priv = NULL;
+	GtkTreePath *path = NULL;
 	gchar *name = NULL;
 	GtkTreeIter iter;
-	SnippetVariableType type, opposed_type;
+	SnippetVariableType type;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (user_data));
 	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (user_data);
 
-	/* We check that the title column was activated */
-	if (g_strcmp0 (gtk_tree_view_column_get_title (col), TYPE_COL_TITLE))
-		return;
-
 	/* Get the name at the given path */
+	path = gtk_tree_path_new_from_string (path_string);
 	gtk_tree_model_get_iter (GTK_TREE_MODEL (priv->vars_store_sorted), &iter, path);
+	gtk_tree_path_free (path);
 	gtk_tree_model_get (GTK_TREE_MODEL (priv->vars_store_sorted), &iter,
 	                    VARS_STORE_COL_NAME, &name,
 	                    VARS_STORE_COL_TYPE, &type,
 	                    -1);
 
 	if (type == SNIPPET_VAR_TYPE_LOCAL)
-		opposed_type = SNIPPET_VAR_TYPE_GLOBAL;
+		snippet_vars_store_set_variable_type (priv->vars_store, name, SNIPPET_VAR_TYPE_GLOBAL);
 	else
-		opposed_type = SNIPPET_VAR_TYPE_LOCAL;
+		snippet_vars_store_set_variable_type (priv->vars_store, name, SNIPPET_VAR_TYPE_LOCAL);
 
-	snippet_vars_store_set_variable_type (priv->vars_store, name, opposed_type);
+	focus_on_in_snippet_variable (priv->variables_view, 
+	                              GTK_TREE_MODEL (priv->vars_store_sorted), 
+	                              name,
+	                              NULL, FALSE);
 
 	g_free (name);
-	
 }
 
 static void
@@ -909,5 +1014,125 @@ on_default_text_cell_edited (GtkCellRendererText *cell,
 	snippet_vars_store_set_variable_default (priv->vars_store, name, new_string);
 
 	g_free (name);
+
+}
+
+
+static void
+on_variables_view_row_activated (GtkTreeView *tree_view,
+                                 GtkTreePath *path,
+                                 GtkTreeViewColumn *col,
+                                 gpointer user_data)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (user_data));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (user_data);
+
+	/* TODO -- still to be decided :) */
+	
+}
+
+static void
+on_variable_add_button_clicked (GtkButton *variable_add_button,
+                                gpointer user_data)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	GtkTreeViewColumn *col = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (user_data));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (user_data);
+
+	/* Add the variable to the vars_store */
+	snippet_vars_store_add_variable_to_snippet (priv->vars_store,
+	                                            NEW_VAR_NAME, FALSE);
+
+	/* Focus on it */
+	col = gtk_tree_view_get_column (priv->variables_view, VARS_VIEW_COL_NAME);
+	focus_on_in_snippet_variable (priv->variables_view, 
+	                              GTK_TREE_MODEL (priv->vars_store_sorted),
+	                              NEW_VAR_NAME,
+	                              col, TRUE);
+}
+
+static void
+on_variable_remove_button_clicked (GtkButton *variable_remove_button,
+                                   gpointer user_data)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	GtkTreeIter iter;
+	gboolean has_selection = FALSE;
+	GtkTreeSelection *selection = NULL;
+	GtkTreeModel *model = NULL;
+	gchar *name = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (user_data));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (user_data);
+
+	/* Get the selected variable */
+	selection = gtk_tree_view_get_selection (priv->variables_view);
+	model = GTK_TREE_MODEL (priv->vars_store_sorted);
+	has_selection = gtk_tree_selection_get_selected (selection, &model, &iter);
+
+	/* We should always have a selection if the remove button is sensitive */
+	g_return_if_fail (has_selection);
+
+	/* Remove the variable from the vars_store */
+	gtk_tree_model_get (model, &iter,
+	                    VARS_STORE_COL_NAME, &name,
+	                    -1);
+	snippet_vars_store_remove_variable_from_snippet (priv->vars_store, name);
+
+	g_free (name);
+}
+
+static void
+on_variable_insert_button_clicked (GtkButton *variable_insert_button,
+                                   gpointer user_data)
+{
+	SnippetsEditorPrivate *priv = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (user_data));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (user_data);
+
+	/* TODO */
+}
+
+
+static void
+on_variables_view_selection_changed (GtkTreeSelection *selection,
+                                     gpointer user_data)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	GtkTreeIter iter;
+	GtkTreeModel *vars_store_sorted_model = NULL;
+	gboolean in_snippet = FALSE, has_selection = FALSE;
+		
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (user_data));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (user_data);
+
+	vars_store_sorted_model = GTK_TREE_MODEL (priv->vars_store_sorted);
+	has_selection = gtk_tree_selection_get_selected (selection,
+	                                                 &vars_store_sorted_model,
+	                                                 &iter);	
+
+	/* If there isn't a selection, the remove and insert button won't be sensitive */
+	g_object_set (priv->variable_remove_button, "sensitive", has_selection, NULL);
+	g_object_set (priv->variable_insert_button, "sensitive", has_selection, NULL);
+
+	if (!has_selection)
+		return;
+	
+	/* Check if the selected variable is in the snippet. If not, the remove button
+	   won't be sensitive. */
+	gtk_tree_model_get (vars_store_sorted_model, &iter,
+	                    VARS_STORE_COL_IN_SNIPPET, &in_snippet,
+	                    -1);
+	g_object_set (priv->variable_remove_button, "sensitive", in_snippet, NULL);
 
 }

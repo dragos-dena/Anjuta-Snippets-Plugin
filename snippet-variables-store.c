@@ -499,6 +499,7 @@ snippet_vars_store_set_variable_type (SnippetVarsStore *vars_store,
 	GtkTreeIter iter;
 	gchar *default_value = NULL;
 	SnippetVariableType old_type;
+	gboolean undefined = FALSE;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPET_VARS_STORE (vars_store));
@@ -533,6 +534,16 @@ snippet_vars_store_set_variable_type (SnippetVarsStore *vars_store,
 	                    -1);
 
 	snippet_set_variable_global (priv->snippet, variable_name, new_type == SNIPPET_VAR_TYPE_GLOBAL);
+	snippet_set_variable_default_value (priv->snippet, variable_name, default_value);
+
+	/* If the newly added variable is local or undefined, we update it's instant value */
+	gtk_tree_model_get (GTK_TREE_MODEL (vars_store), &iter,
+	                    VARS_STORE_COL_UNDEFINED, &undefined,
+	                    -1);
+	if (new_type == SNIPPET_VAR_TYPE_LOCAL || undefined)
+		gtk_list_store_set (GTK_LIST_STORE (vars_store), &iter,
+		                    VARS_STORE_COL_INSTANT_VALUE, default_value,
+		                    -1);
 
 	g_free (default_value);
 
