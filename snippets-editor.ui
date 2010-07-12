@@ -47,7 +47,10 @@
                               <object class="GtkEntry" id="name_entry">
                                 <property name="width_request">180</property>
                                 <property name="visible">True</property>
+                                <property name="sensitive">False</property>
                                 <property name="can_focus">True</property>
+                                <property name="tooltip_text" translatable="yes">Select the name of the Snippet. 
+The role of the name is purely informative.</property>
                                 <property name="invisible_char">&#x25CF;</property>
                               </object>
                               <packing>
@@ -82,6 +85,7 @@
                               <object class="GtkComboBox" id="snippets_group_combo_box">
                                 <property name="width_request">180</property>
                                 <property name="visible">True</property>
+                                <property name="tooltip_text" translatable="yes">Select the Snippets Group to which this snippet belongs.</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -89,10 +93,10 @@
                               </packing>
                             </child>
                             <child>
-                              <object class="GtkImage" id="group_warning">
+                              <object class="GtkImage" id="group_notify">
                                 <property name="width_request">24</property>
-                                <property name="tooltip_text" translatable="yes">The snippet doesn't belong to a group.</property>
-                                <property name="stock">gtk-dialog-warning</property>
+                                <property name="tooltip_markup">&lt;b&gt;Error:&lt;/b&gt; The snippet must belong to a group!</property>
+                                <property name="stock">gtk-dialog-error</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -116,6 +120,7 @@
                         <property name="visible">True</property>
                         <child>
                           <object class="GtkHBox" id="hbox5">
+                            <property name="width_request">336</property>
                             <property name="visible">True</property>
                             <child>
                               <object class="GtkLabel" id="label4">
@@ -125,6 +130,7 @@
                                 <property name="label" translatable="yes">Trigger Key:</property>
                               </object>
                               <packing>
+                                <property name="expand">False</property>
                                 <property name="padding">6</property>
                                 <property name="position">0</property>
                               </packing>
@@ -133,7 +139,10 @@
                               <object class="GtkEntry" id="trigger_entry">
                                 <property name="width_request">180</property>
                                 <property name="visible">True</property>
+                                <property name="sensitive">False</property>
                                 <property name="can_focus">True</property>
+                                <property name="tooltip_markup">The trigger key is used for fast insertion of the snippet. Type the trigger key in the editor, followed by the "Fast Insert" shortcut to insert a snippet.
+&lt;b&gt;Warning: Must be unique per language. &lt;/b&gt;</property>
                                 <property name="invisible_char">&#x25CF;</property>
                               </object>
                               <packing>
@@ -142,12 +151,9 @@
                               </packing>
                             </child>
                             <child>
-                              <object class="GtkImage" id="image1">
+                              <object class="GtkImage" id="trigger_notify">
                                 <property name="width_request">24</property>
-                                <property name="visible">True</property>
-                                <property name="tooltip_markup">The trigger key is used for fast insertion of the snippet. Type the trigger key in the editor, followed by the "Fast Insert" shortcut to insert a snippet.
-&lt;b&gt;Warning: Must be unique per language. &lt;/b&gt;</property>
-                                <property name="stock">gtk-dialog-question</property>
+                                <property name="stock">gtk-dialog-error</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -181,6 +187,7 @@
                               <object class="GtkComboBox" id="languages_combo_box">
                                 <property name="width_request">180</property>
                                 <property name="visible">True</property>
+                                <property name="tooltip_text" translatable="yes">Select the languages for which you want to use this snippet.</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -188,12 +195,12 @@
                               </packing>
                             </child>
                             <child>
-                              <object class="GtkImage" id="languages_warning">
+                              <object class="GtkImage" id="languages_notify">
                                 <property name="width_request">24</property>
-                                <property name="tooltip_text" translatable="yes">Conflict detected with another snippet.</property>
-                                <property name="stock">gtk-dialog-warning</property>
+                                <property name="stock">gtk-dialog-error</property>
                               </object>
                               <packing>
+                                <property name="expand">False</property>
                                 <property name="position">2</property>
                               </packing>
                             </child>
@@ -234,7 +241,9 @@
                               <object class="GtkEntry" id="keywords_entry">
                                 <property name="width_request">546</property>
                                 <property name="visible">True</property>
+                                <property name="sensitive">False</property>
                                 <property name="can_focus">True</property>
+                                <property name="tooltip_text" translatable="yes">Keywords are used for better searching of the snippets. They should be relevant to the snippet content. Type them separated by a single space.</property>
                                 <property name="invisible_char">&#x25CF;</property>
                               </object>
                               <packing>
@@ -243,16 +252,7 @@
                               </packing>
                             </child>
                             <child>
-                              <object class="GtkImage" id="image3">
-                                <property name="width_request">24</property>
-                                <property name="visible">True</property>
-                                <property name="tooltip_text" translatable="yes">Keywords are used for better searching of the snippets. They should be relevant to the snippet content. Type them separated by space.</property>
-                                <property name="stock">gtk-dialog-question</property>
-                              </object>
-                              <packing>
-                                <property name="expand">False</property>
-                                <property name="position">2</property>
-                              </packing>
+                              <placeholder/>
                             </child>
                           </object>
                           <packing>
@@ -324,6 +324,7 @@
                                           <object class="GtkTextView" id="content_text_view">
                                             <property name="width_request">480</property>
                                             <property name="visible">True</property>
+                                            <property name="sensitive">False</property>
                                             <property name="can_focus">True</property>
                                           </object>
                                         </child>

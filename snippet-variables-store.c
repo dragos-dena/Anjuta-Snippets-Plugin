@@ -192,7 +192,6 @@ static void
 reload_vars_store (SnippetVarsStore *vars_store)
 {
 	SnippetVarsStorePrivate *priv = NULL;
-	GtkTreeIter iter;
 	GList *snippet_vars_names = NULL, *snippet_vars_defaults = NULL, *snippet_vars_globals = NULL,
 	      *iter1 = NULL, *iter2 = NULL, *iter3 = NULL;
 	gchar *cur_var_name = NULL, *cur_var_default = NULL;
@@ -203,11 +202,7 @@ reload_vars_store (SnippetVarsStore *vars_store)
 	priv = ANJUTA_SNIPPET_VARS_STORE_GET_PRIVATE (vars_store);
 
 	/* Clear the GtkListStore */
-	if (gtk_tree_model_get_iter_first (GTK_TREE_MODEL (vars_store), &iter))
-	{
-		/* Remove each item */
-		while (gtk_list_store_remove (GTK_LIST_STORE (vars_store), &iter));
-	}
+	gtk_list_store_clear (GTK_LIST_STORE (vars_store));
 
 	/* Add new items */
 	if (ANJUTA_IS_SNIPPET (priv->snippet) && ANJUTA_IS_SNIPPETS_DB (priv->snippets_db))
@@ -331,7 +326,7 @@ snippet_vars_store_unload (SnippetVarsStore *vars_store)
 	priv = ANJUTA_SNIPPET_VARS_STORE_GET_PRIVATE (vars_store);
 
 	/* If we don't have a snippet or a snippets-db we just return */
-	if (!ANJUTA_IS_SNIPPET (priv->snippet) || !ANJUTA_IS_SNIPPETS_DB (priv->snippets_db))
+	if (!ANJUTA_IS_SNIPPETS_DB (priv->snippets_db))
 		return;
 
 	global_vars_model = snippets_db_get_global_vars_model (priv->snippets_db);

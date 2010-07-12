@@ -27,6 +27,7 @@
 #include <libanjuta/interfaces/ianjuta-document.h>
 #include <libanjuta/interfaces/ianjuta-editor.h>
 #include <libanjuta/interfaces/ianjuta-editor-language.h>
+#include <libanjuta/interfaces/ianjuta-language.h>
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <gtk/gtk.h>
@@ -167,18 +168,12 @@ static gchar *
 get_snippet_key_from_trigger_and_language (const gchar *trigger_key,
                                            const gchar *language)
 {
-	gchar *lower_language = NULL;
 	gchar *snippet_key = NULL;
 	
 	/* Assertions */
 	g_return_val_if_fail (trigger_key != NULL, NULL);
-	g_return_val_if_fail (language != NULL, NULL);
 
-	/* All languages are with lower letters */
-	lower_language = g_utf8_strdown (language, -1);
-
-	snippet_key = g_strconcat (trigger_key, ".", lower_language, NULL);
-	g_free (lower_language);
+	snippet_key = g_strconcat (trigger_key, ".", language, NULL);
 
 	return snippet_key;
 }
@@ -195,21 +190,28 @@ add_snippet_to_hash_table (SnippetsDB *snippets_db,
                            AnjutaSnippet *snippet)
 {
 	GList *iter = NULL, *languages = NULL;
-	
+	gchar *snippet_key = NULL;
+	const gchar *trigger_key = NULL, *lang = NULL;
+	SnippetsDBPrivate *priv = NULL;
+
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
 	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
+	
 	languages = (GList *)snippet_get_languages (snippet);
+	trigger_key = snippet_get_trigger_key (snippet);
 
 	for (iter = g_list_first (languages); iter != NULL; iter = g_list_next (iter))
 	{
-		gchar *snippet_key = NULL;
-		snippet_key = get_snippet_key_from_trigger_and_language (snippet_get_trigger_key (snippet),
-		                                                         (const gchar *)iter->data);
-		g_hash_table_insert (snippets_db->priv->snippet_keys_map,
-		                     snippet_key,
-		                     snippet);
+		lang = (const gchar *)iter->data;
+		
+		snippet_key = get_snippet_key_from_trigger_and_language (trigger_key, lang);
+
+		g_hash_table_insert (priv->snippet_keys_map, snippet_key, snippet);
+
 	}
+
 }
 
 static void
@@ -1054,17 +1056,26 @@ snippets_db_get_snippet (SnippetsDB* snippets_db,
 	{
 		IAnjutaDocumentManager *docman = NULL;
 		IAnjutaDocument *doc = NULL;
-
+		IAnjutaEditorLanguage *ieditor_language = NULL;
+		IAnjutaLanguage *ilanguage = NULL;
+		
 		docman = anjuta_shell_get_interface (snippets_db->anjuta_shell, 
 		                                     IAnjutaDocumentManager, 
 		                                     NULL);
-		g_return_val_if_fail (docman != NULL, NULL);
+		ilanguage = anjuta_shell_get_interface (snippets_db->anjuta_shell,
+		                                        IAnjutaLanguage,
+		                                        NULL);
+		g_return_val_if_fail (IANJUTA_IS_DOCUMENT_MANAGER (docman), NULL);
+		g_return_val_if_fail (IANJUTA_IS_LANGUAGE (ilanguage), NULL);
 
 		/* Get the current doc and make sure it's an editor */
 		doc = ianjuta_document_manager_get_current_document (docman, NULL);
-		g_return_val_if_fail (IANJUTA_IS_EDITOR (doc), NULL);
+		if (!IANJUTA_IS_EDITOR_LANGUAGE (doc))
+			return NULL;
+		ieditor_language = IANJUTA_EDITOR_LANGUAGE (doc);
+		
 
-		language = ianjuta_editor_language_get_language (IANJUTA_EDITOR_LANGUAGE (doc), NULL);
+		language = ianjuta_language_get_name_from_editor (ilanguage, ieditor_language, NULL);
 	}
 
 	/* Calculate the snippet-key */
@@ -1106,7 +1117,6 @@ snippets_db_remove_snippet (SnippetsDB* snippets_db,
 	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), FALSE);
-	g_return_val_if_fail (language != NULL, FALSE);
 	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
 
 	/* Get the snippet to be deleted */
@@ -1398,7 +1408,7 @@ snippets_db_remove_snippets_group (SnippetsDB* snippets_db,
 			path = get_tree_path_for_snippets_group (snippets_db, snippets_group);
 			gtk_tree_model_row_deleted (GTK_TREE_MODEL (snippets_db), path);
 			gtk_tree_path_free (path);
-			
+
 			/* Destroy the snippets-group object */
 			g_object_unref (snippets_group);
 

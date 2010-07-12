@@ -26,6 +26,7 @@
 #include <libanjuta/interfaces/ianjuta-document.h>
 #include <libanjuta/interfaces/ianjuta-editor.h>
 #include <libanjuta/interfaces/ianjuta-editor-language.h>
+#include <libanjuta/interfaces/ianjuta-language.h>
 
 #define BROWSER_UI               PACKAGE_DATA_DIR"/glade/snippets-browser.ui"
 #define TOOLTIP_SIZE             200
@@ -411,6 +412,7 @@ snippets_db_language_filter_func (GtkTreeModel *tree_model,
 	SnippetsBrowser *snippets_browser = NULL;
 	IAnjutaDocumentManager *docman = NULL;
 	IAnjutaDocument *doc = NULL;
+	IAnjutaLanguage *ilanguage = NULL;
 	const gchar *language = NULL;
 	GObject *cur_object = NULL;
 	SnippetsBrowserPrivate *priv = NULL;
@@ -451,7 +453,16 @@ snippets_db_language_filter_func (GtkTreeModel *tree_model,
 	docman = anjuta_shell_get_interface (snippets_browser->anjuta_shell, 
 	                                     IAnjutaDocumentManager, 
 	                                     NULL);
-	if (docman == NULL)
+	if (!IANJUTA_IS_DOCUMENT_MANAGER (docman))
+	{
+		g_object_unref (cur_object);
+		return TRUE;
+	}
+
+	ilanguage = anjuta_shell_get_interface (snippets_browser->anjuta_shell,
+	                                        IAnjutaLanguage,
+	                                        NULL);
+	if (!IANJUTA_IS_LANGUAGE (ilanguage))
 	{
 		g_object_unref (cur_object);
 		return TRUE;
@@ -466,7 +477,9 @@ snippets_db_language_filter_func (GtkTreeModel *tree_model,
 	}
 
 	/* Get the language */
-	language = ianjuta_editor_language_get_language (IANJUTA_EDITOR_LANGUAGE (doc), NULL);
+	language = ianjuta_language_get_name_from_editor (ilanguage,
+	                                                  IANJUTA_EDITOR_LANGUAGE (doc),
+	                                                  NULL);
 	if (language == NULL)
 	{
 		g_object_unref (cur_object);
@@ -833,7 +846,6 @@ on_delete_button_clicked (GtkButton *delete_button,
 			trigger_key = snippet_get_trigger_key (ANJUTA_SNIPPET (cur_object));
 			language = snippet_get_any_language (ANJUTA_SNIPPET (cur_object));
 			g_return_if_fail (trigger_key != NULL);
-			g_return_if_fail (language != NULL);
 			
 			snippets_db_remove_snippet (priv->snippets_db, trigger_key, language, TRUE);
 		}
@@ -1102,7 +1114,10 @@ on_snippets_view_selection_changed (GtkTreeSelection *tree_selection,
 	g_return_if_fail (GTK_IS_TREE_MODEL (priv->filter));
 	
 	if (!gtk_tree_selection_get_selected (tree_selection, &priv->filter, &iter))
+	{
+		snippets_editor_set_snippet (priv->snippets_editor, NULL);
 		return;
+	}
 	
 	gtk_tree_model_get (priv->filter, &iter,
 	                    SNIPPETS_DB_MODEL_COL_CUR_OBJECT, &cur_object,
@@ -1112,6 +1127,9 @@ on_snippets_view_selection_changed (GtkTreeSelection *tree_selection,
 	if (ANJUTA_IS_SNIPPET (cur_object) && priv->maximized)
 		snippets_editor_set_snippet (priv->snippets_editor, 
 		                             ANJUTA_SNIPPET (cur_object));
+	else if (priv->maximized)
+		snippets_editor_set_snippet (priv->snippets_editor, NULL);
+
 	g_object_unref (cur_object);
 }
 

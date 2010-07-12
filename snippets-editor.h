@@ -63,9 +63,9 @@ GType            snippets_editor_get_type               (void) G_GNUC_CONST;
 SnippetsEditor*  snippets_editor_new                    (SnippetsDB *snippets_db);
 
 void             snippets_editor_set_snippet            (SnippetsEditor *snippets_editor,
-                                                         AnjutaSnippet *snippet);    
+                                                         AnjutaSnippet *snippet);
 void             snippets_editor_set_snippet_new        (SnippetsEditor *snippets_editor);
-void             snippets_editor_delete_current_snippet (SnippetsEditor *snippets_editor);
+
 G_END_DECLS
 
 #endif /* __SNIPPETS_EDITOR_H__ */

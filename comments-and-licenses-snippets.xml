@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <anjuta-snippet-packet>
-	<name>Comments and licenses snippets</name>
-	<description>Provides snippets for various top file comments and some licenses (GPL, BSD and LGPL).</description>
-
+	<name>Comments and licenses</name>
 	<anjuta-snippets>
-		<anjuta-snippet trigger="header" name="C top comment">
-			<languages>c</languages>
+		<anjuta-snippet trigger="top_com" name="Top Comment">
+			<languages>C</languages>
 			<variables>
 				<variable name="filename" default="file" is_global="true" />
 				<variable name="date_time" default="" is_global="true" />
@@ -24,8 +22,8 @@
 			<keywords>comment header copyright C email date time</keywords>
 		</anjuta-snippet>
 
-		<anjuta-snippet trigger="header" name="C/C++ header top comment">
-			<languages>chdr</languages>
+		<anjuta-snippet trigger="header" name="Header guard">
+			<languages>C C++</languages>
 			<variables>
 				<variable name="filename_prefix" default="FILE_NAME" is_global="false" />
 			</variables>
@@ -45,8 +43,8 @@ G_END_DECLS
 			<keywords>comment header copyright C C++ email date time</keywords>			
 		</anjuta-snippet>
 
-		<anjuta-snippet trigger="header" name="C++ top comment">
-			<languages>cpp</languages>
+		<anjuta-snippet trigger="top_com" name="Top Comment">
+			<languages>C++</languages>
 			<variables>
 				<variable name="filename" default="file" is_global="true" />
 				<variable name="date_time" default="" is_global="true" />
@@ -62,8 +60,8 @@ G_END_DECLS
 			<keywords>comment header copyright C++ email date time</keywords>
 		</anjuta-snippet>
 
-		<anjuta-snippet trigger="header" name="C# top comment">
-			<languages>c-sharp</languages>
+		<anjuta-snippet trigger="top_com" name="Top comment">
+			<languages>C#</languages>
 			<variables>
 				<variable name="copyright_file_name" default="copyright.txt" is_global="false" />
 				<variable name="license_file_name" default="license.txt" is_global="false" />
@@ -81,8 +79,8 @@ G_END_DECLS
 			<keywords>comment header copyright C# csharp license date time email</keywords>
 		</anjuta-snippet>
 
-		<anjuta-snippet trigger="header" name="Script top comment">
-			<languages>perl sh python</languages>
+		<anjuta-snippet trigger="top_com" name="Top comment">
+			<languages>Python</languages>
 			<variables>
 				<variable name="filename" default="file" is_global="true" />
 				<variable name="date_time" default="" is_global="true" />
@@ -99,8 +97,8 @@ G_END_DECLS
 			<keywords>comment header copyright perl shell python sh license email</keywords>
 		</anjuta-snippet>
 
-		<anjuta-snippet trigger="bsd" name="C BSD license">
-			<languages>c chdr</languages>
+		<anjuta-snippet trigger="bsd" name="BSD License">
+			<languages>C</languages>
 			<variables>
 				<variable name="userfullname" default="User Name" is_global="true" />
 			</variables>
@@ -133,8 +131,8 @@ G_END_DECLS
  			<keywords>BSD license C comment</keywords>
 		</anjuta-snippet>
 
-	<anjuta-snippet trigger="bsd" name="C++ BSD license">
-		<languages>cpp</languages>
+	<anjuta-snippet trigger="bsd" name="BSD License">
+		<languages>C++</languages>
 		<variables>
 			<variable name="userfullname" default="User Name" is_global="true" />
 		</variables>
@@ -166,8 +164,8 @@ G_END_DECLS
 			<keywords>BSD license C++ comment</keywords>
 		</anjuta-snippet>
 
-		<anjuta-snippet trigger="bsd" name="Script BSD license">
-			<languages>perl sh python </languages>
+		<anjuta-snippet trigger="bsd" name="BSD License">
+			<languages>Python </languages>
 			<variables>
 				<variable name="userfullname" default="User Name" is_global="true" />
 			</variables>
@@ -198,8 +196,8 @@ G_END_DECLS
 			<keywords>BSD license perl python sh shell comment</keywords>
 		</anjuta-snippet>
 
-		<anjuta-snippet trigger="gpl" name="C GPL license">
-			<languages>c chdr</languages>
+		<anjuta-snippet trigger="gpl" name="GPL License">
+			<languages>C</languages>
 			<variables>
 				<variable name="filename" default="file" is_global="true" />
 				<variable name="year" default="2010" is_global="true" />
@@ -227,8 +225,8 @@ G_END_DECLS
 			<keywords>GPL license C comment</keywords>
 		</anjuta-snippet>
 		
-		<anjuta-snippet trigger="gpl" name="C++ GPL license" >
-			<languages>cpp</languages>
+		<anjuta-snippet trigger="gpl" name="GPL License" >
+			<languages>C++</languages>
 			<variables>
 				<variable name="filename" default="file" is_global="true" />
 				<variable name="year" default="2010" is_global="true" />
@@ -254,8 +252,8 @@ G_END_DECLS
 			<keywords>GPL license C++ comment</keywords>
 		</anjuta-snippet>
 
-		<anjuta-snippet trigger="gpl" name="Script GPL license" >
-			<languages>perl python sh</languages>
+		<anjuta-snippet trigger="gpl" name="GPL License" >
+			<languages>Python</languages>
 			<variables>
 				<variable name="filename" default="file" is_global="true" />
 				<variable name="year" default="2010" is_global="true" />
@@ -281,8 +279,8 @@ G_END_DECLS
 			<keywords>GPL license Perl python shell sh comment</keywords>
 		</anjuta-snippet>
 
-		<anjuta-snippet language="C" trigger="lgpl" name="LGPL C license" >
-			<languages>c chdr</languages>
+		<anjuta-snippet language="C" trigger="lgpl" name="LGPL License" >
+			<languages>C</languages>
 			<variables>
 				<variable name="year" default="2010" is_global="true" />
 				<variable name="userfullname" default="User Name" is_global="true" />
@@ -308,8 +306,8 @@ G_END_DECLS
  		<keywords>lgpl C comment header</keywords>
 		</anjuta-snippet>
 
-		<anjuta-snippet trigger="lgpl" name="LGPL C++ license" >
-			<languages>cpp</languages>
+		<anjuta-snippet trigger="lgpl" name="LGPL License" >
+			<languages>C++</languages>
 			<variables>
 				<variable name="year" default="2010" is_global="true" />
 				<variable name="userfullname" default="User Name" is_global="true" />
@@ -333,8 +331,8 @@ G_END_DECLS
  		<keywords>lgpl C++ cpp comment header</keywords>
 		</anjuta-snippet>
 
-		<anjuta-snippet trigger="lgpl" name="LGPL Script license">
-				<languages>python sh perl</languages>
+		<anjuta-snippet trigger="lgpl" name="LGPL License">
+				<languages>Python</languages>
 				<variables>
 					<variable name="year" default="2010" is_global="true" />
 					<variable name="userfullname" default="User Name" is_global="true" />

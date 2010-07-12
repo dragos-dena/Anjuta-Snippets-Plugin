@@ -172,7 +172,7 @@ snippets_manager_parse_native_snippet_node (xmlNodePtr snippet_node)
 			{
 				if (g_strcmp0 (languages_temp_array[i], ""))
 				{
-					language_temp = g_utf8_strdown (languages_temp_array[i], -1);
+					language_temp = g_strdup (languages_temp_array[i]);
 					snippet_languages = g_list_append (snippet_languages, language_temp); 
 				}
 				i ++;

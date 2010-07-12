@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <anjuta-snippet-packet>
-	<name>General purpose snippets</name>
-	<description>Provides snippets for general purpose operations (like conditional statements, loops)</description>
+	<name>General purpose</name>
 
 	<anjuta-snippets>
 
 		<anjuta-snippet trigger="for" name="For loop">
-			<languages>c</languages>
+			<languages>C</languages>
 			<variables>
 				<variable name="iter" default="i" is_global="false" />
 				<variable name="init" default="0" is_global="false" />
@@ -22,7 +21,7 @@
 		</anjuta-snippet>
 
 		<anjuta-snippet trigger="for" name="For loop">
-			<languages>cpp java c-sharp</languages>
+			<languages>C++ Java C#</languages>
 			<variables>
 				<variable name="type" default="int" is_global="false" />
 				<variable name="iter" default="i" is_global="false" />

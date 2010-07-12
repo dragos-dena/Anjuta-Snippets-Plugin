@@ -21,6 +21,8 @@
 
 #include "snippets-editor.h"
 #include "snippet-variables-store.h"
+#include <libanjuta/interfaces/ianjuta-language.h>
+#include <libanjuta/interfaces/ianjuta-editor-language.h>
 
 #define EDITOR_UI      PACKAGE_DATA_DIR"/glade/snippets-editor.ui"
 
@@ -36,9 +38,16 @@
 #define DEFAULT_COL_TITLE       _("Default value")
 #define INSTANT_COL_TITLE       _("Instant value")
 
-#define MIN_NAME_COL_WIDTH  120
+#define MIN_NAME_COL_WIDTH      120
 
 #define NEW_VAR_NAME            "new_variable"
+
+#define GROUPS_COL_NAME         0
+
+#define ERROR_LANG_NULL           "<b>Error:</b> You must choose at least one language for the snippet!"
+#define ERROR_LANG_CONFLICT       "<b>Error:</b> The trigger key is already in use for one of the languages!"
+#define ERROR_TRIGGER_NOT_VALID   "<b>Error:</b> The trigger key can only contain alfanumeric characters and _ !"
+#define ERROR_TRIGGER_NULL        "<b>Error:</b> You haven't entered a trigger key for the snippet!"
 
 
 struct _SnippetsEditorPrivate
@@ -46,6 +55,8 @@ struct _SnippetsEditorPrivate
 	SnippetsDB *snippets_db;
 	AnjutaSnippet *snippet;
 	AnjutaSnippet *backup_snippet;
+	GtkListStore *group_store;
+	GtkListStore *lang_store;
 
 	/* A tree model with 2 entries: LOCAL_TYPE_STR and GLOBAL_TYPE_STR to be used
 	   by the variables view on the type column */
@@ -61,8 +72,15 @@ struct _SnippetsEditorPrivate
 	GtkEntry *keywords_entry;
 	GtkComboBox *languages_combo_box;
 	GtkComboBox *snippets_group_combo_box;
-	GtkImage *languages_warning;
-	GtkImage *group_warning;
+	GtkImage *languages_notify;
+	GtkImage *group_notify;
+	GtkImage *trigger_notify;
+
+	/* If one of the following variables is TRUE, then we have an error and the Save Button
+	   will be insensitive */
+	gboolean languages_error;
+	gboolean group_error;
+	gboolean trigger_error;
 
 	/* Variables widgets */
 	GtkTreeView *variables_view;
@@ -86,6 +104,10 @@ struct _SnippetsEditorPrivate
 	GtkButton *close_button;
 	GtkAlignment *editor_alignment;
 
+	/* So it will guard deleting the priv->snippet by calling snippets_editor_set_snippet
+	   with snippet == NULL after deleting the backup_snippet in the saving handler. */
+	gboolean saving_snippet;
+
 };
 
 enum
@@ -94,6 +116,13 @@ enum
 	VARS_VIEW_COL_TYPE,
 	VARS_VIEW_COL_DEFAULT,
 	VARS_VIEW_COL_INSTANT
+};
+
+enum
+{
+	LANG_MODEL_COL_IN_SNIPPET = 0,
+	LANG_MODEL_COL_NAME,
+	LANG_MODEL_COL_N
 };
 
 /* Handlers */
@@ -127,6 +156,14 @@ static void  on_variable_insert_button_clicked   (GtkButton *variable_insert_but
                                                   gpointer user_data);
 static void  on_variables_view_selection_changed (GtkTreeSelection *selection,
                                                   gpointer user_data);
+static void  on_snippets_group_combo_box_changed (GtkComboBox *combo_box,
+                                                  gpointer user_data);
+static void  on_languages_combo_box_changed      (GtkComboBox *combo_box,
+                                                  gpointer user_data);
+static void  on_trigger_entry_text_changed       (GObject *entry_obj,
+                                                  GParamSpec *param_spec,
+                                                  gpointer user_data);
+
 
 G_DEFINE_TYPE (SnippetsEditor, snippets_editor, GTK_TYPE_HBOX);
 
@@ -192,7 +229,9 @@ snippets_editor_init (SnippetsEditor* snippets_editor)
 	priv->snippets_db = NULL;
 	priv->snippet = NULL;	
 	priv->backup_snippet = NULL;
-
+	priv->group_store = NULL;
+	priv->lang_store = NULL;
+	
 	priv->type_model = NULL;
 
 	priv->content_text_view = NULL;
@@ -203,8 +242,9 @@ snippets_editor_init (SnippetsEditor* snippets_editor)
 	priv->languages_combo_box = NULL;
 	priv->snippets_group_combo_box = NULL;
 	priv->keywords_entry = NULL;
-	priv->languages_warning = NULL;
-	priv->group_warning = NULL;
+	priv->languages_notify = NULL;
+	priv->group_notify = NULL;
+	priv->trigger_notify = NULL;
 	
 	priv->variables_view = NULL;
 	priv->variable_add_button = NULL;
@@ -223,6 +263,8 @@ snippets_editor_init (SnippetsEditor* snippets_editor)
 	priv->save_button = NULL;
 	priv->close_button = NULL;
 	priv->editor_alignment = NULL;
+
+	priv->saving_snippet = FALSE;
 }
 
 static void
@@ -255,15 +297,16 @@ load_snippets_editor_ui (SnippetsEditor *snippets_editor)
 	priv->trigger_entry = GTK_ENTRY (gtk_builder_get_object (bxml, "trigger_entry"));
 	priv->languages_combo_box = GTK_COMBO_BOX (gtk_builder_get_object (bxml, "languages_combo_box"));
 	priv->snippets_group_combo_box = GTK_COMBO_BOX (gtk_builder_get_object (bxml, "snippets_group_combo_box"));
-	priv->languages_warning = GTK_IMAGE (gtk_builder_get_object (bxml, "languages_warning"));
-	priv->group_warning = GTK_IMAGE (gtk_builder_get_object (bxml, "group_warning"));
+	priv->languages_notify = GTK_IMAGE (gtk_builder_get_object (bxml, "languages_notify"));
+	priv->group_notify = GTK_IMAGE (gtk_builder_get_object (bxml, "group_notify"));
+	priv->trigger_notify = GTK_IMAGE (gtk_builder_get_object (bxml, "trigger_notify"));
 	priv->keywords_entry = GTK_ENTRY (gtk_builder_get_object (bxml, "keywords_entry"));
 	g_return_if_fail (GTK_IS_ENTRY (priv->name_entry));
 	g_return_if_fail (GTK_IS_ENTRY (priv->trigger_entry));
 	g_return_if_fail (GTK_IS_COMBO_BOX (priv->languages_combo_box));
 	g_return_if_fail (GTK_IS_COMBO_BOX (priv->snippets_group_combo_box));
-	g_return_if_fail (GTK_IS_IMAGE (priv->languages_warning));
-	g_return_if_fail (GTK_IS_IMAGE (priv->group_warning));
+	g_return_if_fail (GTK_IS_IMAGE (priv->languages_notify));
+	g_return_if_fail (GTK_IS_IMAGE (priv->group_notify));
 	g_return_if_fail (GTK_IS_ENTRY (priv->keywords_entry));
 	
 	/* Edit variables widgets */
@@ -616,6 +659,463 @@ init_variables_view (SnippetsEditor *snippets_editor)
 	g_object_set (G_OBJECT (priv->instant_text_cell), "editable", FALSE, NULL);
 	gtk_tree_view_insert_column (priv->variables_view, col, -1);
 
+	/* Initialize the buttons as insensitive */
+	g_object_set (priv->variable_add_button, "sensitive", FALSE, NULL);
+	g_object_set (priv->variable_remove_button, "sensitive", FALSE, NULL);
+	g_object_set (priv->variable_insert_button, "sensitive", FALSE, NULL);
+
+}
+
+static void
+focus_snippets_group_combo_box (SnippetsEditor *snippets_editor)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	AnjutaSnippetsGroup *parent_snippets_group = NULL;
+	const gchar *parent_snippets_group_name = NULL;
+	gchar *cur_group_name = NULL;
+	GtkTreeIter iter;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	/* We initialize it */
+	g_object_set (priv->snippets_group_combo_box, "active", -1, NULL);
+
+	/* If we have a snippet and it has a snippets group. */
+	if (ANJUTA_IS_SNIPPET (priv->snippet) && 
+	    ANJUTA_IS_SNIPPETS_GROUP (priv->snippet->parent_snippets_group))
+	{
+		parent_snippets_group = ANJUTA_SNIPPETS_GROUP (priv->snippet->parent_snippets_group);
+		parent_snippets_group_name = snippets_group_get_name (parent_snippets_group);
+
+		if (!gtk_tree_model_get_iter_first (GTK_TREE_MODEL (priv->group_store), &iter))
+			return;
+
+		do
+		{
+			gtk_tree_model_get (GTK_TREE_MODEL (priv->group_store), &iter,
+			                    GROUPS_COL_NAME, &cur_group_name,
+			                    -1);
+
+			if (!g_strcmp0 (cur_group_name, parent_snippets_group_name))
+			{
+				gtk_combo_box_set_active_iter (priv->snippets_group_combo_box, &iter);
+
+				g_free (cur_group_name);
+				return;
+			}
+
+			g_free (cur_group_name);
+			
+		} while (gtk_tree_model_iter_next (GTK_TREE_MODEL (priv->group_store), &iter));
+	}
+
+}
+
+static void
+init_snippets_group_combo_box (SnippetsEditor *snippets_editor)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	GtkCellRenderer *cell = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	/* Init the tree model */
+	priv->group_store = gtk_list_store_new (1, G_TYPE_STRING);
+
+	/* Set the tree model to the combo-box */
+	gtk_combo_box_set_model (priv->snippets_group_combo_box, 
+	                         GTK_TREE_MODEL (priv->group_store));
+	g_object_unref (priv->group_store);
+
+	/* Add the cell renderer */
+	cell = gtk_cell_renderer_text_new ();
+	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (priv->snippets_group_combo_box),
+	                            cell, TRUE);
+	gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (priv->snippets_group_combo_box),
+	                                cell, "text", GROUPS_COL_NAME, NULL);
+	
+}
+
+static void
+reload_snippets_group_combo_box (SnippetsEditor *snippets_editor)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	GtkTreeIter iter;
+	gchar *cur_group_name = NULL, *parent_group_name = NULL;
+	gint i = 0;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	/* Unref the old model if there is one */
+	gtk_list_store_clear (priv->group_store);
+
+	/* If we have a snippet loaded, we should re-check it in the combo-box */
+	if (ANJUTA_IS_SNIPPET (priv->snippet))
+	{
+		AnjutaSnippetsGroup *group = ANJUTA_SNIPPETS_GROUP (priv->snippet->parent_snippets_group);
+
+		parent_group_name = g_strdup (snippets_group_get_name (group));
+	}
+	
+	if (!gtk_tree_model_get_iter_first (GTK_TREE_MODEL (priv->snippets_db), &iter))
+		return;
+
+	/* Add the groups in the database to the list store */
+	do
+	{
+		/* Get the current group name from the database ... */
+		gtk_tree_model_get (GTK_TREE_MODEL (priv->snippets_db), &iter,
+		                    SNIPPETS_DB_MODEL_COL_NAME, &cur_group_name,
+		                    -1);
+
+		gtk_combo_box_append_text (priv->snippets_group_combo_box, cur_group_name);
+
+		/* If we have a snippet loaded, we search for the row. */
+		if (parent_group_name != NULL)
+		{
+			if (!g_strcmp0 (parent_group_name, cur_group_name))
+				g_object_set (priv->snippets_group_combo_box, "active", i, NULL);
+
+			i ++;
+		}
+		
+		g_free (cur_group_name);
+
+	} while (gtk_tree_model_iter_next (GTK_TREE_MODEL (priv->snippets_db), &iter));	
+
+}
+
+static void
+init_languages_combo_box (SnippetsEditor *snippets_editor)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	GtkCellRenderer *cell = NULL;
+	GtkTreeIter tree_iter;
+	GList *lang_ids = NULL, *iter = NULL;
+	gint cur_lang_id = 0;
+	const gchar *cur_lang = NULL;
+	IAnjutaLanguage *language = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	/* Initialize the model which will be used for the combo-box */
+	priv->lang_store = gtk_list_store_new (LANG_MODEL_COL_N, G_TYPE_BOOLEAN, G_TYPE_STRING);
+
+	/* Add the items */
+	language = anjuta_shell_get_interface (priv->snippets_db->anjuta_shell, 
+	                                       IAnjutaLanguage, NULL);
+	lang_ids = ianjuta_language_get_languages (language, NULL);
+	for (iter = g_list_first (lang_ids); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_lang_id = GPOINTER_TO_INT (iter->data);
+		cur_lang = ianjuta_language_get_name (language, cur_lang_id, NULL);
+		gtk_list_store_append (priv->lang_store, &tree_iter);
+		gtk_list_store_set (priv->lang_store, &tree_iter,
+		                    LANG_MODEL_COL_IN_SNIPPET, FALSE,
+		                    LANG_MODEL_COL_NAME, cur_lang,
+		                    -1);
+	}
+	g_list_free (lang_ids);
+
+	/* Set it as the model of the combo-box */
+	gtk_combo_box_set_model (priv->languages_combo_box, 
+	                         GTK_TREE_MODEL (priv->lang_store));
+
+	/* Add the cell renderers */
+	cell = gtk_cell_renderer_toggle_new ();
+	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (priv->languages_combo_box),
+	                            cell, FALSE);
+	gtk_cell_layout_add_attribute (GTK_CELL_LAYOUT (priv->languages_combo_box),
+	                               cell, "active", LANG_MODEL_COL_IN_SNIPPET);
+	
+	cell = gtk_cell_renderer_text_new ();
+	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (priv->languages_combo_box),
+	                            cell, FALSE);
+	gtk_cell_layout_add_attribute (GTK_CELL_LAYOUT (priv->languages_combo_box),
+	                               cell, "text", LANG_MODEL_COL_NAME);
+}
+
+static void
+load_languages_combo_box (SnippetsEditor *snippets_editor)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	GtkTreeIter iter;
+	gchar *cur_lang = NULL;
+	gboolean has_language = FALSE;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	/* Add the new selection or clear it */
+	if (!gtk_tree_model_get_iter_first (GTK_TREE_MODEL (priv->lang_store), &iter))
+		g_return_if_reached ();
+
+	do
+	{
+		/* Clear it */
+		gtk_list_store_set (priv->lang_store, &iter,
+		                    LANG_MODEL_COL_IN_SNIPPET, FALSE,
+		                    -1);
+
+		/* If we have a snippet loaded, we also populate the checklist */
+		if (ANJUTA_IS_SNIPPET (priv->snippet))
+		{
+			gtk_tree_model_get (GTK_TREE_MODEL (priv->lang_store), &iter,
+			                    LANG_MODEL_COL_NAME, &cur_lang,
+			                    -1);
+
+			has_language = snippet_has_language (priv->snippet, cur_lang);
+			gtk_list_store_set (priv->lang_store, &iter,
+			                    LANG_MODEL_COL_IN_SNIPPET, has_language,
+			                    -1);
+	
+			g_free (cur_lang);
+		}
+		
+	} while (gtk_tree_model_iter_next (GTK_TREE_MODEL (priv->lang_store), &iter));
+
+	/* The combo box should be sensitive only if there is a snippet loaded */
+	g_object_set (priv->languages_combo_box, "sensitive", 
+	              ANJUTA_IS_SNIPPET (priv->snippet), NULL);
+}
+
+static void
+load_keywords_entry (SnippetsEditor *snippets_editor)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	GList *keywords = NULL, *iter = NULL;
+	const gchar *cur_keyword = NULL;
+	GString *keywords_string = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	/* Clear the text entry */
+	gtk_entry_set_text (priv->keywords_entry, "");
+
+	/* If there is a snippet loaded, add the keywords */
+	if (ANJUTA_IS_SNIPPET (priv->snippet))
+	{
+		keywords = snippet_get_keywords_list (priv->snippet);
+		keywords_string = g_string_new ("");
+		
+		for (iter = g_list_first (keywords); iter != NULL; iter = g_list_next (iter))
+		{
+			cur_keyword = (const gchar *)iter->data;
+			g_string_append (keywords_string, cur_keyword);
+			g_string_append (keywords_string, " ");
+		}
+
+		gtk_entry_set_text (priv->keywords_entry, keywords_string->str);
+		
+		g_string_free (keywords_string, TRUE);
+		g_list_free (keywords);
+	}
+}
+
+static void
+save_keywords_entry (SnippetsEditor *snippets_editor)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	GList *keywords = NULL;
+	gchar **keywords_array = NULL;
+	gint i = 0;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	keywords_array = g_strsplit (gtk_entry_get_text (priv->keywords_entry), " ", -1);
+
+	/* Add each item of the array to the list */
+	while (keywords_array[i])
+	{
+		/* In case the user entered more than one space between keywords */
+		if (g_strcmp0 (keywords_array[i], ""))
+			keywords = g_list_append (keywords, keywords_array[i]);
+		
+		i ++;
+	}
+
+	snippet_set_keywords_list (priv->snippet, keywords);
+	g_strfreev (keywords_array);
+	g_list_free (keywords);
+	
+}
+
+static gboolean
+check_trigger_entry (SnippetsEditor *snippets_editor)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	gboolean valid = TRUE;
+	guint16 i = 0, text_length = 0;
+	const gchar *text = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor), FALSE);
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	/* Check the text is valid only if there is a snippet loaded */
+	if (ANJUTA_IS_SNIPPET (priv->snippet))
+	{
+		text        = gtk_entry_get_text (priv->trigger_entry);
+		text_length = gtk_entry_get_text_length (priv->trigger_entry);
+
+		for (i = 0; i < text_length; i ++)
+			if (!g_ascii_isalnum (text[i]) && text[i] != '_')
+			{
+				/* Set as invalid and set the according error message */
+				g_object_set (priv->trigger_notify, "tooltip-markup", ERROR_TRIGGER_NOT_VALID, NULL);
+				valid = FALSE;
+				break;
+			}
+
+		/* If there isn't a trigger-key entered, we also show an error message, but a
+		   different one */
+		if (text_length == 0)
+		{
+			g_object_set (priv->trigger_notify, "tooltip-markup", ERROR_TRIGGER_NULL, NULL);
+			valid = FALSE;
+		}
+	}
+
+	/* Show or hide */
+	g_object_set (priv->trigger_notify, "visible", !valid, NULL);
+
+	return valid;
+}
+
+static gboolean
+check_languages_combo_box (SnippetsEditor *snippets_editor)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	GtkTreeIter iter;
+	gchar *lang_name = NULL;
+	const gchar *trigger = NULL;
+	gboolean no_lang_selected = TRUE;
+	AnjutaSnippet *conflicting_snippet = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor), FALSE);
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	trigger = gtk_entry_get_text (priv->trigger_entry);
+
+	/* We should always have this tree model filled */
+	if (!gtk_tree_model_get_iter_first (GTK_TREE_MODEL (priv->lang_store), &iter))
+		g_return_val_if_reached (FALSE);
+
+	/* We initialize the error image by hiding it */
+	g_object_set (priv->languages_notify, "visible", FALSE, NULL);
+
+	if (!ANJUTA_IS_SNIPPET (priv->snippet))
+		return TRUE;
+
+	/* We check each language to see if it doesen't cause a conflict */
+	do
+	{
+		gtk_tree_model_get (GTK_TREE_MODEL (priv->lang_store), &iter,
+		                    LANG_MODEL_COL_NAME, &lang_name,
+		                    -1);
+
+		if (snippet_has_language (priv->snippet, lang_name))
+		{
+			conflicting_snippet = snippets_db_get_snippet (priv->snippets_db, trigger, lang_name);
+
+			no_lang_selected = FALSE;
+
+			/* If there is a conflicting snippet and it isn't the one we had backed-up,
+			   we make visible the error icon. */
+			if (ANJUTA_IS_SNIPPET (conflicting_snippet) && 
+			    priv->backup_snippet != conflicting_snippet)
+			{
+				g_object_set (priv->languages_notify, "tooltip-markup", ERROR_LANG_CONFLICT, NULL);
+				g_object_set (priv->languages_notify, "visible", TRUE, NULL);
+
+				g_free (lang_name);
+				return FALSE;
+			}
+
+		}
+
+		g_free (lang_name);
+			
+	} while (gtk_tree_model_iter_next (GTK_TREE_MODEL (priv->lang_store), &iter));
+
+	/* If the user doesn't have any language selected, we show a warning. */
+	if (no_lang_selected)
+	{
+		g_object_set (priv->languages_notify, "tooltip-markup", ERROR_LANG_NULL, NULL);
+		g_object_set (priv->languages_notify, "visible", TRUE, NULL);
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static gboolean
+check_group_combo_box (SnippetsEditor *snippets_editor)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	gboolean has_selection = FALSE;
+	
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor), FALSE);
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	has_selection = (gtk_combo_box_get_active (priv->snippets_group_combo_box) >= 0);
+	g_object_set (priv->group_notify, "visible", 
+	              !has_selection && ANJUTA_IS_SNIPPET (priv->snippet), 
+	              NULL);
+
+	return has_selection;
+}
+
+static void
+check_all_inputs (SnippetsEditor *snippets_editor)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	gboolean no_errors = FALSE;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	/* We check we don't have any errors */
+	no_errors = (!priv->languages_error && !priv->group_error && !priv->trigger_error);
+
+	g_object_set (priv->save_button, "sensitive", no_errors, NULL);
+}
+
+static void
+init_input_errors (SnippetsEditor *snippets_editor)
+{
+	SnippetsEditorPrivate *priv = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	g_object_set (priv->group_notify, "visible", FALSE, NULL);
+	g_object_set (priv->languages_notify, "visible", FALSE, NULL);
+	g_object_set (priv->trigger_notify, "visible", FALSE, NULL);
+	
+	priv->group_error     = !check_languages_combo_box (snippets_editor);
+	priv->languages_error = !check_group_combo_box (snippets_editor);
+	priv->trigger_error   = !check_trigger_entry (snippets_editor);
+
+	check_all_inputs (snippets_editor);
 }
 
 static void
@@ -671,6 +1171,18 @@ init_editor_handlers (SnippetsEditor *snippets_editor)
 	                  "changed",
 	                  G_CALLBACK (on_variables_view_selection_changed),
 	                  snippets_editor);
+	g_signal_connect (G_OBJECT (priv->snippets_group_combo_box),
+	                  "changed",
+	                  G_CALLBACK (on_snippets_group_combo_box_changed),
+	                  snippets_editor);
+	g_signal_connect (G_OBJECT (priv->languages_combo_box),
+	                  "changed",
+	                  G_CALLBACK (on_languages_combo_box_changed),
+	                  snippets_editor);
+	g_signal_connect (G_OBJECT (priv->trigger_entry),
+	                  "notify::text",
+	                  G_CALLBACK (on_trigger_entry_text_changed),
+	                  snippets_editor);
 }
 
 SnippetsEditor *
@@ -679,7 +1191,7 @@ snippets_editor_new (SnippetsDB *snippets_db)
 	SnippetsEditor *snippets_editor = 
 	          ANJUTA_SNIPPETS_EDITOR (g_object_new (snippets_editor_get_type (), NULL));
 	SnippetsEditorPrivate *priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
-	
+
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), snippets_editor);
 
@@ -694,10 +1206,20 @@ snippets_editor_new (SnippetsDB *snippets_db)
 	/* Initialize the variables tree view */
 	init_variables_view (snippets_editor);
 
-	/* TODO - connect the handlers */
+	/* Initialize the snippets-group combo box */
+	init_snippets_group_combo_box (snippets_editor);
+	reload_snippets_group_combo_box (snippets_editor);
+
+	/* Initialize the languages combo box */
+	init_languages_combo_box (snippets_editor);
+	
+	/* Connect the handlers */
 	init_editor_handlers (snippets_editor);
 
-
+	/* Initialize the buttons as insensitive */
+	g_object_set (priv->save_button, "sensitive", FALSE, NULL);
+	g_object_set (priv->languages_combo_box, "sensitive", FALSE, NULL);
+	g_object_set (priv->snippets_group_combo_box, "sensitive", FALSE, NULL);
 	
 	return snippets_editor;
 }
@@ -715,8 +1237,10 @@ load_content_to_editor (SnippetsEditor *snippets_editor)
 
 	/* If we don't have a snippet loaded we don't do anything */
 	if (!ANJUTA_IS_SNIPPET (priv->snippet))
-		return;
-
+	{
+		text = g_strdup ("");
+	}
+	else
 	if (gtk_toggle_button_get_active (priv->preview_button))
 	{
 		text = snippet_get_default_content (priv->snippet,
@@ -770,35 +1294,67 @@ snippets_editor_set_snippet (SnippetsEditor *snippets_editor,
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (snippets_editor));
-	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
 	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (snippets_editor);
+
+	/* If we are saving the snippet, we need to guard entering this method because
+	   it will be called by the selection changed handler in the browser */
+	if (priv->saving_snippet)
+		return;
 
 	/* Delete the old snippet */
 	if (ANJUTA_IS_SNIPPET (priv->snippet))
 		g_object_unref (priv->snippet);
+
 	/* Set the current snippet */
 	priv->backup_snippet = snippet;
-	priv->snippet = snippet_copy (snippet);
+	if (ANJUTA_IS_SNIPPET (snippet))
+		priv->snippet = snippet_copy (snippet);
+	else
+		priv->snippet = NULL;
+
+	/* Set the sensitive property of the widgets */
+	g_object_set (priv->save_button, "sensitive", ANJUTA_IS_SNIPPET (snippet), NULL);
+	g_object_set (priv->variable_add_button, "sensitive", ANJUTA_IS_SNIPPET (snippet), NULL);
+	g_object_set (priv->languages_combo_box, "sensitive", ANJUTA_IS_SNIPPET (snippet), NULL);
+	g_object_set (priv->snippets_group_combo_box, "sensitive", ANJUTA_IS_SNIPPET (snippet), NULL);
+	g_object_set (priv->name_entry, "sensitive", ANJUTA_IS_SNIPPET (snippet), NULL);
+	g_object_set (priv->trigger_entry, "sensitive", ANJUTA_IS_SNIPPET (snippet), NULL);
+	g_object_set (priv->keywords_entry, "sensitive", ANJUTA_IS_SNIPPET (snippet), NULL);
+	g_object_set (priv->content_text_view, "sensitive", ANJUTA_IS_SNIPPET (snippet), NULL);
 
 	/* Initialize the snippet content editor */
 	load_content_to_editor (snippets_editor);
 
 	/* Initialize the name property */
-	gtk_entry_set_text (priv->name_entry, snippet_get_name (snippet));
-
+	if (ANJUTA_IS_SNIPPET (snippet))
+		gtk_entry_set_text (priv->name_entry, snippet_get_name (snippet));
+	else
+		gtk_entry_set_text (priv->name_entry, "");
+	
 	/* Initialize the trigger-key property */
-	gtk_entry_set_text (priv->trigger_entry, snippet_get_trigger_key (snippet));
+	if (ANJUTA_IS_SNIPPET (snippet))
+		gtk_entry_set_text (priv->trigger_entry, snippet_get_trigger_key (snippet));
+	else
+		gtk_entry_set_text (priv->trigger_entry, "");
 
-	/* Initialize the languages combo-box property */
-	/* TODO */
+	/* Initialize the snippets group combo-box property */
+	reload_snippets_group_combo_box (snippets_editor);
+	focus_snippets_group_combo_box (snippets_editor);
 
+	/* Initialize the language combo-box property */
+	load_languages_combo_box (snippets_editor);
+	
 	/* Initialize the keywords text-view property */
-	/* TODO */
+	load_keywords_entry (snippets_editor);
 
 	/* Initialize the variables tree-view - load the variables tree model with the variables
 	   from the current snippet*/
 	snippet_vars_store_unload (priv->vars_store);
-	snippet_vars_store_load (priv->vars_store, priv->snippets_db, priv->snippet);
+	if (ANJUTA_IS_SNIPPET (priv->snippet))
+		snippet_vars_store_load (priv->vars_store, priv->snippets_db, priv->snippet);
+
+	/* We initialize the errors/warnings */
+	init_input_errors (snippets_editor);
 
 }
 
@@ -807,13 +1363,6 @@ snippets_editor_set_snippet_new (SnippetsEditor *snippets_editor)
 {
 
 }
-
-void
-snippets_editor_delete_current_snippet (SnippetsEditor *snippets_editor)
-{
-
-}
-
 
 static void  
 on_preview_button_toggled (GtkToggleButton *preview_button,
@@ -862,18 +1411,23 @@ on_save_button_clicked (GtkButton *save_button,
 	if (!ANJUTA_IS_SNIPPETS_GROUP (priv->snippet->parent_snippets_group))
 		return;
 
-	/* TODO - check the trigger-key/languages aren't conflicting and show warning
-	   windows */
-
+	/* Copy over the name, trigger and keywords */
+	snippet_set_name (priv->snippet, gtk_entry_get_text (priv->name_entry));
+	snippet_set_trigger_key (priv->snippet, gtk_entry_get_text (priv->trigger_entry));
+	save_keywords_entry (snippets_editor);
+	
 	/* Save the content */
 	if (!gtk_toggle_button_get_active (priv->preview_button))
 		save_content_from_editor (snippets_editor);
 
-	/* Delete the back-up snippet */
-	snippets_db_remove_snippet (priv->snippets_db, 
-	                            snippet_get_trigger_key (priv->backup_snippet),
-	                            snippet_get_any_language (priv->backup_snippet),
-	                            TRUE);
+	/* Delete the back-up snippet if there is one (we don't have one if it's a new snippet)*/
+	priv->saving_snippet = TRUE;
+	if (ANJUTA_IS_SNIPPET (priv->backup_snippet))
+		snippets_db_remove_snippet (priv->snippets_db, 
+			                        snippet_get_trigger_key (priv->backup_snippet),
+			                        snippet_get_any_language (priv->backup_snippet),
+			                        TRUE);
+	/* Add the new snippet */
 	parent_snippets_group = ANJUTA_SNIPPETS_GROUP (priv->snippet->parent_snippets_group);
 	snippets_db_add_snippet (priv->snippets_db,
 	                         priv->snippet,
@@ -886,6 +1440,7 @@ on_save_button_clicked (GtkButton *save_button,
 	/* Emit the signal that the snippet was saved */
 	g_signal_emit_by_name (snippets_editor, "snippet-saved", priv->backup_snippet);
 
+	priv->saving_snippet = FALSE;
 }
 
 static void
@@ -1135,4 +1690,105 @@ on_variables_view_selection_changed (GtkTreeSelection *selection,
 	                    -1);
 	g_object_set (priv->variable_remove_button, "sensitive", in_snippet, NULL);
 
+}
+
+static void
+on_snippets_group_combo_box_changed (GtkComboBox *combo_box,
+                                     gpointer user_data)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	GtkTreeIter iter;
+	gchar *group_name = NULL;
+	AnjutaSnippetsGroup *snippets_group = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (user_data));	
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (user_data);
+
+	/* If we have a snippet loaded, we change his parent */
+	if (ANJUTA_IS_SNIPPET (priv->snippet))
+	{
+		if (!gtk_combo_box_get_active_iter (priv->snippets_group_combo_box, &iter))
+		{	
+			priv->group_error = !check_group_combo_box (ANJUTA_SNIPPETS_EDITOR (user_data));
+			check_all_inputs (ANJUTA_SNIPPETS_EDITOR (user_data));
+			return;
+		}
+		
+		gtk_tree_model_get (GTK_TREE_MODEL (priv->group_store), &iter,
+		                    GROUPS_COL_NAME, &group_name,
+		                    -1);
+
+		snippets_group = snippets_db_get_snippets_group (priv->snippets_db, group_name);
+		g_return_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group));
+
+		priv->snippet->parent_snippets_group = G_OBJECT (snippets_group);
+
+		g_free (group_name);
+	}
+
+	priv->group_error = !check_group_combo_box (ANJUTA_SNIPPETS_EDITOR (user_data));
+	check_all_inputs (ANJUTA_SNIPPETS_EDITOR (user_data));
+}
+
+
+static void
+on_languages_combo_box_changed (GtkComboBox *combo_box,
+                                gpointer user_data)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	GtkTreeIter iter;
+	gboolean in_snippet = FALSE;
+	gchar *lang_name = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (user_data));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (user_data);
+
+	/* This will happen because we set at the end of this function -1 as active */
+	if (gtk_combo_box_get_active (combo_box) < 0)
+		return;
+
+	if (!gtk_combo_box_get_active_iter (combo_box, &iter))
+		g_return_if_reached ();
+
+	/* We reverse the setting */
+	gtk_tree_model_get (GTK_TREE_MODEL (priv->lang_store), &iter,
+	                    LANG_MODEL_COL_IN_SNIPPET, &in_snippet,
+	                    LANG_MODEL_COL_NAME, &lang_name,
+	                    -1);
+	gtk_list_store_set (priv->lang_store, &iter,
+	                    LANG_MODEL_COL_IN_SNIPPET, !in_snippet,
+	                    -1);
+	
+	if (!in_snippet)
+		snippet_add_language (priv->snippet, lang_name);
+	else
+		snippet_remove_language (priv->snippet, lang_name);
+
+	g_free (lang_name);
+
+	/* We don't want anything to show when there isn't a popup */
+	gtk_combo_box_set_active (combo_box, -1);
+
+	priv->languages_error = !check_languages_combo_box (ANJUTA_SNIPPETS_EDITOR (user_data));
+
+	check_all_inputs (ANJUTA_SNIPPETS_EDITOR (user_data));
+}
+
+static void
+on_trigger_entry_text_changed (GObject *entry_obj,
+                               GParamSpec *param_spec,
+                               gpointer user_data)
+{
+	SnippetsEditorPrivate *priv = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (user_data));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (user_data);
+
+	priv->trigger_error = !check_trigger_entry (ANJUTA_SNIPPETS_EDITOR (user_data));
+	priv->languages_error = !check_languages_combo_box (ANJUTA_SNIPPETS_EDITOR (user_data));
+
+	check_all_inputs (ANJUTA_SNIPPETS_EDITOR (user_data));
 }

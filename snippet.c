@@ -197,7 +197,6 @@ snippet_new (const gchar* trigger_key,
 	
 	/* Assertions */
 	g_return_val_if_fail (trigger_key != NULL, NULL);
-	g_return_val_if_fail (snippet_languages != NULL, NULL);
 	g_return_val_if_fail (snippet_name != NULL, NULL);
 	g_return_val_if_fail (snippet_content != NULL, NULL);
 	g_return_val_if_fail (g_list_length (variable_names) == g_list_length (variable_default_values),
@@ -217,8 +216,7 @@ snippet_new (const gchar* trigger_key,
 	snippet->priv->snippet_languages = NULL;
 	for (iter1 = g_list_first (snippet_languages); iter1 != NULL; iter1 = g_list_next (iter1))
 	{
-		/* We keep all languages with lower letters */
-		temporary_string_holder = g_utf8_strdown ((const gchar *)iter1->data, -1);
+		temporary_string_holder = g_strdup ((const gchar *)iter1->data);
 		snippet->priv->snippet_languages = g_list_append (snippet->priv->snippet_languages,
 		                                                  temporary_string_holder);
 	}
@@ -449,12 +447,12 @@ snippet_add_language (AnjutaSnippet *snippet,
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
 	g_return_if_fail (snippet->priv != NULL);
-	
+
 	if (snippet_has_language (snippet, language))
 		return;
 
 	snippet->priv->snippet_languages = g_list_append (snippet->priv->snippet_languages, 
-	                                                  (gchar *)language);
+	                                                  g_strdup (language));
 }
 
 
@@ -561,7 +559,7 @@ snippet_get_keywords_list (AnjutaSnippet* snippet)
  * @snippet: An #AnjutaSnippet object.
  * @keywords_list: The new list of keywords for the snippet.
  *
- * Sets a new keywords list. 
+ * Sets a new keywords list.
  */
 void
 snippet_set_keywords_list (AnjutaSnippet *snippet,
@@ -569,7 +567,8 @@ snippet_set_keywords_list (AnjutaSnippet *snippet,
 {
 	GList *iter = NULL;
 	AnjutaSnippetPrivate *priv = NULL;
-	
+	gchar *cur_keyword = NULL;
+
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
 	priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
@@ -585,7 +584,8 @@ snippet_set_keywords_list (AnjutaSnippet *snippet,
 	/* Copy over the new list */
 	for (iter = g_list_first ((GList *)keywords_list); iter != NULL; iter = g_list_next (iter))
 	{
-		priv->keywords = g_list_append (priv->keywords, iter->data);
+		cur_keyword = g_strdup ((const gchar *)iter->data);
+		priv->keywords = g_list_append (priv->keywords, cur_keyword);
 	}
 	
 }
@@ -1185,23 +1185,27 @@ snippet_is_equal (AnjutaSnippet *snippet,
                   AnjutaSnippet *snippet2)
 {
 	const gchar *trigger = NULL, *trigger2 = NULL, *cur_lang = NULL;
-	GList *iter = NULL;
+	GList *iter = NULL, *languages = NULL;
 	AnjutaSnippetPrivate *priv = NULL;
 	
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
 	priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
+
 	trigger  = snippet_get_trigger_key (snippet);
 	trigger2 = snippet_get_trigger_key (snippet2);
-
+	languages  = (GList *)snippet_get_languages (snippet);
+	
 	if (!g_strcmp0 (trigger, trigger2))
-		for (iter = g_list_first (priv->snippet_languages); iter != NULL; iter = g_list_next (iter))
+	{
+		for (iter = g_list_first (languages); iter != NULL; iter = g_list_next (iter))
 		{
 			cur_lang = (gchar *)iter->data;
 			if (snippet_has_language (snippet2, cur_lang))
 				return TRUE;
 		}
+	}
 
 	return FALSE;
 }
