@@ -452,8 +452,6 @@ static gchar*
 get_internal_global_variable_value (AnjutaShell *shell,
                                     const gchar* variable_name)
 {
-	gchar* value = NULL;
-
 	/* Assertions */
 	g_return_val_if_fail (variable_name != NULL, NULL);
 
@@ -470,28 +468,22 @@ get_internal_global_variable_value (AnjutaShell *shell,
 		{
 			anjuta_cur_doc = ianjuta_document_manager_get_current_document (anjuta_docman, NULL);
 			if (!anjuta_cur_doc)
-				return NULL;
-			value = g_strdup (ianjuta_document_get_filename (anjuta_cur_doc, NULL));
-			return value;
+				return g_strdup ("");
+
+			return g_strdup (ianjuta_document_get_filename (anjuta_cur_doc, NULL));
 		}
 		else
-			return NULL;
+			return g_strdup ("");
 	}
+	
 	if (!g_strcmp0 (variable_name, GLOBAL_VAR_USER_NAME))
-	{
-		value = g_strdup (g_get_user_name ());
-		return value;
-	}
+		return g_strdup (g_get_user_name ());
+
 	if (!g_strcmp0 (variable_name, GLOBAL_VAR_USER_FULL_NAME))
-	{
-		value = g_strdup (g_get_real_name ());
-		return value;
-	}
+		return g_strdup (g_get_real_name ());
+
 	if (!g_strcmp0 (variable_name, GLOBAL_VAR_HOST_NAME))
-	{
-		value = g_strdup (g_get_host_name ());
-		return value;
-	}
+		return g_strdup (g_get_host_name ());
 	
 	return NULL;
 }

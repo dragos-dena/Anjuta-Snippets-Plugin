@@ -660,7 +660,7 @@ snippet_vars_store_add_variable_to_snippet (SnippetVarsStore *vars_store,
 			                -1);
 	}
 
-	snippet_add_variable (priv->snippet, variable_name, "", FALSE);
+	snippet_add_variable (priv->snippet, variable_name, "", get_global);
 }
 
 /**

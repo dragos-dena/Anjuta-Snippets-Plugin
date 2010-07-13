@@ -1045,7 +1045,18 @@ static void
 on_add_snippet_menu_item_activated (GtkMenuItem *menu_item,
                                     gpointer user_data)
 {
-	/* TODO */
+	SnippetsBrowserPrivate *priv = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (user_data));
+	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (user_data);
+
+	/* Request a maximize/unmaximize (which should be caught by the plugin) */
+	if (!priv->maximized)
+		g_signal_emit_by_name (G_OBJECT (user_data),
+		                       "maximize-request");
+		                       
+	snippets_editor_set_snippet_new (priv->snippets_editor);
 }
 
 static void     
