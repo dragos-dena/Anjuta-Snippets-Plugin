@@ -32,12 +32,9 @@
 #include <glib/gstdio.h>
 #include <gtk/gtk.h>
 
+#define DEFAULT_SNIPPETS_FILE               "snippets.xml"
 #define DEFAULT_GLOBAL_VARS_FILE            "snippets-global-variables.xml"
-#define COMMENTS_LICENSES_INSTALL_PATH      PACKAGE_DATA_DIR"/"COMMENTS_LICENSES_SNIPPETS_FILE
-#define GENERAL_PURPOSE_INSTALL_PATH        PACKAGE_DATA_DIR"/"GENERAL_PURPOSE_SNIPPETS_FILE
-#define DEFAULT_GLOBAL_VARS_INSTALL_PATH    PACKAGE_DATA_DIR"/"DEFAULT_GLOBAL_VARS_FILE
 #define USER_SNIPPETS_DB_DIR                "snippets-database"
-#define USER_SNIPPETS_DIR                   "snippets-database/snippet-packages"
 
 #define SNIPPETS_DB_MODEL_DEPTH             2
 
@@ -49,18 +46,15 @@
 
 #define ANJUTA_SNIPPETS_DB_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ANJUTA_TYPE_SNIPPETS_DB, SnippetsDBPrivate))
 
-static gchar* default_snippet_files[] = {
-	"general-purpose-snippets.xml",
-	"comments-and-licenses-snippets.xml"
+static gchar *default_files[] = {
+	DEFAULT_SNIPPETS_FILE,
+	DEFAULT_GLOBAL_VARS_FILE
 };
+
 
 /**
  * SnippetsDBPrivate:
  * @snippets_groups: A #GList where the #AnjutaSnippetsGroup objects are loaded.
- * @unsaved_snippets_group: A #GList where the unsaved #AnjutaSnippetsGroup objects are tracked.
- *                          Important: One should not try to destroy the objects in this group,
- *                          as they are saved in @snippets_groups. This is just for tracking 
- *                          purposes.
  * @trigger_keys_tree: A #GTree with the keys being a string representing the trigger-key and
  *                     the values being a #GList with #AnjutaSnippet as entries for the list.
  *                     Important: One should not try to delete anything. The #GTree was constructed
@@ -85,7 +79,6 @@ static gchar* default_snippet_files[] = {
 struct _SnippetsDBPrivate
 {	
 	GList* snippets_groups;
-	GList* unsaved_snippets_groups;
 	
 	GTree* trigger_keys_tree;
 	GTree* keywords_tree;
@@ -281,74 +274,49 @@ remove_snippets_group_from_searching_trees (SnippetsDB *snippets_db,
 static void
 copy_default_files_to_user_folder (SnippetsDB *snippets_db)
 {
-	/* In this function we should copy the default snippet files and the global variables
+	/* In this function we should copy the default snippets file and the global variables
 	   files in the user folder if there aren't already files with the same name in that
 	   folder */
-	gchar *user_snippets_path = NULL, *user_snippets_db_path = NULL, *cur_file_user_path = NULL,
-	      *cur_file_installation_path = NULL, *global_vars_user_path = NULL,
-	      *global_vars_installation_path = NULL;
-	gint i = 0;
+	gchar *cur_user_path = NULL, *cur_installation_path = NULL,
+	      *user_snippets_db_path = NULL;
+	GFile *cur_user_file = NULL, *cur_installation_file = NULL;
 	gboolean cur_file_exists = FALSE, copy_success = FALSE;
-	GFile *cur_installation_file = NULL, *cur_user_file = NULL,
-	      *global_vars_installation_file = NULL, *global_vars_user_file = NULL;
-	
+	gint i = 0;
+
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
 
-	/* Compute the user_snippets and user_snippets_db file paths */
-	user_snippets_path    = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DIR, "/", NULL);
+	/* Compute the user_snippets_db file paths */
 	user_snippets_db_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DB_DIR, "/", NULL);
 
-	/* Copy the snippet-package files if they don't exist in the user_folder */
-	for (i = 0; i < G_N_ELEMENTS (default_snippet_files); i ++)
+	for (i = 0; i < G_N_ELEMENTS (default_files); i ++)
 	{
-		cur_file_user_path         = g_strconcat (user_snippets_path, "/", default_snippet_files[i], NULL);
-		cur_file_installation_path = g_strconcat (PACKAGE_DATA_DIR, "/", default_snippet_files[i], NULL);
+		cur_user_path         = g_strconcat (user_snippets_db_path, "/", default_files[i], NULL);
+		cur_installation_path = g_strconcat (PACKAGE_DATA_DIR, "/", default_files[i], NULL);
 
-		/* We test if the current file is in the user folder. If it isn't we copy it from the installation
-		   folder. */
-		cur_file_exists = g_file_test (cur_file_user_path, G_FILE_TEST_EXISTS);
+		cur_file_exists = g_file_test (cur_user_path, G_FILE_TEST_EXISTS);
 		if (!cur_file_exists)
 		{
-			cur_installation_file = g_file_new_for_path (cur_file_installation_path);
-			cur_user_file         = g_file_new_for_path (cur_file_user_path);
+			cur_installation_file = g_file_new_for_path (cur_installation_path);
+			cur_user_file         = g_file_new_for_path (cur_user_path);
 
-			copy_success = g_file_copy (cur_installation_file,
-			                            cur_user_file,
+			copy_success = g_file_copy (cur_installation_file, cur_user_file,
 			                            G_FILE_COPY_NONE,
 			                            NULL, NULL, NULL, NULL);
 
 			if (!copy_success)
-				DEBUG_PRINT ("Copying of %s failed", default_snippet_files[i]);
+				DEBUG_PRINT ("Copying of %s failed.", default_files[i]);
+
+			g_object_unref (cur_installation_file);
+			g_object_unref (cur_user_file);
 		}
 
-		g_free (cur_file_user_path);
-		g_free (cur_file_installation_path);
+		g_free (cur_user_path);
+		g_free (cur_installation_path);
 	}
 
-	/* Copy the global variables file */
-	global_vars_user_path  = g_strconcat (user_snippets_db_path, "/", DEFAULT_GLOBAL_VARS_FILE, NULL);
-	global_vars_installation_path = g_strconcat (PACKAGE_DATA_DIR, "/", DEFAULT_GLOBAL_VARS_FILE, NULL);
-
-	cur_file_exists = g_file_test (global_vars_user_path, G_FILE_TEST_EXISTS);
-	if (!cur_file_exists)
-	{
-		global_vars_installation_file = g_file_new_for_path (global_vars_installation_path);
-		global_vars_user_file         = g_file_new_for_path (global_vars_user_path);
-
-		copy_success = g_file_copy (global_vars_installation_file,
-		                            global_vars_user_file,
-		                            G_FILE_COPY_NONE,
-		                            NULL, NULL, NULL, NULL);
-
-		if (!copy_success)
-			DEBUG_PRINT ("Copying of %s failed", DEFAULT_GLOBAL_VARS_FILE);
-	}
-	g_free (global_vars_user_path);
-	g_free (global_vars_installation_path);
-
-	g_free (user_snippets_path);
 	g_free (user_snippets_db_path);
+
 }
 
 static void
@@ -403,7 +371,7 @@ load_internal_global_variables (SnippetsDB *snippets_db)
 static void
 load_global_variables (SnippetsDB *snippets_db)
 {
-	gchar *global_vars_user_path = NULL, *snippets_db_user_path = NULL;
+	gchar *global_vars_user_path = NULL;
 
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
@@ -411,39 +379,38 @@ load_global_variables (SnippetsDB *snippets_db)
 	/* Load the internal global variables */
 	load_internal_global_variables (snippets_db);
 
-	snippets_db_user_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DB_DIR, "/", NULL);
-	global_vars_user_path = g_strconcat (snippets_db_user_path, "/", DEFAULT_GLOBAL_VARS_FILE, NULL);
-
+	global_vars_user_path = 
+		anjuta_util_get_user_data_file_path (USER_SNIPPETS_DB_DIR, "/", 
+		                                     DEFAULT_GLOBAL_VARS_FILE, NULL);
 	snippets_manager_parse_variables_xml_file (global_vars_user_path, snippets_db);
 
-	g_free (snippets_db_user_path);
 	g_free (global_vars_user_path);	
 }
 
 static void
-load_default_snippets (SnippetsDB *snippets_db)
+load_snippets (SnippetsDB *snippets_db)
 {
-	GDir *user_snippets_dir = NULL;
-	gchar *user_snippets_path = NULL, *cur_file_path = NULL;
-	const gchar *cur_file_name = NULL;
-	
+	gchar *user_snippets_path;
+	GList *snippets_groups = NULL, *iter = NULL;
+	AnjutaSnippetsGroup *snippets_group = NULL;
+
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
 
-	user_snippets_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DIR, "/", NULL);
-	user_snippets_dir  = g_dir_open (user_snippets_path, 0, NULL);
-	
-	cur_file_name = g_dir_read_name (user_snippets_dir);
-	while (cur_file_name)
+	user_snippets_path = 
+		anjuta_util_get_user_data_file_path (USER_SNIPPETS_DB_DIR, "/", 
+		                                     DEFAULT_SNIPPETS_FILE, NULL);
+
+	snippets_groups = snippets_manager_parse_snippets_xml_file (user_snippets_path, NATIVE_FORMAT);
+
+	for (iter = g_list_first (snippets_groups); iter != NULL; iter = g_list_next (iter))
 	{
-		cur_file_path = g_strconcat (user_snippets_path, "/", cur_file_name, NULL);
+		snippets_group = ANJUTA_SNIPPETS_GROUP (iter->data);
+		if (!ANJUTA_IS_SNIPPETS_GROUP (snippets_group))
+			continue;
 
-		snippets_db_load_file (snippets_db, cur_file_path, TRUE, TRUE, NATIVE_FORMAT);
-
-		g_free (cur_file_path);
-		cur_file_name = g_dir_read_name (user_snippets_dir);
+		snippets_db_add_snippets_group (snippets_db, snippets_group, TRUE);
 	}
-	g_dir_close (user_snippets_dir);
 
 	g_free (user_snippets_path);
 }
@@ -629,7 +596,6 @@ snippets_db_init (SnippetsDB *snippets_db)
 
 	/* Initialize the private fields */
 	snippets_db->priv->snippets_groups = NULL;
-	snippets_db->priv->unsaved_snippets_groups = NULL;
 	snippets_db->priv->trigger_keys_tree = g_tree_new_full (trigger_keys_tree_compare_func,
 	                                                        NULL,
 	                                                        g_free,
@@ -680,7 +646,7 @@ snippets_db_load (SnippetsDB *snippets_db)
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
 
 	/* Make sure we have the user folder */
-	user_snippets_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DIR, "/", NULL);
+	user_snippets_path = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DB_DIR, "/", NULL);
 	g_mkdir_with_parents (user_snippets_path, 0755);
 
 	/* Check if the default snippets file is in the user directory and copy them
@@ -689,7 +655,7 @@ snippets_db_load (SnippetsDB *snippets_db)
 
 	/* Load the snippets and global variables */
 	load_global_variables (snippets_db);
-	load_default_snippets (snippets_db);
+	load_snippets (snippets_db);
 }
 
 /**
@@ -707,14 +673,14 @@ snippets_db_close (SnippetsDB *snippets_db)
 	AnjutaSnippetsGroup *cur_snippets_group = NULL;
 	SnippetsDBPrivate *priv = NULL;
 	GtkTreePath *path = NULL;
-	
+
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
 	g_return_if_fail (snippets_db->priv != NULL);
 	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
 	
 	/* Save all the files */
-	snippets_db_save_all (snippets_db);
+	// save_snippets (snippets_db);
 	/* TODO - save the global variables */
 
 	/* Free the memory for the snippets-groups in the SnippetsDB */
@@ -777,118 +743,6 @@ snippets_db_debug (SnippetsDB *snippets_db)
 }
 
 /**
- * snippets_db_load_file:
- * @snippets_db: A #SnippetsDB object where the file should be loaded.
- * @snippet_packet_file_path: A string with the file path.
- * @overwrite_group: If a #AnjutaSnippetsGroup with the same name exists, it will be overwriten.
- * @overwrite_snippets: If conflicting snippets are found, the old ones will be overwriten.
- * @format_type: A #FormatType with the type of the snippet-packet XML file.
- *
- * Loads the given file in the #SnippetsDB. 
- * 
- * If the snippet_packet_file_path doesn't point to a file in the user folder then it will be 
- * considered as unsaved and the file_path property of the #AnjutaSnippetsGroup will be set to the given
- * @snippet_packet_file_path. On calling snippets_db_save_file () with snippet_packet_file_path
- * set to NULL for the resulting group it will first try to give the same file name as the 
- * one indicated in the @snippet_packet_file_path and if a conflict occurs, it will add a 
- * sufix to it.
- *
- * If the @format_type is not #NATIVE_FORMAT, the #AnjutaSnippetsGroup will be marked
- * as unsaved, and it will follow the above procedure.
- *
- * Returns: TRUE on success.
- **/
-gboolean
-snippets_db_load_file (SnippetsDB* snippets_db,
-                       const gchar* snippet_packet_file_path,
-                       gboolean overwrite_group,
-                       gboolean overwrite_snippets,
-                       FormatType format_type)
-{
-	AnjutaSnippetsGroup *snippets_group = NULL;
-	gboolean success = FALSE;
-	gchar *snippet_packet_file_path_dir = NULL, *user_snippets_folder_dir = NULL;
-	gboolean file_path_in_user_folder = FALSE;
-	
-	/* Assertions */
-	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), FALSE);
-	g_return_val_if_fail (snippet_packet_file_path != NULL, FALSE);
-
-	/* Get the AnjutaSnippetsGroup object from the file */
-	snippets_group = snippets_manager_parse_snippets_xml_file (snippet_packet_file_path,
-	                                                           format_type);
-	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group), FALSE);
-
-	/* Add the new AnjutaSnippetsGroup to the database */
-	success = snippets_db_add_snippets_group (snippets_db, 
-	                                          snippets_group,
-	                                          overwrite_group);
-	g_object_unref (snippets_group);
-
-	/* If success, we check to see if the new AnjutaSnippetsGroup should be marked as unsaved */
-	snippet_packet_file_path_dir = g_path_get_dirname (snippet_packet_file_path);
-	user_snippets_folder_dir = anjuta_util_get_user_data_file_path (USER_SNIPPETS_DIR, "/", NULL);
-	file_path_in_user_folder = !g_ascii_strncasecmp (snippet_packet_file_path_dir, 
-	                                                 user_snippets_folder_dir, 
-	                                                 sizeof (snippet_packet_file_path_dir));
-	if (success)
-	{
-		/* If it's not the native format or it's not in the user snippets folder we will
-		   consider it unsaved. */
-		if (format_type != NATIVE_FORMAT || !file_path_in_user_folder)
-			snippets_db->priv->unsaved_snippets_groups = g_list_prepend (snippets_db->priv->unsaved_snippets_groups, 
-			                                                             snippets_group);
-
-		snippets_group->file_path = g_strdup (snippet_packet_file_path);
-	}
-	g_free (snippet_packet_file_path_dir);
-	g_free (user_snippets_folder_dir);
-
-	return success;
-}
-
-/**
- * snippets_db_save_file:
- * @snippets_db: A #SnippetsDB object where the file is loaded.
- * @snippet_group_name: The #AnjutaSnippetsGroup name for the group that should be saved.
- * @snippet_packet_file_path: The name of the file where the #AnjutaSnippetsGroup should
- *                            be saved. Can be NULL (read bellow).
- *
- * Saves the #AnjutaSnippetsGroup in a snippet-packet XML file. If snippet_packet_file_path
- * is not NULL, then it will be saved in the user directory where all snippet-packet files
- * are saved. If the #AnjutaSnippetsGroup was created on runtime and doesn't have a file name
- * the file name will be computed based on the #AnjutaSnippetsGroup first 50 characters. 
- * The last case may also appear if the user loaded a snippet packet from other format
- * than the native one.
- *
- * Returns: TRUE on success.
- **/
-gboolean	
-snippets_db_save_file (SnippetsDB* snippets_db,
-                       const gchar* snippets_group_name,
-                       const gchar* snippet_packet_file_path)
-{
-
-	/* TODO */
-	return FALSE;
-}
-
-/**
- * snippets_db_save_all:
- * @snippets_db: A #SnippestDB object.
- * 
- * Saves all the files loaded in the #SnippetsDB.
- *
- * Returns: TRUE on success.
- **/
-gboolean	
-snippets_db_save_all (SnippetsDB* snippets_db)
-{
-	/* TODO */
-	return FALSE;
-}
-
-/**
  * snippets_db_search:
  * @snippets_db: A #SnippetsDB object
  * @search_string: A string with the searched content.
@@ -934,6 +788,36 @@ snippets_db_get_path_at_object (SnippetsDB *snippets_db,
 		return get_tree_path_for_snippets_group (snippets_db, ANJUTA_SNIPPETS_GROUP (obj));
 
 	g_return_val_if_reached (NULL);
+}
+
+
+void
+snippets_db_save_snippets (SnippetsDB *snippets_db)
+{
+	SnippetsDBPrivate *priv = NULL;
+	gchar *user_file_path = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
+	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
+
+	user_file_path = 
+		anjuta_util_get_user_data_file_path (USER_SNIPPETS_DB_DIR, "/", 
+		                                     DEFAULT_SNIPPETS_FILE, NULL);
+
+	snippets_manager_save_snippets_xml_file (NATIVE_FORMAT, priv->snippets_groups, user_file_path);
+
+}
+
+void
+snippets_db_save_global_vars (SnippetsDB *snippets_db)
+{
+	SnippetsDBPrivate *priv = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
+	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
+
 }
 
 /**
@@ -1319,7 +1203,8 @@ snippets_db_add_snippets_group (SnippetsDB* snippets_db,
 	group_name = snippets_group_get_name (snippets_group);
 	if (overwrite_group)
 		snippets_db_remove_snippets_group (snippets_db, group_name);
-	else if (snippets_db_has_snippets_group_name (snippets_db, group_name))
+	else 
+	if (snippets_db_has_snippets_group_name (snippets_db, group_name))
 		return FALSE;
 
 	/* Check for conflicts */

@@ -23,11 +23,14 @@
 #include "snippet.h"
 #include <libxml/parser.h>
 #include <libxml/xmlwriter.h>
+#include <string.h>
 
-#define NATIVE_XML_ROOT             "anjuta-snippet-packet"
-#define NATIVE_XML_NAME_TAG         "name"
-#define NATIVE_XML_DESCRIPTION_TAG  "description"
-#define NATIVE_XML_GROUP_TAG        "anjuta-snippets"
+#define NATIVE_XML_HEADER           "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+
+#define NATIVE_XML_ROOT             "anjuta-snippets-packet"
+#define NATIVE_XML_GROUP_TAG        "anjuta-snippets-group"
+#define NATIVE_XML_GROUP_NAME_TAG   "name"
+#define NATIVE_XML_SNIPPETS_TAG     "anjuta-snippets"
 #define NATIVE_XML_SNIPPET_TAG      "anjuta-snippet"
 #define NATIVE_XML_LANGUAGES_TAG    "languages"
 #define NATIVE_XML_VARIABLES_TAG    "variables"
@@ -48,25 +51,262 @@
 #define GLOBAL_VARS_XML_TRUE         "true"
 #define GLOBAL_VARS_XML_FALSE        "false"
 
+#define CDATA_START                  "<![CDATA["
+#define CDATA_END                    "]]>"
+#define CDATA_MID                    "]]><![CDATA["
+#define IS_CDATA_END(text, i)        (text[i - 1] == ']' && text[i] == ']' && text[i + 1] == '>')
 
-static gboolean 
-snippets_manager_save_native_xml_file (const gchar *snippet_packet_path, 
-                                       AnjutaSnippetsGroup* snippets_group)
+
+static void
+write_simple_start_tag (GOutputStream *os,
+                        const gchar *name)
 {
-	/* TODO */
-	return FALSE;
+	gchar *tag = g_strconcat ("<", name, ">\n", NULL);
+	g_output_stream_write (os, tag, strlen (tag), NULL, NULL);
+	g_free (tag);
+}
+
+static void
+write_simple_end_tag (GOutputStream *os,
+                      const gchar *name)
+{
+	gchar *tag = g_strconcat ("</", name, ">\n", NULL);
+	g_output_stream_write (os, tag, strlen (tag), NULL, NULL);
+	g_free (tag);
+}
+
+static void
+write_start_end_tag_with_content (GOutputStream *os,
+                                  const gchar *tag_name,
+                                  const gchar *content)
+{
+	gchar *tag_with_content = 
+		g_strconcat ("<", tag_name, ">", content, "</", tag_name, ">\n", NULL);
+
+	g_output_stream_write (os, tag_with_content, strlen (tag_with_content), NULL, NULL);
+	g_free (tag_with_content);
+}
+
+static void
+write_start_end_tag_with_content_as_list (GOutputStream *os,
+                                          const gchar *tag_name,
+                                          GList *content_list)
+{
+	GList *iter = NULL;
+	GString *content = g_string_new ("");
+	gchar *cur_word = NULL;
+
+	for (iter = g_list_first (content_list); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_word = (gchar *)iter->data;
+		g_string_append (content, cur_word);
+		g_string_append (content, " ");
+	}
+
+	write_start_end_tag_with_content (os, tag_name, content->str);
+	g_string_free (content, TRUE);
+
+}
+
+static void
+write_anjuta_snippet_tag (GOutputStream *os,
+                          const gchar *trigger,
+                          const gchar *name)
+{
+	gchar *tag = g_strconcat ("<anjuta-snippet trigger=\"", trigger, "\" name=\"", name, "\">\n", NULL);
+	g_output_stream_write (os, tag, strlen (tag), NULL, NULL);
+	g_free (tag);
+}
+
+static void
+write_variable_tag (GOutputStream *os,
+                    const gchar *name,
+                    const gchar *default_val,
+                    gboolean is_global)
+{
+	const gchar *global_val = (is_global) ? NATIVE_XML_TRUE : NATIVE_XML_FALSE;
+	gchar *tag = g_strconcat ("<variable name=\"", name, "\" default=\"", default_val, 
+	                          "\" is_global=\"", global_val, "\" />\n", NULL);
+	g_output_stream_write (os, tag, strlen (tag), NULL, NULL);
+	g_free (tag);
+}
+
+static gchar*
+escape_text_cdata (const gchar *content)
+{
+	GString *formated_content = g_string_new (CDATA_START);
+	gint i = 0, content_len = 0;
+
+	content_len = strlen (content);
+	for (i = 0; i < content_len; i ++)
+	{
+		/* If we found the "]]>" string in the content we should escape it. */
+		if (i > 0 && IS_CDATA_END (content, i))
+			g_string_append (formated_content, CDATA_MID);
+
+		g_string_append_c (formated_content, content[i]);
+	}
+	g_string_append (formated_content, CDATA_END);
+
+	return g_string_free (formated_content, FALSE);
+
+}
+
+static gboolean
+write_snippet (GOutputStream *os,
+               AnjutaSnippet *snippet)
+{
+	GList *iter = NULL, *iter2 = NULL, *iter3 = NULL, *keywords = NULL,
+	      *vars_names = NULL, *vars_defaults = NULL, *vars_globals = NULL;
+	const gchar *content = NULL;
+	gchar *escaped_content = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (G_IS_OUTPUT_STREAM (os), FALSE);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
+
+	write_anjuta_snippet_tag (os, 
+	                          snippet_get_trigger_key (snippet),
+	                          snippet_get_name (snippet));
+
+	/* Write the languages */
+	write_start_end_tag_with_content_as_list (os, 
+	                                          NATIVE_XML_LANGUAGES_TAG,
+	                                          (GList *)snippet_get_languages (snippet));
+
+	/* Write the variables */
+	write_simple_start_tag (os, NATIVE_XML_VARIABLES_TAG);
+	/* Write each variable */
+	vars_names    = snippet_get_variable_names_list (snippet);
+	vars_defaults = snippet_get_variable_defaults_list (snippet);
+	vars_globals  = snippet_get_variable_globals_list (snippet);
+	iter  = g_list_first (vars_names);
+	iter2 = g_list_first (vars_defaults);
+	iter3 = g_list_first (vars_globals);
+	while (iter != NULL && iter2 != NULL && iter3 != NULL)
+	{
+		write_variable_tag (os, 
+		                    (gchar *)iter->data, 
+		                    (gchar *)iter2->data, 
+		                    GPOINTER_TO_INT (iter3->data));
+
+		iter  = g_list_next (iter);
+		iter2 = g_list_next (iter2);
+		iter3 = g_list_next (iter3);
+	}
+	g_list_free (vars_names);
+	g_list_free (vars_defaults);
+	g_list_free (vars_globals);
+	write_simple_end_tag (os, NATIVE_XML_VARIABLES_TAG);
+
+	/* Write the content */
+	content = snippet_get_content (snippet);
+	escaped_content = escape_text_cdata (content);
+	write_start_end_tag_with_content (os, NATIVE_XML_CONTENT_TAG, escaped_content);
+	g_free (escaped_content);
+
+	/* Write the keywords */
+	keywords = snippet_get_keywords_list (snippet);
+	write_start_end_tag_with_content_as_list (os, NATIVE_XML_KEYWORDS_TAG, keywords);
+	g_list_free (keywords);
+	write_simple_end_tag (os, NATIVE_XML_SNIPPET_TAG);
+
+	return TRUE;
+}
+
+static gboolean
+write_snippets_group (GOutputStream *os,
+                      AnjutaSnippetsGroup *snippets_group)
+{
+	GList *iter = NULL, *snippets = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (G_IS_OUTPUT_STREAM (os), FALSE);
+	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_GROUP (snippets_group), FALSE);
+
+	write_simple_start_tag (os, NATIVE_XML_GROUP_TAG);
+
+	/* Write the name tag */
+	write_start_end_tag_with_content (os, 
+	                                  NATIVE_XML_GROUP_NAME_TAG,
+	                                  snippets_group_get_name (snippets_group));
+
+	write_simple_start_tag (os, NATIVE_XML_SNIPPETS_TAG);
+
+	/* Write the snippets */
+	snippets = snippets_group_get_snippets_list (snippets_group);
+	for (iter = g_list_first (snippets); iter != NULL; iter = g_list_next (iter))
+	{
+		if (!ANJUTA_IS_SNIPPET (iter->data))
+			continue;
+
+		write_snippet (os, ANJUTA_SNIPPET (iter->data));
+	}
+	write_simple_end_tag (os, NATIVE_XML_SNIPPETS_TAG);
+
+	write_simple_end_tag (os, NATIVE_XML_GROUP_TAG);
+	
+	return TRUE;
 }
 
 static gboolean 
-snippets_manager_save_gedit_xml_file (const gchar *snippet_packet_path, 
-                                      AnjutaSnippetsGroup* snippets_group)
+snippets_manager_save_native_xml_file (GList* snippets_groups,
+                                       const gchar *file_path)
+{
+	GFile *file = NULL;
+	GOutputStream *os = NULL;
+	GList *iter = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (file_path != NULL, FALSE);
+
+	/* Open the file */
+	file = g_file_new_for_path (file_path);
+	os = G_OUTPUT_STREAM (g_file_replace (file, NULL, FALSE, G_FILE_CREATE_NONE, NULL, NULL));
+	if (!G_IS_OUTPUT_STREAM (os))
+	{
+		g_object_unref (file);
+		return FALSE;
+	}
+
+	if (g_output_stream_write (os, NATIVE_XML_HEADER, strlen (NATIVE_XML_HEADER), NULL, NULL) < 0)
+	{
+		g_output_stream_close (os, NULL, NULL);
+		g_object_unref (os);
+		g_object_unref (file);
+		return FALSE;
+	}
+
+	write_simple_start_tag (os, NATIVE_XML_ROOT);
+
+	for (iter = g_list_first (snippets_groups); iter != NULL; iter = g_list_next (iter))
+	{
+		if (!ANJUTA_IS_SNIPPETS_GROUP (iter->data))
+			continue;
+
+		write_snippets_group (os, ANJUTA_SNIPPETS_GROUP (iter->data));
+	}
+
+	write_simple_end_tag (os, NATIVE_XML_ROOT);
+
+	/* Close the file */
+	g_output_stream_close (os, NULL, NULL);
+	g_object_unref (os);
+	g_object_unref (file);
+
+	return TRUE;
+}
+
+static gboolean 
+snippets_manager_save_gedit_xml_file (GList* snippets_group,
+                                      const gchar *file_path)
 {
 	/* TODO */
 	return FALSE;
 }
 
 static AnjutaSnippet*
-snippets_manager_parse_native_snippet_node (xmlNodePtr snippet_node)
+parse_snippet_node (xmlNodePtr snippet_node)
 {
 	AnjutaSnippet* snippet = NULL;
 	gchar *trigger_key = NULL, *snippet_name = NULL, *snippet_content = NULL, *cur_var_name = NULL, 
@@ -79,7 +319,7 @@ snippets_manager_parse_native_snippet_node (xmlNodePtr snippet_node)
 	xmlNodePtr cur_field_node = NULL, cur_variable_node = NULL;
 	gboolean cur_var_is_global = FALSE;
 	gint i = 0;
-	
+
 	/* Assert that the snippet_node is indeed a anjuta-snippet tag */
 	g_return_val_if_fail (!g_strcmp0 ((gchar *)snippet_node->name, NATIVE_XML_SNIPPET_TAG), NULL);
 	
@@ -94,7 +334,7 @@ snippets_manager_parse_native_snippet_node (xmlNodePtr snippet_node)
 		g_free (snippet_name);
 		return NULL;
 	}
-	
+
 	/* Get the snippet fields (variables, content and keywords) in the following loop */
 	cur_field_node = snippet_node->xmlChildrenNode;
 	while (cur_field_node != NULL)
@@ -224,57 +464,42 @@ snippets_manager_parse_native_snippet_node (xmlNodePtr snippet_node)
 	return snippet;
 }
 
-static AnjutaSnippetsGroup* 
-snippets_manager_parse_native_xml_file (const gchar *snippet_packet_path)
+static AnjutaSnippetsGroup*
+parse_snippets_group_node (xmlNodePtr snippets_group_node)
 {
-	AnjutaSnippetsGroup* snippets_group = NULL;
-	AnjutaSnippet* cur_snippet = NULL;
-	xmlDocPtr snippet_packet_doc = NULL;
-	xmlNodePtr cur_node = NULL, cur_snippet_node = NULL;
+	AnjutaSnippetsGroup *snippets_group = NULL;
+	AnjutaSnippet *cur_snippet = NULL;
+	xmlNodePtr cur_snippet_node = NULL, cur_node = NULL;
 	gchar *group_name = NULL;
-	
-	/* Parse the XML file and load it into a xmlDoc */
-	snippet_packet_doc = xmlParseFile (snippet_packet_path);
-	g_return_val_if_fail (snippet_packet_doc != NULL, NULL);
 
-	/* Get the root and assert it */
-	cur_node = xmlDocGetRootElement (snippet_packet_doc);
-	if (cur_node == NULL ||\
-	    g_strcmp0 ((gchar *)cur_node->name, NATIVE_XML_ROOT))
-	{
-		xmlFreeDoc (snippet_packet_doc);
-		return NULL;
-	}
-
-	/* Get the name and description fields */
-	cur_node = cur_node->xmlChildrenNode;
+	/* Get the group name */
+	cur_node = snippets_group_node->xmlChildrenNode;
 	while (cur_node != NULL)
 	{
-		/* Get the SnippetsGroup name */
-		if (!g_strcmp0 ((gchar*)cur_node->name, NATIVE_XML_NAME_TAG))
+		if (!g_strcmp0 ((gchar*)cur_node->name, NATIVE_XML_GROUP_NAME_TAG))
 		{
 			group_name = g_strdup ((gchar *)xmlNodeGetContent (cur_node));
+			break;
 		}
 		
 		cur_node = cur_node->next;
 	}
+	if (group_name == NULL)
+		return NULL;
 
-	/* Make a new AnjutaSnippetsGroup object */
-	snippets_group = snippets_group_new (snippet_packet_path, 
-	                                     group_name);
-	g_free (group_name);
+	/* Initialize the snippets group */
+	snippets_group = snippets_group_new (group_name);
 
-	/* Parse the snippets in the XML file */
-	cur_node = xmlDocGetRootElement (snippet_packet_doc);
-	cur_node = cur_node->xmlChildrenNode;
-	while (cur_node != NULL)
+	/* Get the snippets */
+	cur_node = snippets_group_node->xmlChildrenNode;
+	while (cur_node)
 	{
-		if (!g_strcmp0 ((gchar *)cur_node->name, NATIVE_XML_GROUP_TAG))
+		if (!g_strcmp0 ((gchar *)cur_node->name, NATIVE_XML_SNIPPETS_TAG))
 		{
-			/* We will iterate over the snippets with cur_snippet_node */
 			cur_snippet_node = cur_node->xmlChildrenNode;
 
-			while (cur_snippet_node != NULL)
+			/* Look trough all the snippets */
+			while (cur_snippet_node)
 			{
 				/* Make sure it's a snippet node */
 				if (g_strcmp0 ((gchar *)cur_snippet_node->name, NATIVE_XML_SNIPPET_TAG))
@@ -283,30 +508,66 @@ snippets_manager_parse_native_xml_file (const gchar *snippet_packet_path)
 					continue;
 				}
 
-				/* Get a new AnjutaSnippet object from the current node */
-				cur_snippet = snippets_manager_parse_native_snippet_node (cur_snippet_node);
-
-				/* If we have a valid snippet, add it to the snippet group */
-				if (cur_snippet != NULL)
-				{
+				/* Get a new AnjutaSnippet object from the current node and add it to the group*/
+				cur_snippet = parse_snippet_node (cur_snippet_node);
+				if (ANJUTA_IS_SNIPPET (cur_snippet))
 					snippets_group_add_snippet (snippets_group, cur_snippet);
-				}
-				
+
 				cur_snippet_node = cur_snippet_node->next;
 			}
+
 			break;
+		}
+
+		cur_node = cur_node->next;
+	}
+
+	return snippets_group;
+}
+
+static GList* 
+snippets_manager_parse_native_xml_file (const gchar *snippet_packet_path)
+{
+	AnjutaSnippetsGroup* snippets_group = NULL;
+	GList* snippets_groups = NULL;
+	xmlDocPtr snippet_packet_doc = NULL;
+	xmlNodePtr cur_node = NULL;
+	
+	/* Parse the XML file and load it into a xmlDoc */
+	snippet_packet_doc = xmlParseFile (snippet_packet_path);
+	if (snippet_packet_doc == NULL)
+		return NULL;
+	
+	/* Get the root and assert it */
+	cur_node = xmlDocGetRootElement (snippet_packet_doc);
+	if (cur_node == NULL || g_strcmp0 ((gchar *)cur_node->name, NATIVE_XML_ROOT))
+	{
+		xmlFreeDoc (snippet_packet_doc);
+		return NULL;
+	}
+
+	/* Get the snippets groups */
+	cur_node = cur_node->xmlChildrenNode;
+	while (cur_node != NULL)
+	{
+		/* Get the current snippets group */
+		if (!g_strcmp0 ((gchar*)cur_node->name, NATIVE_XML_GROUP_TAG))
+		{
+			snippets_group = parse_snippets_group_node (cur_node);
+
+			if (ANJUTA_IS_SNIPPETS_GROUP (snippets_group))
+				snippets_groups = g_list_prepend (snippets_groups, snippets_group);
 		}
 		
 		cur_node = cur_node->next;
 	}
 	
 	xmlFreeDoc (snippet_packet_doc);
-
 	
-	return snippets_group;
+	return snippets_groups;
 }
 
-static AnjutaSnippetsGroup*
+static GList*
 snippets_manager_parse_gedit_xml_file (const gchar* snippet_packet_path)
 {
 	/* TODO */
@@ -321,9 +582,9 @@ snippets_manager_parse_gedit_xml_file (const gchar* snippet_packet_path)
  *
  * Parses the given XML file.
  *
- * Returns: A #AnjutaSnippetsGroup object on success or NULL on failure.
+ * Returns: A list of #AnjutaSnippetGroup objects.
  **/
-AnjutaSnippetsGroup*	
+GList*	
 snippets_manager_parse_snippets_xml_file (const gchar* snippet_packet_path,
                                           FormatType format_type)
 {
@@ -342,28 +603,25 @@ snippets_manager_parse_snippets_xml_file (const gchar* snippet_packet_path,
 
 /**
  * snippets_manager_parse_xml_file:
- * @snippet_packet_path: The path of the XML file describing the Snippet Group where it should be saved
- * @format_Type: The type of the XML file (see snippets-db.h for the supported types)
- * @snippets_group: A #AnjutaSnippetsGroup object.
+ * @format_type: The type of the XML file (see snippets-db.h for the supported types)
+ * @snippets_group: A list #AnjutaSnippetsGroup objects.
  *
  * Saves the given snippets to a snippet-packet XML file.
  *
  * Returns: TRUE on success.
  **/
 gboolean
-snippets_manager_save_snippets_xml_file (const gchar* snippet_packet_path,
-                                         FormatType format_type,
-                                         AnjutaSnippetsGroup* snippets_group)
+snippets_manager_save_snippets_xml_file (FormatType format_type,
+                                         GList* snippets_groups,
+                                         const gchar *file_path)
 {
 	switch (format_type)
 	{
 		case NATIVE_FORMAT:
-			return snippets_manager_save_native_xml_file (snippet_packet_path, 
-                                                          snippets_group);
+			return snippets_manager_save_native_xml_file (snippets_groups, file_path);
 		
 		case GEDIT_FORMAT:
-			return snippets_manager_save_gedit_xml_file (snippet_packet_path,
-                                                         snippets_group);
+			return snippets_manager_save_gedit_xml_file (snippets_groups, file_path);
 		
 		default:
 			return FALSE;
@@ -446,7 +704,7 @@ gboolean snippets_manager_parse_variables_xml_file (const gchar* global_vars_pat
  * @variables_name: A #GList with the name of the variables.
  * @variables_values: A #GList with the values of the variables.
  * @variables_shell_commands: A #Glist with #gboolean values showing if the value
- *                            of the given variable is a shell command. 
+ *                            of the given variable is a command. 
  *
  * Saves the given snippets global variables in a XML file at the given path.
  *

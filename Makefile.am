@@ -10,8 +10,7 @@ snippets_manager_glade_DATA = snippets-manager-preferences.ui \
 # The default installed plugins here.
 default_snippetsdir = $(anjuta_data_dir)
 default_snippets_DATA = \
-	comments-and-licenses-snippets.xml \
-	general-purpose-snippets.xml \
+	snippets.xml \
 	snippets-global-variables.xml
                         
 

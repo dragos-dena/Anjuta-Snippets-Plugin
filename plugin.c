@@ -327,7 +327,7 @@ snippets_manager_deactivate (AnjutaPlugin *plugin)
 {
 	SnippetsManagerPlugin *snippets_manager_plugin = NULL;
 	AnjutaUI *anjuta_ui = NULL;
-	
+
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin), FALSE);
 	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);

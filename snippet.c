@@ -651,7 +651,7 @@ snippet_get_variable_defaults_list (AnjutaSnippet* snippet)
  * @snippet: A #AnjutaSnippet object.
  *
  * A list with the variables global truth value, in the order they should be edited.
- * The GList* returned should be freed, but not the containing data.
+ * The GList* returned should be freed.
  *
  * Returns: The variables global truth values #GList or NULL if @snippet is invalid.
  **/

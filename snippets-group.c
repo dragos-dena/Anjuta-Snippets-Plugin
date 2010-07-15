@@ -39,24 +39,21 @@ static void
 snippets_group_dispose (GObject* snippets_group)
 {
 	AnjutaSnippetsGroup *anjuta_snippets_group = ANJUTA_SNIPPETS_GROUP (snippets_group);
+	AnjutaSnippetsGroupPrivate *priv = ANJUTA_SNIPPETS_GROUP_GET_PRIVATE (snippets_group);
 	AnjutaSnippet *cur_snippet = NULL;
 	GList *iter = NULL;
-
+	printf ("disposing %s\n", priv->name);
 	/* Delete the name and description fields */
-	g_free (anjuta_snippets_group->priv->name);
-	anjuta_snippets_group->priv->name = NULL;
+	g_free (priv->name);
+	priv->name = NULL;
 	
 	/* Delete the snippets in the group */
-	for (iter = g_list_first (anjuta_snippets_group->priv->snippets); iter != NULL; iter = g_list_next (iter))
+	for (iter = g_list_first (priv->snippets); iter != NULL; iter = g_list_next (iter))
 	{
 		cur_snippet = (AnjutaSnippet *)iter->data;
 		g_object_unref (cur_snippet);
 	}
 	g_list_free (anjuta_snippets_group->priv->snippets);
-
-	/* Delete the filename field */
-	g_free (anjuta_snippets_group->file_path);
-	anjuta_snippets_group->file_path = NULL;
 	
 	G_OBJECT_CLASS (snippets_group_parent_class)->dispose (snippets_group);
 }
@@ -84,16 +81,14 @@ snippets_group_init (AnjutaSnippetsGroup* snippets_group)
 	AnjutaSnippetsGroupPrivate* priv = ANJUTA_SNIPPETS_GROUP_GET_PRIVATE (snippets_group);
 	
 	snippets_group->priv = priv;
-	snippets_group->file_path = NULL;
 
 	/* Initialize the private field */
-	snippets_group->priv->name = NULL;
-	snippets_group->priv->snippets = NULL;
+	priv->name = NULL;
+	priv->snippets = NULL;
 }
 
 /**
  * snippets_group_new:
- * @snippets_filename: The filename from which the snippet group was loaded.
  * @snippets_group_name: A name for the group. It's unique.
  *
  * Makes a new #AnjutaSnippetsGroup object.
@@ -101,20 +96,20 @@ snippets_group_init (AnjutaSnippetsGroup* snippets_group)
  * Returns: A new #AnjutaSnippetsGroup object or NULL on failure.
  **/
 AnjutaSnippetsGroup* 
-snippets_group_new (const gchar* snippets_file_path,
-                    const gchar* snippets_group_name)
+snippets_group_new (const gchar* snippets_group_name)
 {
 	AnjutaSnippetsGroup* snippets_group = NULL;
-	
+	AnjutaSnippetsGroupPrivate *priv = NULL;
+
 	/* Assertions */
 	g_return_val_if_fail (snippets_group_name != NULL, NULL);
 	
 	/* Initialize the object */
 	snippets_group = ANJUTA_SNIPPETS_GROUP (g_object_new (snippets_group_get_type (), NULL));
-	
+	priv = ANJUTA_SNIPPETS_GROUP_GET_PRIVATE (snippets_group);
+
 	/* Copy the name, description and filename */
-	snippets_group->priv->name = g_strdup (snippets_group_name);
-	snippets_group->file_path = g_strdup (snippets_file_path);
+	priv->name = g_strdup (snippets_group_name);
 	
 	return snippets_group;
 }
@@ -186,7 +181,6 @@ snippets_group_add_snippet (AnjutaSnippetsGroup* snippets_group,
 	                                       compare_snippets_by_name);
 	snippet->parent_snippets_group = G_OBJECT (snippets_group);
 
-	printf ("{%s added to %s}\n", snippet_get_name (snippet), priv->name);
 	return TRUE;
 }
 
@@ -246,7 +240,6 @@ snippets_group_remove_snippet (AnjutaSnippetsGroup* snippets_group,
 	/* If we found a snippet that should be deleted we remove it from the list and unref it */
 	if (to_be_deleted_snippet)
 	{
-		printf ("{%s removed from %s}\n", snippet_get_name (to_be_deleted_snippet), priv->name);
 		priv->snippets = g_list_remove (priv->snippets, to_be_deleted_snippet);
 		g_object_unref (to_be_deleted_snippet);
 

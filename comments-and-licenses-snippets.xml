@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<anjuta-snippet-packet>
+<anjuta-snippets-group>
 	<name>Comments and licenses</name>
 	<anjuta-snippets>
 		<anjuta-snippet trigger="top_com" name="Top Comment">
@@ -357,4 +357,4 @@ G_END_DECLS
 		</anjuta-snippet>
 
 	</anjuta-snippets>
-</anjuta-snippet-packet>
+</anjuta-snippets-group>

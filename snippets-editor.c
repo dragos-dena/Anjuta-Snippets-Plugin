@@ -179,10 +179,14 @@ G_DEFINE_TYPE (SnippetsEditor, snippets_editor, GTK_TYPE_HBOX);
 static void
 snippets_editor_dispose (GObject *object)
 {
+	SnippetsEditorPrivate *priv = NULL;
+
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (object));
+	priv = ANJUTA_SNIPPETS_EDITOR_GET_PRIVATE (object);
 
-	/* TODO - destroy the snippet if one */
+	if (ANJUTA_IS_SNIPPET (priv->snippet))
+		g_object_unref (priv->snippet);
 
 	G_OBJECT_CLASS (snippets_editor_parent_class)->dispose (G_OBJECT (object));
 }
@@ -924,6 +928,7 @@ init_languages_combo_box (SnippetsEditor *snippets_editor)
 	/* Set it as the model of the combo-box */
 	gtk_combo_box_set_model (priv->languages_combo_box, 
 	                         GTK_TREE_MODEL (priv->lang_store));
+	g_object_unref (priv->lang_store);
 
 	/* Add the cell renderers */
 	cell = gtk_cell_renderer_toggle_new ();

@@ -102,19 +102,9 @@ void                       snippets_db_close                  (SnippetsDB *snipp
 
 GtkTreePath *              snippets_db_get_path_at_object     (SnippetsDB *snippets_db,
                                                                GObject *obj);
+void                       snippets_db_save_snippets          (SnippetsDB *snippets_db);
+void                       snippets_db_save_global_vars       (SnippetsDB *snippets_db);
 void                       snippets_db_debug                  (SnippetsDB *snippets_db);
-
-/* File handling methods */
-gboolean                   snippets_db_load_file              (SnippetsDB* snippets_db,
-                                                               const gchar* snippet_packet_file_path,
-                                                               gboolean overwrite_group,
-                                                               gboolean overwrite_snippets,
-                                                               FormatType format_type);
-gboolean                   snippets_db_save_file              (SnippetsDB* snippets_db,
-                                                               const gchar* snippets_group_name,
-                                                               const gchar* snippet_packet_file_path);
-gboolean                   snippets_db_save_all               (SnippetsDB* snippets_db);
-const GList*               snippets_db_get_unsaved_groups     (SnippetsDB* snippets_db);
 
 /* Searching method (mainly for auto-completion) */
 GList*                     snippets_db_search                 (SnippetsDB* snippets_db,

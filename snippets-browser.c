@@ -215,14 +215,7 @@ init_browser_layout (SnippetsBrowser *snippets_browser)
 	                    TRUE,
 	                    0);
 	g_object_unref (priv->snippets_view_vbox);
-	
-	/* Init the HPaned and the Frame which are hidden until the editor is shown */
-/*	priv->snippets_editor_frame = gtk_frame_new (_("Snippets Editor"));*/
-/*	gtk_paned_pack2 (GTK_PANED (priv->browser_hpaned),*/
-/*	                 priv->snippets_editor_frame,*/
-/*	                 TRUE, FALSE);*/
-/*	g_object_ref_sink (priv->browser_hpaned);*/
-	
+
 	/* Initialize the snippets editor */
 	priv->snippets_editor = snippets_editor_new (priv->snippets_db);
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_EDITOR (priv->snippets_editor));
@@ -233,10 +226,7 @@ init_browser_layout (SnippetsBrowser *snippets_browser)
 	                 GTK_WIDGET (priv->snippets_editor),
 	                 TRUE, FALSE);
 	g_object_ref_sink (priv->browser_hpaned);
-
-/*	gtk_container_add (GTK_CONTAINER (priv->snippets_editor_frame),*/
-/*	                   GTK_WIDGET (priv->snippets_editor));*/
-	                   
+              
 	g_object_unref (bxml);
 }
 
@@ -861,6 +851,8 @@ on_delete_button_clicked (GtkButton *delete_button,
 		
 		g_object_unref (cur_object);
 	}
+
+	snippets_db_save_snippets (priv->snippets_db);
 	
 }
 
@@ -1035,6 +1027,8 @@ on_name_changed (GtkCellRendererText *renderer,
 	
 	snippets_db_set_snippets_group_name (priv->snippets_db, old_name, new_text);
 	snippets_browser_refilter_snippets_view (snippets_browser);
+
+	snippets_db_save_snippets (priv->snippets_db);
 	
 	gtk_tree_path_free (path);
 	g_free (old_name);
@@ -1074,7 +1068,7 @@ on_add_snippets_group_menu_item_activated (GtkMenuItem *menu_item,
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (priv->snippets_db));
 
-	snippets_group = snippets_group_new (NULL, NEW_SNIPPETS_GROUP_NAME);
+	snippets_group = snippets_group_new (NEW_SNIPPETS_GROUP_NAME);
 	snippets_db_add_snippets_group (priv->snippets_db, snippets_group, FALSE);
 
 	/* The snippets database shouldn't be empty here */
@@ -1094,6 +1088,9 @@ on_add_snippets_group_menu_item_activated (GtkMenuItem *menu_item,
 			GtkTreeViewColumn *col = gtk_tree_view_get_column (priv->snippets_view, 
 			                                                   SNIPPETS_VIEW_COL_NAME);
 			gtk_tree_view_set_cursor (priv->snippets_view, path, col, TRUE);
+
+			/* We save the database after the cursor was set. */
+			snippets_db_save_snippets (priv->snippets_db);
 
 			gtk_tree_path_free (path);
 			g_free (name);
@@ -1163,6 +1160,9 @@ on_snippets_editor_snippet_saved (SnippetsEditor *snippets_editor,
 	gtk_tree_model_filter_refilter (GTK_TREE_MODEL_FILTER (priv->filter)); 
 	path = snippets_db_get_path_at_object (priv->snippets_db, snippet);
 	gtk_tree_view_set_cursor (priv->snippets_view, path, NULL, FALSE);
+
+	/* We save the database after we set the cursor */
+	snippets_db_save_snippets (priv->snippets_db);
 }
 
 
