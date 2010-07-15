@@ -637,8 +637,9 @@ snippets_manager_save_snippets_xml_file (FormatType format_type,
  *
  * Returns: TRUE on success.
  */
-gboolean snippets_manager_parse_variables_xml_file (const gchar* global_vars_path,
-                                                    SnippetsDB* snippets_db)
+gboolean 
+snippets_manager_parse_variables_xml_file (const gchar* global_vars_path,
+                                           SnippetsDB* snippets_db)
 {
 	xmlDocPtr global_vars_doc = NULL;
 	xmlNodePtr cur_var_node = NULL;
@@ -698,23 +699,97 @@ gboolean snippets_manager_parse_variables_xml_file (const gchar* global_vars_pat
 	return TRUE;
 }
 
+static void
+write_global_var_tags (GOutputStream *os,
+                       const gchar *name,
+                       const gchar *value,
+                       gboolean is_command)
+{
+	gchar *command_string = NULL, *escaped_content = NULL, *line = NULL;
+
+	/* Assertions */
+	g_return_if_fail (G_IS_OUTPUT_STREAM (os));
+
+	command_string = (is_command) ? GLOBAL_VARS_XML_TRUE : GLOBAL_VARS_XML_FALSE;
+	escaped_content = escape_text_cdata (value);
+
+	line = g_strconcat ("<global-variable name=\"", name, 
+	                    "\" is_command=\"", command_string, "\">", 
+	                    escaped_content, 
+	                    "</global-variable>\n",
+	                    NULL);
+	g_output_stream_write (os, line, strlen (line), NULL, NULL);
+
+	g_free (line);
+	g_free (escaped_content);
+}
+
 /**
  * snippets_manager_save_variables_xml_file:
  * @global_vars_path: A path with a XML file describing snippets global variables.
- * @variables_name: A #GList with the name of the variables.
- * @variables_values: A #GList with the values of the variables.
- * @variables_shell_commands: A #Glist with #gboolean values showing if the value
- *                            of the given variable is a command. 
+ * @global_vars_name_list: A #GList with the name of the variables.
+ * @global_vars_value_list: A #GList with the values of the variables.
+ * @global_vars_is_command_list: A #Glist with #gboolean values showing if the value
+ *                               of the given variable is a command. 
  *
  * Saves the given snippets global variables in a XML file at the given path.
  *
  * Returns: TRUE on success.
  */
-gboolean snippets_manager_save_variables_xml_file (const gchar* global_variables_path,
-                                                   GList* variables_names,
-                                                   GList* variables_values,
-                                                   GList* variables_shell_commands)
+gboolean 
+snippets_manager_save_variables_xml_file (const gchar* global_variables_path,
+                                          GList* global_vars_name_list,
+                                          GList* global_vars_value_list,
+                                          GList* global_vars_is_command_list)
 {
-	/* TODO */
-	return FALSE;
+	GList *iter = NULL, *iter2 = NULL, *iter3 = NULL;
+	GFile *file = NULL;
+	GOutputStream *os = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (global_variables_path != NULL, FALSE);
+
+	/* Open the file */
+	file = g_file_new_for_path (global_variables_path);
+	os = G_OUTPUT_STREAM (g_file_replace (file, NULL, FALSE, G_FILE_CREATE_NONE, NULL, NULL));
+	if (!G_IS_OUTPUT_STREAM (os))
+	{
+		g_object_unref (file);
+		return FALSE;
+	}
+
+	if (g_output_stream_write (os, NATIVE_XML_HEADER, strlen (NATIVE_XML_HEADER), NULL, NULL) < 0)
+	{
+		g_output_stream_close (os, NULL, NULL);
+		g_object_unref (os);
+		g_object_unref (file);
+		return FALSE;
+	}
+
+	write_simple_start_tag (os, GLOBAL_VARS_XML_ROOT);
+
+	/* Write each of the global variable */
+	iter  = g_list_first (global_vars_name_list);
+	iter2 = g_list_first (global_vars_value_list);
+	iter3 = g_list_first (global_vars_is_command_list);
+	while (iter != NULL && iter2 != NULL && iter3 != NULL)
+	{
+		write_global_var_tags (os, 
+		                       (gchar *)iter->data, 
+		                       (gchar *)iter2->data, 
+		                       GPOINTER_TO_INT (iter3->data));
+
+		iter  = g_list_next (iter);
+		iter2 = g_list_next (iter2);
+		iter3 = g_list_next (iter3);
+	}
+	
+	write_simple_end_tag (os, GLOBAL_VARS_XML_ROOT);
+
+	/* Close the file */
+	g_output_stream_close (os, NULL, NULL);
+	g_object_unref (os);
+	g_object_unref (file);	
+
+	return TRUE;
 }

@@ -31,7 +31,7 @@ gboolean     snippets_manager_save_snippets_xml_file   (FormatType format_type,
 gboolean     snippets_manager_parse_variables_xml_file (const gchar* global_vars_file_path,
                                                         SnippetsDB* snippets_db);
 gboolean     snippets_manager_save_variables_xml_file  (const gchar* global_variables_file_path,
-                                                        GList* variables_names,
-                                                        GList* variables_values,
-                                                        GList* variables_shell_commands);
+                                                        GList* global_vars_name_list,
+                                                        GList* global_vars_value_list,
+                                                        GList* global_vars_is_command_list);
 

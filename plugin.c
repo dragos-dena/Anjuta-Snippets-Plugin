@@ -493,6 +493,9 @@ on_global_vars_name_changed (GtkCellRendererText *cell,
 	                                      name, 
 	                                      new_text);
 	g_free (name);
+
+	/* Save the global variables */
+	snippets_db_save_global_vars (snippets_db);
 }
 
 static void
@@ -570,6 +573,10 @@ on_global_vars_type_toggled (GtkCellRendererToggle *cell,
 	snippets_db_set_global_variable_type (snippets_db, 
 	                                      name, 
 	                                      (is_command) ? FALSE : TRUE);
+
+	/* Save the global variables */
+	snippets_db_save_global_vars (snippets_db);
+
 	g_free (name);
 	
 }
@@ -638,6 +645,9 @@ on_global_vars_text_changed (GtkCellRendererText *cell,
 	                                       name, 
 	                                       new_text);
 	g_free (name);
+
+	/* Save the global variables */
+	snippets_db_save_global_vars (snippets_db);
 }
 
 static void
@@ -835,6 +845,9 @@ on_add_variable_b_clicked (GtkButton *button,
 		g_free (name);
 		iter_has_next = gtk_tree_model_iter_next (global_vars_model, &iter);
 	}
+
+	/* Save the global variables */
+	snippets_db_save_global_vars (snippets_db);
 }
 
 static void
@@ -873,6 +886,9 @@ on_delete_variable_b_clicked (GtkButton *button,
 		g_free (name);
 	
 	}
+
+	/* Save the global variables */
+	snippets_db_save_global_vars (snippets_db);
 }
 
 static void

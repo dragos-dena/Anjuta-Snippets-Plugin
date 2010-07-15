@@ -807,17 +807,59 @@ snippets_db_save_snippets (SnippetsDB *snippets_db)
 
 	snippets_manager_save_snippets_xml_file (NATIVE_FORMAT, priv->snippets_groups, user_file_path);
 
+	g_free (user_file_path);
 }
 
 void
 snippets_db_save_global_vars (SnippetsDB *snippets_db)
 {
 	SnippetsDBPrivate *priv = NULL;
+	gchar *user_file_path = NULL;
+	GList *vars_names = NULL, *vars_values = NULL, *vars_comm = NULL, *l_iter = NULL;
+	GtkTreeIter iter;
+	gchar *name = NULL, *value = NULL;
+	gboolean is_command = FALSE, is_internal = FALSE;
 
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
 	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
 
+	user_file_path =
+		anjuta_util_get_user_data_file_path (USER_SNIPPETS_DB_DIR, "/",
+		                                     DEFAULT_GLOBAL_VARS_FILE, NULL);
+
+	if (!gtk_tree_model_get_iter_first (GTK_TREE_MODEL (priv->global_variables), &iter))
+		return;
+
+	do
+	{
+		gtk_tree_model_get (GTK_TREE_MODEL (priv->global_variables), &iter,
+		                    GLOBAL_VARS_MODEL_COL_NAME, &name,
+		                    GLOBAL_VARS_MODEL_COL_VALUE, &value,
+		                    GLOBAL_VARS_MODEL_COL_IS_COMMAND, &is_command,
+		                    GLOBAL_VARS_MODEL_COL_IS_INTERNAL, &is_internal,
+		                    -1);
+
+		if (!is_internal)
+		{
+			vars_names  = g_list_append (vars_names, name);
+			vars_values = g_list_append (vars_values, value);
+			vars_comm   = g_list_append (vars_comm, GINT_TO_POINTER (is_command));
+		}
+
+	} while (gtk_tree_model_iter_next (GTK_TREE_MODEL (priv->global_variables), &iter));
+
+	snippets_manager_save_variables_xml_file (user_file_path, vars_names, vars_values, vars_comm);
+
+	/* Free the data */
+	for (l_iter = g_list_first (vars_names); l_iter != NULL; l_iter = g_list_next (l_iter))
+		g_free (l_iter->data);
+	g_list_free (vars_names);
+	for (l_iter = g_list_first (vars_values); l_iter != NULL; l_iter = g_list_next (l_iter))
+		g_free (l_iter->data);
+	g_list_free (vars_values);
+	g_list_free (vars_comm);
+	g_free (user_file_path);
 }
 
 /**
