@@ -43,9 +43,16 @@
 
 static gpointer parent_class;
 
-static void on_menu_insert_snippet (GtkAction *action, SnippetsManagerPlugin *plugin);
+/* Menu callbacks and actions */
 
-/* TODO - add the other menu items and actions */
+static void on_menu_trigger_insert_snippet       (GtkAction *action, 
+                                                  SnippetsManagerPlugin *plugin);
+static void on_menu_autocomplete_insert_snippet  (GtkAction *action,
+                                                  SnippetsManagerPlugin *plugin);
+static void on_menu_import_snippets              (GtkAction *action,
+                                                  SnippetsManagerPlugin *plugin);
+static void on_menu_export_snippets              (GtkAction *action,
+                                                  SnippetsManagerPlugin *plugin);
 
 static GtkActionEntry actions_snippets[] = {
 	{
@@ -56,12 +63,33 @@ static GtkActionEntry actions_snippets[] = {
 		NULL,
 		NULL},
 	{
-		"ActionEditInsertSnippet",
+		"ActionEditTriggerInsert",
 		NULL,
-		N_("_Insert Snippet"),
+		N_("_Trigger insert"),
 		"<control>e",
 		N_("Insert a snippet using the trigger-key"),
-		G_CALLBACK (on_menu_insert_snippet)}
+		G_CALLBACK (on_menu_trigger_insert_snippet)},
+	{
+		"ActionEditAutoCompleteInsert",
+		NULL,
+		N_("_Auto complete insert"),
+		"<control>r",
+		N_("Insert a snippet using auto-completion"),
+		G_CALLBACK (on_menu_autocomplete_insert_snippet)},
+	{
+		"ActionEditImportSnippets",
+		NULL,
+		N_("_Import snippets …"),
+		NULL,
+		N_("Import snippets to the database"),
+		G_CALLBACK (on_menu_import_snippets)},
+	{
+		"ActionEditExportSnippets",
+		NULL,
+		N_("_Export snippets …"),
+		NULL,
+		N_("Export snippets from the database"),
+		G_CALLBACK (on_menu_export_snippets)}
 };
 
 typedef struct _GlobalVariablesUpdateData
@@ -122,17 +150,19 @@ char_at_iterator (IAnjutaEditor *editor,
 }
 
 static void 
-on_menu_insert_snippet (GtkAction *action, 
-                        SnippetsManagerPlugin *plugin)
+on_menu_trigger_insert_snippet (GtkAction *action, 
+                                SnippetsManagerPlugin *plugin)
 {
 	IAnjutaIterable *rewind_iter = NULL, *cur_pos = NULL;
 	gchar *trigger = NULL, cur_char = 0;
 	gboolean reached_start = FALSE;
+	/* TODO - move most of this code to snippets-interaction-interpreter */
 
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin));
-	g_return_if_fail (IANJUTA_IS_EDITOR (plugin->cur_editor));
-
+	if (!IANJUTA_IS_EDITOR (plugin->cur_editor))
+		return;
+	
 	/* If the current document isn't an editor, return */
 	if (plugin->cur_editor == NULL)
 		return;
@@ -183,6 +213,31 @@ on_menu_insert_snippet (GtkAction *action,
 	g_free (trigger);
 	g_object_unref (rewind_iter);
 	g_object_unref (cur_pos);
+}
+
+static void
+on_menu_autocomplete_insert_snippet (GtkAction *action,
+                                     SnippetsManagerPlugin *plugin)
+{
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin));
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_PROVIDER (plugin->snippets_provider));
+
+	snippets_provider_request (plugin->snippets_provider);
+}
+
+static void
+on_menu_import_snippets (GtkAction *action,
+                         SnippetsManagerPlugin *plugin)
+{
+	/* TODO */
+}
+
+static void
+on_menu_export_snippets (GtkAction *action,
+                         SnippetsManagerPlugin *plugin)
+{
+	/* TODO */
 }
 
 static void
@@ -275,7 +330,10 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	/* Link the AnjutaShell to the SnippetsDB and load the SnippetsDB*/
 	snippets_manager_plugin->snippets_db->anjuta_shell = plugin->shell;
 	snippets_db_load (snippets_manager_plugin->snippets_db);
-	
+
+	/* Link the AnjutaShell to the SnippetsProvider */
+	snippets_manager_plugin->snippets_provider->anjuta_shell = plugin->shell;
+
 	/* Load the SnippetsBrowser with the snippets in the SnippetsDB */
 	snippets_manager_plugin->snippets_browser->anjuta_shell = plugin->shell;
 	snippets_browser_load (snippets_manager_plugin->snippets_browser,
@@ -377,24 +435,18 @@ snippets_manager_dispose (GObject * obj)
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (snippets_manager));
 
-	if (snippets_manager->snippets_db != NULL)
-	{
+	if (ANJUTA_IS_SNIPPETS_DB (snippets_manager->snippets_db))
 		g_object_unref (snippets_manager->snippets_db);
-		snippets_manager->snippets_db = NULL;
-	}
 	
-	if (snippets_manager->snippets_interaction != NULL)
-	{
+	if (ANJUTA_IS_SNIPPETS_INTERACTION (snippets_manager->snippets_interaction))
 		g_object_unref (snippets_manager->snippets_interaction);
-		snippets_manager->snippets_interaction = NULL;
-	}
 	
-	if (snippets_manager->snippets_browser != NULL)
-	{
+	if (ANJUTA_IS_SNIPPETS_BROWSER (snippets_manager->snippets_browser))
 		g_object_unref (snippets_manager->snippets_browser);
-		snippets_manager->snippets_browser = NULL;
-	}
-		
+
+	if (ANJUTA_IS_SNIPPETS_PROVIDER (snippets_manager->snippets_provider))
+		g_object_unref (snippets_manager->snippets_provider);
+
 	G_OBJECT_CLASS (parent_class)->dispose (obj);
 }
 
@@ -416,6 +468,9 @@ snippets_manager_plugin_instance_init (GObject * obj)
 	snippets_manager->snippets_db = snippets_db_new ();
 	snippets_manager->snippets_interaction = snippets_interaction_new ();
 	snippets_manager->snippets_browser = snippets_browser_new ();
+	snippets_manager->snippets_provider = 
+		snippets_provider_new (snippets_manager->snippets_db,
+	                           snippets_manager->snippets_interaction);
  
 	g_signal_connect (GTK_OBJECT (snippets_manager->snippets_browser),
     	              "maximize-request",

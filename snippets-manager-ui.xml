@@ -4,7 +4,11 @@
 		<menu name="MenuEdit" action="ActionMenuEdit">
 			<placeholder name="PlaceholderInsertMenus">
 				<menu name="SnippetsManagerMenu" action="ActionMenuEditSnippetsManager">
-					<menuitem name="InsertSnippetMenuItem" action="ActionEditInsertSnippet" />
+					<menuitem name="TriggerInsertSnippetMenuItem" action="ActionEditTriggerInsert" />
+					<menuitem name="AutoCompleteInsertSnippetMenuItem" action="ActionEditAutoCompleteInsert" />
+					<separator />
+					<menuitem name="ImportSnippetMenuItem" action="ActionEditImportSnippets" />
+					<menuitem name="ExportSnippetMenuItem" action="ActionEditExportSnippets" />
 				</menu>
 			</placeholder>
 		</menu>

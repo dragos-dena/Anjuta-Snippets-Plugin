@@ -95,7 +95,7 @@ typedef enum
 
 
 GType                      snippets_db_get_type               (void) G_GNUC_CONST;
-SnippetsDB*                snippets_db_new	                  (void);
+SnippetsDB*                snippets_db_new                    (void);
 
 void                       snippets_db_load                   (SnippetsDB *snippets_db);
 void                       snippets_db_close                  (SnippetsDB *snippets_db);
@@ -105,12 +105,6 @@ GtkTreePath *              snippets_db_get_path_at_object     (SnippetsDB *snipp
 void                       snippets_db_save_snippets          (SnippetsDB *snippets_db);
 void                       snippets_db_save_global_vars       (SnippetsDB *snippets_db);
 void                       snippets_db_debug                  (SnippetsDB *snippets_db);
-
-/* Searching method (mainly for auto-completion) */
-GList*                     snippets_db_search                 (SnippetsDB* snippets_db,
-                                                               const gchar* search_string,
-                                                               const gchar* snippet_language,
-                                                               guint16 maximum_results);
 
 /* Snippet handling methods */
 gboolean                   snippets_db_add_snippet            (SnippetsDB* snippets_db,
@@ -125,15 +119,6 @@ gboolean                   snippets_db_remove_snippet         (SnippetsDB* snipp
                                                                const gchar* trigger_key,
                                                                const gchar* language,
                                                                gboolean remove_all_languages_support);
-gboolean                   snippets_db_set_snippet_keywords   (SnippetsDB *snippets_db,
-                                                               AnjutaSnippet *snippet,
-                                                               const GList *new_keywords);
-gboolean                   snippets_db_set_snippet_trigger    (SnippetsDB *snippets_db,
-                                                               AnjutaSnippet *snippet,
-                                                               const gchar *new_trigger);
-gboolean                   snippets_db_add_snippet_language   (SnippetsDB *snippets_db,
-                                                               AnjutaSnippet *snippet,
-                                                               const gchar *language);
 
 /* SnippetsGroup handling methods */
 gboolean                   snippets_db_add_snippets_group      (SnippetsDB* snippets_db,

@@ -44,25 +44,17 @@
 #define GLOBAL_VAR_USER_FULL_NAME  "userfullname"
 #define GLOBAL_VAR_HOST_NAME       "hostname"
 
-#define ANJUTA_SNIPPETS_DB_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ANJUTA_TYPE_SNIPPETS_DB, SnippetsDBPrivate))
-
 static gchar *default_files[] = {
 	DEFAULT_SNIPPETS_FILE,
 	DEFAULT_GLOBAL_VARS_FILE
 };
 
 
+#define ANJUTA_SNIPPETS_DB_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ANJUTA_TYPE_SNIPPETS_DB, SnippetsDBPrivate))
+
 /**
  * SnippetsDBPrivate:
  * @snippets_groups: A #GList where the #AnjutaSnippetsGroup objects are loaded.
- * @trigger_keys_tree: A #GTree with the keys being a string representing the trigger-key and
- *                     the values being a #GList with #AnjutaSnippet as entries for the list.
- *                     Important: One should not try to delete anything. The #GTree was constructed
- *                     with destroy functions passed to the #GTree that will free the memory.
- * @keywords_tree: A #GTree with the keys being a string representing the keyword and the values
- *                 being a #GList with #AnjutaSnippet as entries for the list.
- *                 Important: One should not try to delete anything. The #GTree was constructed
- *                 with destroy functions passed to the #GTree that will free the memory.
  * @snippet_keys_map: A #GHashTable with strings representing the snippet-key as keys and pointers
  *                    to #AnjutaSnippet objects as values.
  *                    Important: One should not try to delete anything. The #GHashTable was 
@@ -79,9 +71,6 @@ static gchar *default_files[] = {
 struct _SnippetsDBPrivate
 {	
 	GList* snippets_groups;
-	
-	GTree* trigger_keys_tree;
-	GTree* keywords_tree;
 
 	GHashTable* snippet_keys_map;
 	
@@ -172,13 +161,6 @@ get_snippet_key_from_trigger_and_language (const gchar *trigger_key,
 }
 
 static void
-add_snippet_to_searching_trees (SnippetsDB *snippets_db,
-                                AnjutaSnippet *snippet)
-{
-	/* TODO */
-}
-
-static void
 add_snippet_to_hash_table (SnippetsDB *snippets_db,
                            AnjutaSnippet *snippet)
 {
@@ -205,13 +187,6 @@ add_snippet_to_hash_table (SnippetsDB *snippets_db,
 
 	}
 
-}
-
-static void
-remove_snippet_from_searching_trees (SnippetsDB *snippets_db,
-                                     AnjutaSnippet *snippet)
-{
-	/* TODO */
 }
 
 static void
@@ -262,13 +237,6 @@ remove_snippets_group_from_hash_table (SnippetsDB *snippets_db,
 
 		remove_snippet_from_hash_table (snippets_db, cur_snippet);
 	}
-}
-
-static void
-remove_snippets_group_from_searching_trees (SnippetsDB *snippets_db,
-                                            AnjutaSnippetsGroup *snippets_group)
-{
-	/* TODO */
 }
 
 static void
@@ -488,28 +456,6 @@ get_iter_at_global_variable_name (GtkListStore *global_vars_store,
 }
 
 static gint
-trigger_keys_tree_compare_func (gconstpointer a,
-                                gconstpointer b,
-                                gpointer user_data)
-{
-	gchar* trigger_key1 = (gchar *)a;
-	gchar* trigger_key2 = (gchar *)b;
-
-	return g_utf8_collate (trigger_key1, trigger_key2);
-}
-
-static gint
-keywords_tree_compare_func (gconstpointer a,
-                            gconstpointer b,
-                            gpointer user_data)
-{
-	gchar* keyword1 = (gchar *)a;
-	gchar* keyword2 = (gchar *)b;
-
-	return g_utf8_collate (keyword1, keyword2);
-}
-
-static gint
 compare_snippets_groups_by_name (gconstpointer a,
                                  gconstpointer b)
 {
@@ -540,13 +486,9 @@ snippets_db_dispose (GObject* obj)
 	
 	g_list_free (snippets_db->priv->snippets_groups);
 	g_hash_table_destroy (snippets_db->priv->snippet_keys_map);
-	g_tree_unref (snippets_db->priv->keywords_tree);
-	g_tree_unref (snippets_db->priv->trigger_keys_tree);
 
 	snippets_db->priv->snippets_groups   = NULL;
 	snippets_db->priv->snippet_keys_map  = NULL;
-	snippets_db->priv->keywords_tree     = NULL;
-	snippets_db->priv->trigger_keys_tree = NULL;
 	
 	G_OBJECT_CLASS (snippets_db_parent_class)->dispose (obj);
 }
@@ -596,14 +538,6 @@ snippets_db_init (SnippetsDB *snippets_db)
 
 	/* Initialize the private fields */
 	snippets_db->priv->snippets_groups = NULL;
-	snippets_db->priv->trigger_keys_tree = g_tree_new_full (trigger_keys_tree_compare_func,
-	                                                        NULL,
-	                                                        g_free,
-	                                                        (GDestroyNotify)g_list_free);
-	snippets_db->priv->keywords_tree = g_tree_new_full (keywords_tree_compare_func,
-	                                                    NULL,
-	                                                    g_free,
-	                                                    (GDestroyNotify)g_list_free);
 	snippets_db->priv->snippet_keys_map = g_hash_table_new_full (g_str_hash, 
 	                                                             g_str_equal, 
 	                                                             g_free, 
@@ -678,10 +612,6 @@ snippets_db_close (SnippetsDB *snippets_db)
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
 	g_return_if_fail (snippets_db->priv != NULL);
 	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
-	
-	/* Save all the files */
-	// save_snippets (snippets_db);
-	/* TODO - save the global variables */
 
 	/* Free the memory for the snippets-groups in the SnippetsDB */
 	for (iter = g_list_first (priv->snippets_groups); iter != NULL; iter = g_list_next (iter))
@@ -706,12 +636,7 @@ snippets_db_close (SnippetsDB *snippets_db)
 	/* Free the hash-table memory */
 	g_hash_table_ref (priv->snippet_keys_map);
 	g_hash_table_destroy (priv->snippet_keys_map);
-	
-	/* Destroy the searching trees */
-	g_tree_ref (priv->keywords_tree);
-	g_tree_ref (priv->trigger_keys_tree);
-	g_tree_destroy (priv->keywords_tree);
-	g_tree_destroy (priv->trigger_keys_tree);
+
 }
 
 void
@@ -740,28 +665,6 @@ snippets_db_debug (SnippetsDB *snippets_db)
 		else
 			printf ("(Invalid Snippets Group)\n");
 	}
-}
-
-/**
- * snippets_db_search:
- * @snippets_db: A #SnippetsDB object
- * @search_string: A string with the searched content.
- * @snippet_language: The language for which the searching is requested. If NULL, 
- *                    it will search all languages.
- * @maximum_results: The maximum results that are to be returned.
- *
- * Searches the #SnippetsDB from the @search_string given. 
- *
- * Returns: A #GList with #Snippet entries sorted by relevance.
- **/
-GList*	
-snippets_db_search (SnippetsDB* snippets_db,
-                    const gchar* search_string,
-                    const gchar* snippet_language,
-                    guint16 maximum_results)
-{
-	/* TODO */
-	return NULL;
 }
 
 /**
@@ -907,9 +810,6 @@ snippets_db_add_snippet (SnippetsDB* snippets_db,
 			/* Add the snippet to the group */
 			snippets_group_add_snippet (cur_snippets_group, added_snippet);
 
-			/* Add to the two GTree's */
-			add_snippet_to_searching_trees (snippets_db, added_snippet);
-
 			/* Add to the Hashtable */
 			add_snippet_to_hash_table (snippets_db, added_snippet);
 
@@ -1050,14 +950,11 @@ snippets_db_remove_snippet (SnippetsDB* snippets_db,
 	if (remove_all_languages_support)
 	{
 		remove_snippet_from_hash_table (snippets_db, deleted_snippet);
-		remove_snippet_from_searching_trees (snippets_db, deleted_snippet);
 	}
 	else
 	{
 		/* We remove just the current language support from the database */
 		g_hash_table_remove (priv->snippet_keys_map, snippet_key);
-
-		/* TODO - remove just this snippet-key from the searching tree's */
 	}
 
 	/* Emit the signal that the snippet was deleted */
@@ -1072,141 +969,6 @@ snippets_db_remove_snippet (SnippetsDB* snippets_db,
 	                               trigger_key, 
 	                               language,
 	                               remove_all_languages_support);
-
-	return TRUE;
-}
-
-/**
- * snippets_db_set_snippet_keywords:
- * @snippets_db: A #SnippetsDB object.
- * @snippet: An #AnjutaSnippet object.
- * @new_keywords: The new list of keywords for the snippet.
- *
- * Changes the keywords of a snippet, modifying the internal structures as needed.
- *
- * Returns: TRUE on success.
- */
-gboolean                   
-snippets_db_set_snippet_keywords (SnippetsDB *snippets_db,
-                                  AnjutaSnippet *snippet,
-                                  const GList *new_keywords)
-{
-	SnippetsDBPrivate *priv = NULL;
-	
-	/* Assertions */
-	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), FALSE);
-	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
-	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
-
-	/* TODO - modify the keyword searching tree */
-
-	snippet_set_keywords_list (snippet, new_keywords);
-
-	return TRUE;
-}
-
-gboolean                   
-snippets_db_set_snippet_trigger (SnippetsDB *snippets_db,
-                                 AnjutaSnippet *snippet,
-                                 const gchar *new_trigger)
-{
-	SnippetsDBPrivate *priv = NULL;
-	const gchar *old_trigger = NULL;
-	gchar *cur_language = NULL, *cur_snippet_key = NULL;
-	GList *languages = NULL, *iter = NULL;
-	GtkTreePath *path = NULL;
-	GtkTreeIter tree_iter;
-	
-	/* Assertions */
-	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), FALSE);
-	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
-	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
-
-	old_trigger = snippet_get_trigger_key (snippet);
-	languages = (GList *)snippet_get_languages (snippet);
-
-	/* If the old and new trigger keys are the same, we return TRUE and don't change
-	   anything */
-	if (!g_strcmp0 (old_trigger, new_trigger))
-		return TRUE;
-		
-	/* Check to see if we have any conflicts with the new trigger-key */
-	for (iter = g_list_first (languages); iter != NULL; iter = g_list_next (iter))
-	{
-		cur_language = (gchar *)iter->data;
-		cur_snippet_key = get_snippet_key_from_trigger_and_language (old_trigger,
-		                                                             cur_language);
-
-		if (g_hash_table_lookup (priv->snippet_keys_map, cur_snippet_key))
-		{
-			g_free (cur_snippet_key);
-			return FALSE;
-		}
-		g_free (cur_snippet_key);
-	}
-
-	/* TODO - modify the trigger searching tree */
-
-
-	/* Remove the entries with the old trigger-key from the hashtable and
-	   add the entries with the new trigger-key */
-	for (iter = g_list_first (languages); iter != NULL; iter = g_list_next (iter))
-	{
-		cur_language = (gchar *)iter->data;
-		cur_snippet_key = get_snippet_key_from_trigger_and_language (old_trigger, 
-		                                                             cur_language);
-		g_hash_table_remove (priv->snippet_keys_map, cur_snippet_key);
-
-		cur_snippet_key = get_snippet_key_from_trigger_and_language (new_trigger,
-		                                                             cur_language);
-		g_hash_table_insert (priv->snippet_keys_map, cur_snippet_key, snippet);
-	}
-
-	/* Modify the snippet */
-	snippet_set_trigger_key (snippet, new_trigger);
-
-	/* Emit the signal that the database was changed */
-	path = get_tree_path_for_snippet (snippets_db, snippet);
-	snippets_db_get_iter (GTK_TREE_MODEL (snippets_db), &tree_iter, path);
-	gtk_tree_model_row_changed (GTK_TREE_MODEL (snippets_db), path, &tree_iter);
-	gtk_tree_path_free (path);
-
-	return TRUE;
-}
-
-gboolean                   
-snippets_db_add_snippet_language (SnippetsDB *snippets_db,
-                                  AnjutaSnippet *snippet,
-                                  const gchar *language)
-{
-	SnippetsDBPrivate *priv = NULL;
-	const gchar *trigger_key = NULL;
-	gchar *snippet_key = NULL;
-	GtkTreePath *path = NULL;
-	GtkTreeIter tree_iter;
-	
-	/* Assertions */
-	g_return_val_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db), FALSE);
-	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), FALSE);
-	priv = ANJUTA_SNIPPETS_DB_GET_PRIVATE (snippets_db);
-
-	/* Check for a conflict */
-	trigger_key = snippet_get_trigger_key (snippet);
-	snippet_key = get_snippet_key_from_trigger_and_language (trigger_key, language);
-	if (g_hash_table_lookup (priv->snippet_keys_map, snippet_key))
-	{
-		g_free (snippet_key);
-		return FALSE;
-	}
-	g_free (snippet_key);
-
-	snippet_add_language (snippet, language);
-
-	/* Emit the signal that the database was changed */
-	path = get_tree_path_for_snippet (snippets_db, snippet);
-	snippets_db_get_iter (GTK_TREE_MODEL (snippets_db), &tree_iter, path);
-	gtk_tree_model_row_changed (GTK_TREE_MODEL (snippets_db), path, &tree_iter);
-	gtk_tree_path_free (path);
 
 	return TRUE;
 }
@@ -1267,7 +1029,6 @@ snippets_db_add_snippets_group (SnippetsDB* snippets_db,
 		else
 		{
 			add_snippet_to_hash_table (snippets_db, cur_snippet);
-			add_snippet_to_searching_trees (snippets_db, cur_snippet);
 		}
 	}
 
@@ -1317,9 +1078,6 @@ snippets_db_remove_snippets_group (SnippetsDB* snippets_db,
 	
 		if (!g_strcmp0 (group_name, snippets_group_get_name (snippets_group)))
 		{
-			/* Remove the snippets from the searching tree's */
-			remove_snippets_group_from_searching_trees (snippets_db, snippets_group);
-			
 			/* Remove the snippets in the group from the hash-table */
 			remove_snippets_group_from_hash_table (snippets_db, snippets_group);
 
@@ -1760,7 +1518,6 @@ snippets_db_set_global_variable_value (SnippetsDB* snippets_db,
 
 	return FALSE;
 }
-
 
 /**
  * snippets_db_set_global_variable_type:

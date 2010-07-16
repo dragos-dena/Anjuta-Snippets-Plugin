@@ -31,6 +31,7 @@
 #include "snippets-browser.h"
 #include "snippets-db.h"
 #include "snippets-interaction-interpreter.h"
+#include "snippets-provider.h"
 
 
 extern GType snippets_manager_plugin_get_type (GTypeModule *module);
@@ -59,6 +60,8 @@ struct _SnippetsManagerPlugin
 		
 	/* GUI parts. */
 	SnippetsBrowser* snippets_browser;
+
+	SnippetsProvider *snippets_provider;
 	
 	/* Plug-in settings */
 	gboolean overwrite_on_conflict;
