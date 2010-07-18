@@ -25,6 +25,7 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <libanjuta/anjuta-shell.h>
+#include <libanjuta/interfaces/ianjuta-editor-assist.h>
 #include "snippets-db.h"
 #include "snippets-interaction-interpreter.h"
 
@@ -58,6 +59,9 @@ struct _SnippetsProviderClass
 GType                snippets_provider_get_type (void) G_GNUC_CONST;
 SnippetsProvider*    snippets_provider_new      (SnippetsDB *snippets_db,
                                                  SnippetsInteraction *snippets_interaction);
+void                 snippets_provider_load     (SnippetsProvider *snippets_provider,
+                                                 IAnjutaEditorAssist *editor_assist);
+void                 snippets_provider_unload   (SnippetsProvider *snippets_provider);
 void                 snippets_provider_request  (SnippetsProvider *snippets_provider);
 
 G_END_DECLS

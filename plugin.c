@@ -261,6 +261,12 @@ on_added_current_document (AnjutaPlugin *plugin,
 
 	/* Refilter the snippets shown in the browser */
 	snippets_browser_refilter_snippets_view (snippets_manager_plugin->snippets_browser);
+
+	/* Load the provider if needed */
+	if (IANJUTA_IS_EDITOR_ASSIST (cur_editor))
+		snippets_provider_load (snippets_manager_plugin->snippets_provider, 
+		                        IANJUTA_EDITOR_ASSIST (cur_editor));
+
 }
 
 static void
@@ -275,6 +281,9 @@ on_removed_current_document (AnjutaPlugin *plugin,
 	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
 
 	snippets_manager_plugin->cur_editor = NULL;
+
+	/* Unload the provider */
+	snippets_provider_unload (snippets_manager_plugin->snippets_provider);
 }
 
 static void
