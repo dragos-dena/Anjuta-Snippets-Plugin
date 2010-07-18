@@ -673,6 +673,36 @@ snippets_provider_activate (IAnjutaProvider *self,
                             gpointer data,
                             GError **error)
 {
+	SnippetsProviderPrivate *priv = NULL;
+	AnjutaSnippet *snippet = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_PROVIDER (self));
+	g_return_if_fail (IANJUTA_IS_ITERABLE (iter));
+	priv = ANJUTA_SNIPPETS_PROVIDER_GET_PRIVATE (self);
+	g_return_if_fail (IANJUTA_IS_ITERABLE (priv->start_iter));
+	g_return_if_fail (IANJUTA_IS_EDITOR (priv->editor_assist));
+
+	/* Get the Snippet and assert it */
+	snippet = ((SnippetEntry *)data)->snippet;
+	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
+
+	/* Erase the text */
+	ianjuta_editor_erase (IANJUTA_EDITOR (priv->editor_assist),
+	                      priv->start_iter,
+	                      iter,
+	                      NULL);
+
+	/* Set the cursor at the start iter */
+	ianjuta_editor_goto_position (IANJUTA_EDITOR (priv->editor_assist),
+	                              priv->start_iter,
+	                              NULL);
+
+	/* Insert the snippet */
+	snippets_interaction_insert_snippet (priv->snippets_interaction,
+	                                     G_OBJECT (priv->snippets_db),
+	                                     snippet);
+
 	stop_listening (ANJUTA_SNIPPETS_PROVIDER (self));
 }
 
