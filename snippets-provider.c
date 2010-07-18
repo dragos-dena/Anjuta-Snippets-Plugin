@@ -24,6 +24,7 @@
 #include <libanjuta/interfaces/ianjuta-document-manager.h>
 #include <libanjuta/interfaces/ianjuta-document.h>
 #include <libanjuta/interfaces/ianjuta-language.h>
+#include <libanjuta/interfaces/ianjuta-indicable.h>
 #include "snippets-provider.h"
 #include "snippet.h"
 #include "snippets-group.h"
@@ -156,19 +157,19 @@ get_relevance_for_word (const gchar *search_word,
 	gint i = 0, search_word_len = 0, key_word_len = 0;
 	gdouble relevance = 0.0;
 
-	search_word_len = g_utf8_strlen (search_word, -1);
-	key_word_len    = g_utf8_strlen (key_word, -1);
+	search_word_len = strlen (search_word);
+	key_word_len    = strlen (key_word);
 
 	for (i = 0; i < key_word_len - search_word_len + 1; i ++)
 	{
 		if (g_str_has_prefix (key_word + i, search_word))
 		{
-			relevance = RELEVANCE (search_word_len, key_word_len);
+			if (RELEVANCE (search_word_len, key_word_len) > relevance)
+				relevance = RELEVANCE (search_word_len, key_word_len);
 
 			if (i == 0)
 				relevance *= START_MATCH_BONUS;
 
-			break;
 		}
 	}
 
@@ -601,6 +602,11 @@ snippets_provider_request (SnippetsProvider *snippets_provider)
 	priv->request   = TRUE;
 	priv->listening = TRUE;
 
+	/* Clear the iter if need */
+	if (IANJUTA_IS_ITERABLE (priv->start_iter))
+		g_object_unref (priv->start_iter);
+	priv->start_iter = NULL;
+
 	/* Show the auto-complete widget */
 	ianjuta_editor_assist_invoke (priv->editor_assist,
 	                              IANJUTA_PROVIDER (snippets_provider),
@@ -645,8 +651,26 @@ snippets_provider_populate (IAnjutaProvider *self,
 	clear_suggestions_list (snippets_provider);
 	build_suggestions_list (snippets_provider, cursor);
 
+	/* Clear the previous indicator */
+	if (IANJUTA_IS_INDICABLE (priv->editor_assist))
+		ianjuta_indicable_clear (IANJUTA_INDICABLE (priv->editor_assist), NULL);
+	
 	if (priv->suggestions_list == NULL)
+	{
 		stop_listening (snippets_provider);
+		ianjuta_editor_assist_proposals (priv->editor_assist, self, NULL, TRUE, NULL);
+		return;
+	}
+
+	/* Highlight the search string */
+	if (IANJUTA_IS_INDICABLE (priv->editor_assist))
+	{
+		ianjuta_indicable_set (IANJUTA_INDICABLE (priv->editor_assist),
+		                       priv->start_iter,
+		                       cursor,
+		                       IANJUTA_INDICABLE_IMPORTANT,
+		                       NULL);
+	}
 
 	ianjuta_editor_assist_proposals (priv->editor_assist,
 	                                 self,
@@ -697,6 +721,10 @@ snippets_provider_activate (IAnjutaProvider *self,
 	ianjuta_editor_goto_position (IANJUTA_EDITOR (priv->editor_assist),
 	                              priv->start_iter,
 	                              NULL);
+
+	/* Clear the indicator */
+	if (IANJUTA_IS_INDICABLE (priv->editor_assist))
+		ianjuta_indicable_clear (IANJUTA_INDICABLE (priv->editor_assist), NULL);
 
 	/* Insert the snippet */
 	snippets_interaction_insert_snippet (priv->snippets_interaction,
