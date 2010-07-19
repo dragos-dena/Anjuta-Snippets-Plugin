@@ -887,7 +887,7 @@ on_insert_button_clicked (GtkButton *insert_button,
 			return;
 
 		snippets_interaction_insert_snippet (priv->snippets_interaction,
-		                                     G_OBJECT (priv->snippets_db),
+		                                     priv->snippets_db,
 		                                     ANJUTA_SNIPPET (cur_object));
 	}
 
@@ -939,7 +939,7 @@ on_snippets_view_row_activated (GtkTreeView *snippets_view,
 
 	if (ANJUTA_IS_SNIPPET (cur_object))
 		snippets_interaction_insert_snippet (priv->snippets_interaction,
-		                                     G_OBJECT (priv->snippets_db),
+		                                     priv->snippets_db,
 		                                     ANJUTA_SNIPPET (cur_object));
 
 	g_object_unref (cur_object);

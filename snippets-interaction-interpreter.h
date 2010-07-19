@@ -25,6 +25,7 @@
 #include <glib.h>
 #include <glib-object.h>
 #include "snippet.h"
+#include "snippets-db.h"
 #include <libanjuta/anjuta-shell.h>
 
 G_BEGIN_DECLS
@@ -43,8 +44,6 @@ struct _SnippetsInteraction
 {
 	GObject object;
 
-	/*< private >*/
-	SnippetsInteractionPrivate *priv;
 };
 
 struct _SnippetsInteractionClass
@@ -53,17 +52,17 @@ struct _SnippetsInteractionClass
 	
 };
 
-GType                snippets_interaction_get_type          (void) G_GNUC_CONST;
-SnippetsInteraction* snippets_interaction_new               (void);
+GType                snippets_interaction_get_type               (void) G_GNUC_CONST;
+SnippetsInteraction* snippets_interaction_new                    (void);
 
-void                 snippets_interaction_start             (SnippetsInteraction *snippets_interaction,
-                                                             AnjutaShell *shell);
-void                 snippets_interaction_destroy           (SnippetsInteraction *snippets_interaction);
-
-void                 snippets_interaction_insert_snippet    (SnippetsInteraction *snippets_interaction,
-                                                             GObject *snippets_db,
-                                                             AnjutaSnippet *snippet);
-
+void                 snippets_interaction_start                  (SnippetsInteraction *snippets_interaction,
+                                                                  AnjutaShell *shell);
+void                 snippets_interaction_destroy                (SnippetsInteraction *snippets_interaction);
+void                 snippets_interaction_insert_snippet         (SnippetsInteraction *snippets_interaction,
+                                                                  SnippetsDB *snippets_db,
+                                                                  AnjutaSnippet *snippet);
+void                 snippets_interaction_trigger_insert_request (SnippetsInteraction *snippets_interaction,
+                                                                  SnippetsDB *snippets_db);
 G_END_DECLS
 
 #endif /* __SNIPPETS_INTERACTION_H__ */

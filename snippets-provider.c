@@ -132,24 +132,6 @@ snippets_provider_iface_init (IAnjutaProviderIface* iface)
 
 /* Private methods */
 
-static void
-stop_listening (SnippetsProvider *snippets_provider)
-{
-	SnippetsProviderPrivate *priv = NULL;
-
-	/* Assertions */
-	g_return_if_fail (ANJUTA_IS_SNIPPETS_PROVIDER (snippets_provider));
-	priv = ANJUTA_SNIPPETS_PROVIDER_GET_PRIVATE (snippets_provider);
-
-	if (IANJUTA_IS_ITERABLE (priv->start_iter))
-		g_object_unref (priv->start_iter);
-	priv->start_iter = NULL;
-
-	priv->request   = FALSE;
-	priv->listening = FALSE;
-	
-}
-
 static gdouble
 get_relevance_for_word (const gchar *search_word,
                         const gchar *key_word)
@@ -344,6 +326,27 @@ get_current_editor_language (SnippetsProvider *snippets_provider)
 	                                              IANJUTA_EDITOR_LANGUAGE (doc),
 	                                              NULL);
 }
+
+static void
+stop_listening (SnippetsProvider *snippets_provider)
+{
+	SnippetsProviderPrivate *priv = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_PROVIDER (snippets_provider));
+	priv = ANJUTA_SNIPPETS_PROVIDER_GET_PRIVATE (snippets_provider);
+
+	if (IANJUTA_IS_ITERABLE (priv->start_iter))
+		g_object_unref (priv->start_iter);
+	priv->start_iter = NULL;
+
+	priv->request   = FALSE;
+	priv->listening = FALSE;
+
+	clear_suggestions_list (snippets_provider);
+
+}
+
 
 static void
 build_suggestions_list (SnippetsProvider *snippets_provider,
@@ -575,6 +578,9 @@ snippets_provider_unload (SnippetsProvider *snippets_provider)
 	                              NULL);
 	priv->editor_assist = NULL;
 
+	/* Stop listening if necessary */
+	stop_listening (snippets_provider);
+
 }
 
 void
@@ -635,9 +641,13 @@ snippets_provider_populate (IAnjutaProvider *self,
 	if (priv->request)
 	{
 		/* Save the new cursor as the starting one */
-		priv->start_iter = get_start_iter_for_cursor (IANJUTA_EDITOR (priv->editor_assist),
-		                                              cursor);
-
+/*		priv->start_iter = get_start_iter_for_cursor (IANJUTA_EDITOR (priv->editor_assist),*/
+/*		                                              cursor);*/
+		/* TODO - seems to feel better if it starts at the current cursor position.
+		   Keeping the old method also if it will be decided to use that method.
+		   Note: get_start_iter_for_cursor goes back in the text until it finds a
+		   separator. */
+		priv->start_iter = ianjuta_iterable_clone (cursor, NULL);
 		priv->request = FALSE;
 	}
 
@@ -722,7 +732,7 @@ snippets_provider_activate (IAnjutaProvider *self,
 
 	/* Insert the snippet */
 	snippets_interaction_insert_snippet (priv->snippets_interaction,
-	                                     G_OBJECT (priv->snippets_db),
+	                                     priv->snippets_db,
 	                                     snippet);
 
 	stop_listening (ANJUTA_SNIPPETS_PROVIDER (self));

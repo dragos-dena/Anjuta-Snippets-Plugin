@@ -39,8 +39,6 @@
 #define GLOBAL_VAR_NEW_NAME   "new_global_var_name"
 #define GLOBAL_VAR_NEW_VALUE  "new_global_var_value"
 
-#define IN_WORD(c)    (g_ascii_isalnum (c) || c == '_')
-
 static gpointer parent_class;
 
 /* Menu callbacks and actions */
@@ -111,108 +109,31 @@ snippet_insert (SnippetsManagerPlugin * plugin,
 	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
 
 	/* Get the snippet from the database and check if it's not found */
-	requested_snippet = (AnjutaSnippet *)snippets_db_get_snippet (snippets_manager_plugin->snippets_db,\
-	                                                              trigger,
-	                                                              NULL);
+	requested_snippet = snippets_db_get_snippet (snippets_manager_plugin->snippets_db,
+	                                             trigger,
+	                                             NULL);
 	g_return_val_if_fail (ANJUTA_IS_SNIPPET (requested_snippet), FALSE);
 
 	/* Get the default content of the snippet */
 	snippets_interaction_insert_snippet (snippets_manager_plugin->snippets_interaction,
-	                                     G_OBJECT (snippets_manager_plugin->snippets_db),
+	                                     snippets_manager_plugin->snippets_db,
 	                                     requested_snippet);
 
 	return TRUE;
-}
-
-static gchar
-char_at_iterator (IAnjutaEditor *editor,
-                  IAnjutaIterable *iter)
-{
-	IAnjutaIterable *next = NULL;
-	gchar *text = NULL, returned_char = 0;
-	
-	/* Assertions */
-	g_return_val_if_fail (IANJUTA_IS_EDITOR (editor), 0);
-	g_return_val_if_fail (IANJUTA_IS_ITERABLE (iter), 0);
-
-	next = ianjuta_iterable_clone (iter, NULL);
-	ianjuta_iterable_next (next, NULL);
-	
-	text = ianjuta_editor_get_text (editor, iter, next, NULL);
-	if (text == NULL)
-		return 0;
-
-	returned_char = text[0];
-	g_free (text);
-	g_object_unref (next);
-
-	return returned_char;	
 }
 
 static void 
 on_menu_trigger_insert_snippet (GtkAction *action, 
                                 SnippetsManagerPlugin *plugin)
 {
-	IAnjutaIterable *rewind_iter = NULL, *cur_pos = NULL;
-	gchar *trigger = NULL, cur_char = 0;
-	gboolean reached_start = FALSE;
-	/* TODO - move most of this code to snippets-interaction-interpreter */
-
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin));
-	if (!IANJUTA_IS_EDITOR (plugin->cur_editor))
-		return;
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (plugin->snippets_db));
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_INTERACTION (plugin->snippets_interaction));
+
+	snippets_interaction_trigger_insert_request (plugin->snippets_interaction,
+	                                             plugin->snippets_db);
 	
-	/* If the current document isn't an editor, return */
-	if (plugin->cur_editor == NULL)
-		return;
-
-	/* Initialize the iterators */
-	cur_pos     = ianjuta_editor_get_position (plugin->cur_editor, NULL);
-	rewind_iter = ianjuta_iterable_clone (cur_pos, NULL);
-
-	/* If we are inside a word we can't insert a snippet */
-	cur_char = char_at_iterator (plugin->cur_editor, cur_pos);
-	if (IN_WORD (cur_char))
-		return;
-
-	/* If we can't decrement the cur_pos iterator, then we are at the start of the document,
-	   so the trigger key is NULL */
-	if (!ianjuta_iterable_previous (rewind_iter, NULL))
-		return;
-	cur_char = char_at_iterator (plugin->cur_editor, rewind_iter);
-
-	/* We iterate until we get to the start of the word or the start of the document */
-	while (IN_WORD (cur_char))
-	{	
-		if (!ianjuta_iterable_previous (rewind_iter, NULL))
-		{
-			reached_start = TRUE;
-			break;
-		}
-
-		cur_char = char_at_iterator (plugin->cur_editor, rewind_iter);
-	}
-
-	/* If we didn't reached the start of the document, we move the iterator forward one
-	   step so we don't delete one extra char. */
-	if (!reached_start)
-		ianjuta_iterable_next (rewind_iter, NULL);
-
-	/* We compute the trigger-key */
-	trigger = ianjuta_editor_get_text (plugin->cur_editor, rewind_iter, cur_pos, NULL);
-
-	/* If there is a snippet for our trigger-key we delete the trigger from the editor
-	   and insert the snippet. */
-	if (snippets_db_get_snippet (plugin->snippets_db, trigger, NULL))
-	{
-		ianjuta_editor_erase (plugin->cur_editor, rewind_iter, cur_pos, NULL);
-		snippet_insert (plugin, trigger);
-	}
-
-	g_free (trigger);
-	g_object_unref (rewind_iter);
-	g_object_unref (cur_pos);
 }
 
 static void
@@ -331,7 +252,7 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 {
 	SnippetsManagerPlugin *snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
 	AnjutaUI *anjuta_ui = NULL;
-	
+
 	/* Assertions */
 	g_return_val_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (snippets_manager_plugin),
 	                      FALSE);
@@ -340,7 +261,7 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	snippets_manager_plugin->snippets_db->anjuta_shell = plugin->shell;
 	snippets_db_load (snippets_manager_plugin->snippets_db);
 
-	/* Link the AnjutaShell to the SnippetsProvider */
+	/* Link the AnjutaShell to the SnippetsProvider and load if necessary */
 	snippets_manager_plugin->snippets_provider->anjuta_shell = plugin->shell;
 
 	/* Load the SnippetsBrowser with the snippets in the SnippetsDB */
@@ -425,6 +346,9 @@ snippets_manager_deactivate (AnjutaPlugin *plugin)
 
 	/* Destroy the Interaction Interpreter */
 	snippets_interaction_destroy (snippets_manager_plugin->snippets_interaction);
+
+	/* Unload the SnippetsProvider */
+	snippets_provider_unload (snippets_manager_plugin->snippets_provider);
 	
 	return TRUE;
 }

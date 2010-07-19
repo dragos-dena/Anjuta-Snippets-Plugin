@@ -24,6 +24,8 @@
 #include <libanjuta/interfaces/ianjuta-document-manager.h>
 #include <libanjuta/interfaces/ianjuta-editor-language.h>
 
+#define IN_WORD(c)    (g_ascii_isalnum (c) || c == '_')
+
 #define ANJUTA_SNIPPETS_INTERACTION_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ANJUTA_TYPE_SNIPPETS_INTERACTION, SnippetsInteractionPrivate))
 
 struct _SnippetsInteractionPrivate
@@ -58,20 +60,18 @@ static void
 snippets_interaction_init (SnippetsInteraction *snippets_interaction)
 {
 	SnippetsInteractionPrivate* priv = ANJUTA_SNIPPETS_INTERACTION_GET_PRIVATE (snippets_interaction);
-	
-	snippets_interaction->priv = priv;
 
 	/* Initialize the private field */
-	snippets_interaction->priv->snippet_start_position = NULL;
-	snippets_interaction->priv->snippet_end_position   = NULL;
-	snippets_interaction->priv->cursor_position        = NULL;
+	priv->snippet_start_position = NULL;
+	priv->snippet_end_position   = NULL;
+	priv->cursor_position        = NULL;
 
-	snippets_interaction->priv->cur_snippet = NULL;
+	priv->cur_snippet = NULL;
 
-	snippets_interaction->priv->cur_editor = NULL;
-	snippets_interaction->priv->editing    = FALSE;
+	priv->cur_editor = NULL;
+	priv->editing    = FALSE;
 
-	snippets_interaction->priv->shell = NULL;
+	priv->shell = NULL;
 	
 }
 
@@ -86,6 +86,34 @@ snippets_interaction_class_init (SnippetsInteractionClass *snippets_interaction_
 	g_type_class_add_private (snippets_interaction_class, sizeof (SnippetsInteractionPrivate));
 }
 
+/* Private */
+
+static gchar
+char_at_iterator (IAnjutaEditor *editor,
+                  IAnjutaIterable *iter)
+{
+	IAnjutaIterable *next = NULL;
+	gchar *text = NULL, returned_char = 0;
+	
+	/* Assertions */
+	g_return_val_if_fail (IANJUTA_IS_EDITOR (editor), 0);
+	g_return_val_if_fail (IANJUTA_IS_ITERABLE (iter), 0);
+
+	next = ianjuta_iterable_clone (iter, NULL);
+	ianjuta_iterable_next (next, NULL);
+	
+	text = ianjuta_editor_get_text (editor, iter, next, NULL);
+	if (text == NULL)
+		return 0;
+
+	returned_char = text[0];
+	g_free (text);
+	g_object_unref (next);
+
+	return returned_char;	
+}
+
+/* Public methods */
 
 SnippetsInteraction* 
 snippets_interaction_new ()
@@ -97,11 +125,14 @@ void
 snippets_interaction_start (SnippetsInteraction *snippets_interaction,
                             AnjutaShell *shell)
 {
+	SnippetsInteractionPrivate *priv = NULL;
+
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_INTERACTION (snippets_interaction));
 	g_return_if_fail (ANJUTA_IS_SHELL (shell));
+	priv = ANJUTA_SNIPPETS_INTERACTION_GET_PRIVATE (snippets_interaction);
 
-	snippets_interaction->priv->shell = shell;
+	priv->shell = shell;
 }
 
 void
@@ -113,7 +144,7 @@ snippets_interaction_destroy (SnippetsInteraction *snippets_interaction)
 
 void                 
 snippets_interaction_insert_snippet (SnippetsInteraction *snippets_interaction,
-                                     GObject *snippets_db,
+                                     SnippetsDB *snippets_db,
                                      AnjutaSnippet *snippet)
 {
 	SnippetsInteractionPrivate *priv = NULL;
@@ -128,7 +159,8 @@ snippets_interaction_insert_snippet (SnippetsInteraction *snippets_interaction,
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_INTERACTION (snippets_interaction));
 	g_return_if_fail (ANJUTA_IS_SNIPPET (snippet));
 	priv = ANJUTA_SNIPPETS_INTERACTION_GET_PRIVATE (snippets_interaction);
-	
+	g_return_if_fail (ANJUTA_IS_SHELL (priv->shell));
+
 	/* Get the current document and check that it is an editor */
 	docman = anjuta_shell_get_interface (priv->shell,
 	                                     IAnjutaDocumentManager,
@@ -152,7 +184,9 @@ snippets_interaction_insert_snippet (SnippetsInteraction *snippets_interaction,
 	indent[i] = 0;
 
 	/* Get the default content of the snippet */
-	snippet_default_content = snippet_get_default_content (snippet, snippets_db, indent);
+	snippet_default_content = snippet_get_default_content (snippet, 
+	                                                       G_OBJECT (snippets_db), 
+	                                                       indent);
 	g_return_if_fail (snippet_default_content != NULL);
 	
 	/* Insert the default content into the editor */
@@ -174,4 +208,73 @@ snippets_interaction_insert_snippet (SnippetsInteraction *snippets_interaction,
 	g_object_unref (line_begin);
 	g_object_unref (cur_pos);
 	
+}
+
+void
+snippets_interaction_trigger_insert_request (SnippetsInteraction *snippets_interaction,
+                                             SnippetsDB *snippets_db)
+{
+	SnippetsInteractionPrivate *priv = NULL;
+	IAnjutaIterable *rewind_iter = NULL, *cur_pos = NULL;
+	gchar *trigger = NULL, cur_char = 0;
+	gboolean reached_start = FALSE;
+	AnjutaSnippet *snippet = NULL;
+	
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_INTERACTION (snippets_interaction));
+	g_return_if_fail (ANJUTA_IS_SNIPPETS_DB (snippets_db));
+	priv = ANJUTA_SNIPPETS_INTERACTION_GET_PRIVATE (snippets_interaction);
+	g_return_if_fail (ANJUTA_IS_SHELL (priv->shell));
+
+	if (!IANJUTA_IS_EDITOR (priv->cur_editor))
+		return;
+
+	/* Initialize the iterators */
+	cur_pos     = ianjuta_editor_get_position (priv->cur_editor, NULL);
+	rewind_iter = ianjuta_iterable_clone (cur_pos, NULL);
+
+	/* If we are inside a word we can't insert a snippet */
+	cur_char = char_at_iterator (priv->cur_editor, cur_pos);
+	if (IN_WORD (cur_char))
+		return;
+
+	/* If we can't decrement the cur_pos iterator, then we are at the start of the document,
+	   so the trigger key is NULL */
+	if (!ianjuta_iterable_previous (rewind_iter, NULL))
+		return;
+	cur_char = char_at_iterator (priv->cur_editor, rewind_iter);
+
+	/* We iterate until we get to the start of the word or the start of the document */
+	while (IN_WORD (cur_char))
+	{	
+		if (!ianjuta_iterable_previous (rewind_iter, NULL))
+		{
+			reached_start = TRUE;
+			break;
+		}
+
+		cur_char = char_at_iterator (priv->cur_editor, rewind_iter);
+	}
+
+	/* If we didn't reached the start of the document, we move the iterator forward one
+	   step so we don't delete one extra char. */
+	if (!reached_start)
+		ianjuta_iterable_next (rewind_iter, NULL);
+
+	/* We compute the trigger-key */
+	trigger = ianjuta_editor_get_text (priv->cur_editor, rewind_iter, cur_pos, NULL);
+
+	/* If there is a snippet for our trigger-key we delete the trigger from the editor
+	   and insert the snippet. */
+	snippet = snippets_db_get_snippet (snippets_db, trigger, NULL);
+	if (ANJUTA_IS_SNIPPET (snippet))
+	{
+		ianjuta_editor_erase (priv->cur_editor, rewind_iter, cur_pos, NULL);
+		snippets_interaction_insert_snippet (snippets_interaction, snippets_db, snippet);
+	}
+
+	g_free (trigger);
+	g_object_unref (rewind_iter);
+	g_object_unref (cur_pos);
+
 }
