@@ -32,8 +32,8 @@
 
 #define TRIGGER_RELEVANCE        1000
 #define NAME_RELEVANCE           1000
-#define FIRST_KEYWORD_RELEVANCE  300
-#define KEYWORD_RELEVANCE_DEC    20
+#define FIRST_KEYWORD_RELEVANCE  100
+#define KEYWORD_RELEVANCE_DEC    5
 #define START_MATCH_BONUS        1.7
 
 #define RELEVANCE(search_str_len, key_len)  ((gdouble)(search_str_len)/(key_len - search_str_len + 1))
@@ -155,7 +155,7 @@ get_relevance_for_word (const gchar *search_word,
                         const gchar *key_word)
 {
 	gint i = 0, search_word_len = 0, key_word_len = 0;
-	gdouble relevance = 0.0;
+	gdouble relevance = 0.0, cur_relevance = 0.0;
 
 	search_word_len = strlen (search_word);
 	key_word_len    = strlen (key_word);
@@ -164,12 +164,11 @@ get_relevance_for_word (const gchar *search_word,
 	{
 		if (g_str_has_prefix (key_word + i, search_word))
 		{
-			if (RELEVANCE (search_word_len, key_word_len) > relevance)
-				relevance = RELEVANCE (search_word_len, key_word_len);
-
+			cur_relevance = RELEVANCE (search_word_len, key_word_len);
 			if (i == 0)
-				relevance *= START_MATCH_BONUS;
+				cur_relevance *= START_MATCH_BONUS;
 
+			relevance += cur_relevance;
 		}
 	}
 
@@ -592,12 +591,6 @@ snippets_provider_request (SnippetsProvider *snippets_provider)
 	if (!IANJUTA_IS_EDITOR_ASSIST (priv->editor_assist))
 		return;
 
-	/* Add the snippets provider to the editor assist. This should be removed after
-	   an insertion. */
-	ianjuta_editor_assist_add (priv->editor_assist, 
-	                           IANJUTA_PROVIDER (snippets_provider), 
-	                           NULL);
-
 	/* We just made the request and should listen with the populate method. */
 	priv->request   = TRUE;
 	priv->listening = TRUE;
@@ -654,7 +647,7 @@ snippets_provider_populate (IAnjutaProvider *self,
 	/* Clear the previous indicator */
 	if (IANJUTA_IS_INDICABLE (priv->editor_assist))
 		ianjuta_indicable_clear (IANJUTA_INDICABLE (priv->editor_assist), NULL);
-	
+
 	if (priv->suggestions_list == NULL)
 	{
 		stop_listening (snippets_provider);
@@ -676,6 +669,7 @@ snippets_provider_populate (IAnjutaProvider *self,
 	                                 self,
 	                                 priv->suggestions_list,
 	                                 TRUE, NULL);
+
 }
 
 static IAnjutaIterable*
