@@ -27,6 +27,7 @@
 #include "snippet.h"
 #include "snippets-db.h"
 #include <libanjuta/anjuta-shell.h>
+#include <libanjuta/interfaces/ianjuta-editor.h>
 
 G_BEGIN_DECLS
 
@@ -63,6 +64,9 @@ void                 snippets_interaction_insert_snippet         (SnippetsIntera
                                                                   AnjutaSnippet *snippet);
 void                 snippets_interaction_trigger_insert_request (SnippetsInteraction *snippets_interaction,
                                                                   SnippetsDB *snippets_db);
+void                 snippets_interaction_set_editor              (SnippetsInteraction *snippets_interaction,
+                                                                   IAnjutaEditor *editor);
+
 G_END_DECLS
 
 #endif /* __SNIPPETS_INTERACTION_H__ */

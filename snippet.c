@@ -23,6 +23,7 @@
 #include "snippet.h"
 #include "snippets-db.h"
 #include <gio/gio.h>
+#include <libanjuta/anjuta-debug.h>
 
 #define SNIPPET_VARIABLE_START(text, index)  (text[index] == '$' && text[index + 1] == '{')
 #define SNIPPET_VARIABLE_END(text, index)    (text[index] == '}')
@@ -85,7 +86,7 @@ snippet_dispose (GObject* snippet)
 	GList* iter = NULL;
 	gpointer p;
 	AnjutaSnippetVariable* cur_snippet_var;
-	printf ("Snippet disposed: %s\n", anjuta_snippet->priv->snippet_name);
+
 	/* Delete the trigger_key, snippet_language, snippet_name and snippet_content fields */
 	g_free (anjuta_snippet->priv->trigger_key);
 	anjuta_snippet->priv->trigger_key = NULL;
@@ -161,7 +162,7 @@ snippet_init (AnjutaSnippet* snippet)
 	snippet->priv->variables = NULL;
 	snippet->priv->keywords = NULL;
 
-	snippet->priv->cur_value_end_position = 0;
+	snippet->priv->cur_value_end_position = -1;
 	snippet->priv->default_computed = FALSE;
 }
 
@@ -194,7 +195,7 @@ snippet_new (const gchar* trigger_key,
 	GList *iter1 = NULL, *iter2 = NULL, *iter3 = NULL;
 	gchar* temporary_string_holder = NULL;
 	AnjutaSnippetVariable* cur_snippet_var = NULL;
-	
+
 	/* Assertions */
 	g_return_val_if_fail (trigger_key != NULL, NULL);
 	g_return_val_if_fail (snippet_name != NULL, NULL);
@@ -251,7 +252,7 @@ snippet_new (const gchar* trigger_key,
 		iter2 = g_list_next (iter2);
 		iter3 = g_list_next (iter3);
 	}
-	
+	DEBUG_PRINT ("Snippet %s created.\n", snippet_name); 
 	return snippet;
 }
 
@@ -919,6 +920,8 @@ reset_variables (AnjutaSnippet *snippet)
 			g_ptr_array_remove_range (cur_var->relative_positions, 
 				                      0, cur_var->relative_positions->len);
 	}
+
+	snippet->priv->cur_value_end_position = -1;
 }
 
 static gchar *
@@ -1007,7 +1010,7 @@ expand_global_and_default_variables (AnjutaSnippet *snippet,
 			cur_var->cur_value_len = cur_var_value_size;
 			g_ptr_array_add (cur_var->relative_positions, 
 			                 GINT_TO_POINTER (STRING_CUR_POSITION (buffer)));
-			
+
 			/* Append the variable value to the buffer */
 			buffer = g_string_append (buffer, cur_var_value);
 
@@ -1149,7 +1152,7 @@ snippet_get_variable_relative_positions	(AnjutaSnippet* snippet)
  *
  * Returns: The requested #GList or NULL on failure.
  */
-GList*          
+GList*
 snippet_get_variable_cur_values_len (AnjutaSnippet *snippet)
 {
 	GList *cur_values_len_list = NULL, *iter = NULL;
@@ -1169,6 +1172,18 @@ snippet_get_variable_cur_values_len (AnjutaSnippet *snippet)
 	}
 
 	return cur_values_len_list;	
+}
+
+gint
+snippet_get_cur_value_end_position (AnjutaSnippet *snippet)
+{
+	AnjutaSnippetPrivate *priv = NULL;
+
+	/* Assertions */
+	g_return_val_if_fail (ANJUTA_IS_SNIPPET (snippet), -1);
+	priv = ANJUTA_SNIPPET_GET_PRIVATE (snippet);
+
+	return priv->cur_value_end_position;
 }
 
 /**

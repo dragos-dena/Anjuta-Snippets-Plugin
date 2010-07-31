@@ -417,7 +417,7 @@ parse_snippet_node (xmlNodePtr snippet_node)
 				}
 				i ++;
 			}
-
+			
 			g_free (languages_temp);
 			g_strfreev (languages_temp_array);
 		}

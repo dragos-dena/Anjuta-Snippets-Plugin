@@ -24,7 +24,7 @@
 
 #include <config.h>
 #include <libanjuta/anjuta-plugin.h>
-#include <libanjuta/interfaces/ianjuta-snippet-manager.h>
+#include <libanjuta/interfaces/ianjuta-snippets-manager.h>
 #include <libanjuta/interfaces/ianjuta-editor.h>
 
 #include "snippets-editor.h"
@@ -67,10 +67,7 @@ struct _SnippetsManagerPlugin
 	gboolean overwrite_on_conflict;
 	gboolean show_only_document_language_snippets;
 
-	/* Current IAnjutaEditor or NULL if the current IAnjutaDocument isn't an Editor */
-	IAnjutaEditor *cur_editor;
 	gint cur_editor_watch_id;
-	gint cur_editor_handler_id;
 
 	/* The Menu UI */
 	GtkActionGroup *action_group;

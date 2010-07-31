@@ -31,9 +31,10 @@ snippets_manager_plugin_DATA = $(plugin_in_files:.plugin.in=.plugin)
 
 AM_CPPFLAGS= \
 	$(WARN_CFLAGS) \
-	$(DEPRECATED_FLAGS) \
+	$(DEPRECATED_FLAGS) \ 
 	$(LIBXML_CFLAGS) \
-	$(LIBANJUTA_CFLAGS)
+	$(LIBANJUTA_CFLAGS) \
+	-DG_LOG_DOMAIN=\"libanjuta-snippets-manager\"
 
 plugindir = $(anjuta_plugin_dir)
 plugin_LTLIBRARIES = libanjuta-snippets-manager.la

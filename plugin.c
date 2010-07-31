@@ -176,9 +176,12 @@ on_added_current_document (AnjutaPlugin *plugin,
 
 	/* Get the current document and test if it's an IAnjutaEditor */
 	cur_editor = g_value_get_object (value);
-	if (!IANJUTA_IS_EDITOR (cur_editor))
-		return;
-	snippets_manager_plugin->cur_editor = IANJUTA_EDITOR (cur_editor);
+	if (IANJUTA_IS_EDITOR (cur_editor))
+		snippets_interaction_set_editor (snippets_manager_plugin->snippets_interaction,
+			                             IANJUTA_EDITOR (cur_editor));
+	else
+		snippets_interaction_set_editor (snippets_manager_plugin->snippets_interaction,
+		                                 NULL);
 
 	/* Refilter the snippets shown in the browser */
 	snippets_browser_refilter_snippets_view (snippets_manager_plugin->snippets_browser);
@@ -201,10 +204,11 @@ on_removed_current_document (AnjutaPlugin *plugin,
 	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin));
 	snippets_manager_plugin = ANJUTA_PLUGIN_SNIPPETS_MANAGER (plugin);
 
-	snippets_manager_plugin->cur_editor = NULL;
-
 	/* Unload the provider */
 	snippets_provider_unload (snippets_manager_plugin->snippets_provider);
+
+	snippets_interaction_set_editor (snippets_manager_plugin->snippets_interaction,
+	                                 NULL);
 }
 
 static void
@@ -272,7 +276,7 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 	anjuta_shell_add_widget (plugin->shell,
 	                         GTK_WIDGET (snippets_manager_plugin->snippets_browser),
 	                         "snippets_browser",
-	                         _("Snippets Browser"),
+	                         _("Snippets"),
 	                         GTK_STOCK_FILE,
 	                         ANJUTA_SHELL_PLACEMENT_LEFT,
 	                         NULL);
@@ -290,7 +294,7 @@ snippets_manager_activate (AnjutaPlugin * plugin)
 		                         on_removed_current_document,
 		                         NULL);
 
-	/* Merge the Menu UI */
+		/* Merge the Menu UI */
 	anjuta_ui = anjuta_shell_get_ui (plugin->shell, FALSE);
 
 	snippets_manager_plugin->action_group =
@@ -391,9 +395,7 @@ snippets_manager_plugin_instance_init (GObject * obj)
 	snippets_manager->overwrite_on_conflict = FALSE;
 	snippets_manager->show_only_document_language_snippets = FALSE;
 
-	snippets_manager->cur_editor = NULL;
 	snippets_manager->cur_editor_watch_id = -1;
-	snippets_manager->cur_editor_handler_id = -1;
 
 	snippets_manager->action_group = NULL;
 	snippets_manager->uiid = -1;
