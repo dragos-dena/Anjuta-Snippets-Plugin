@@ -226,7 +226,7 @@ update_editor_iter (IAnjutaIterable *iter,
 
 	/* Update the iter position */
 	ianjuta_iterable_set_position (iter, iter_position + modified_count, NULL);
-//	printf (">>%d %d %d\n", start_position, iter_position, modified_count);
+
 	return TRUE;
 }
 
@@ -238,7 +238,6 @@ update_snippet_positions (SnippetsInteraction *snippets_interaction,
 	GList *iter = NULL, *iter2 = NULL;
 	SnippetsInteractionPrivate *priv = NULL;
 	SnippetVariableInfo *cur_var_info = NULL;
-	gboolean intact_iter = FALSE;
 
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_INTERACTION (snippets_interaction));
@@ -292,7 +291,7 @@ update_snippet_positions (SnippetsInteraction *snippets_interaction,
 		}
 
 	}
-	printf ("\n");
+
 }
 
 static void
@@ -329,23 +328,22 @@ update_variables_values (SnippetsInteraction *snippets_interaction,
 			g_return_if_fail (IANJUTA_IS_ITERABLE (var_iter));
 
 			/* We found a variable value modified */
-			diff = ianjuta_iterable_diff (iter, var_iter, NULL);
+			diff = ianjuta_iterable_diff (var_iter, iter, NULL);
+			printf ("%d\n", diff);
 			if ((diff == 0) ||
-			    (diff > 0 && diff < var_info->cur_value_length))
+			    (diff > 0 && diff <= var_info->cur_value_length))
 			{
 				edited_app_node = iter2;
 				found = TRUE;
-				IAnjutaIterable *end_iter = ianjuta_iterable_clone (var_iter, NULL);
-				ianjuta_iterable_set_position (end_iter, ianjuta_iterable_get_position (var_iter, NULL) + var_info->cur_value_length, NULL);
 				var_info->cur_value_length += modified_value;
-				printf ("%d\n", var_info->cur_value_length);
+
 				break;
 			}
 		}
 		if (found) break;
 
 	}
-
+	printf ("\n");
 	if (found)
 	{
 		g_return_if_fail (edited_app_node != NULL);
@@ -369,12 +367,12 @@ update_variables_values (SnippetsInteraction *snippets_interaction,
 			ianjuta_iterable_set_position (end_iter,
 			                               ianjuta_iterable_get_position (var_iter, NULL) + diff - modified_value,
 			                               NULL);
-//			printf ("%d %d\n", ianjuta_iterable_get_position (start_iter, NULL), ianjuta_iterable_get_position (end_iter, NULL));
+
 			if (modified_value > 0)
 				ianjuta_editor_insert (priv->cur_editor, start_iter, text, modified_value, NULL);
 			else
 				ianjuta_editor_erase (priv->cur_editor, start_iter, end_iter, NULL);
-			
+
 			g_object_unref (start_iter);
 			g_object_unref (end_iter);
 		}
@@ -521,11 +519,10 @@ on_cur_editor_cursor_moved (IAnjutaEditor *cur_editor,
 			break;
 
 	}
-	
 #if 0
 	/* Check if we got out of the snippet bounds. */
 	if (ianjuta_iterable_diff (priv->editing_info->snippet_start, cur_pos, NULL) > 0 || 
-	    ianjuta_iterable_diff (priv->editing_info->snippet_end, cur_pos, NULL) <= 0)
+	    ianjuta_iterable_diff (priv->editing_info->snippet_end, cur_pos, NULL) < 0)
 	{
 		stop_snippet_editing_session (ANJUTA_SNIPPETS_INTERACTION (user_data));
 		g_object_unref (cur_pos);
