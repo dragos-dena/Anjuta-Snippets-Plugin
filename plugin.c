@@ -152,14 +152,26 @@ static void
 on_menu_import_snippets (GtkAction *action,
                          SnippetsManagerPlugin *plugin)
 {
-	/* TODO */
+	AnjutaPlugin *p = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin));
+
+	p = ANJUTA_PLUGIN (plugin);
+	snippets_manager_import_snippets (plugin->snippets_db, p->shell);
 }
 
 static void
 on_menu_export_snippets (GtkAction *action,
                          SnippetsManagerPlugin *plugin)
 {
-	/* TODO */
+	AnjutaPlugin *p = NULL;
+
+	/* Assertions */
+	g_return_if_fail (ANJUTA_IS_PLUGIN_SNIPPETS_MANAGER (plugin));
+
+	p = ANJUTA_PLUGIN (plugin);
+	snippets_manager_export_snippets (plugin->snippets_db, p->shell);
 }
 
 static void

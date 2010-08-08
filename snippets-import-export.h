@@ -20,6 +20,9 @@
 */
 
 #include "snippets-db.h"
+#include <libanjuta/anjuta-shell.h>
 
-void snippets_manager_import_snippets (SnippetsDB *snippets_db);
-void snippets_manager_export_snippets (SnippetsDB *snippets_db);
+void snippets_manager_import_snippets (SnippetsDB *snippets_db,
+                                       AnjutaShell *anjuta_shell);
+void snippets_manager_export_snippets (SnippetsDB *snippets_db,
+                                       AnjutaShell *anjuta_shell);
