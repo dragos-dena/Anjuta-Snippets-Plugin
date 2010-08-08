@@ -65,8 +65,9 @@ libanjuta_snippets_manager_la_SOURCES = \
 	snippet-variables-store.c\
 	snippet-variables-store.h\
 	snippets-provider.c\
-	snippets-provider.h
-
+	snippets-provider.h\
+	snippets-import-export.c\
+	snippets-import-export.h
 	
 EXTRA_DIST = \
 	$(plugin_in_files) \

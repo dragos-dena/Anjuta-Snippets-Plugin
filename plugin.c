@@ -22,6 +22,7 @@
 #include <string.h>
 #include "plugin.h"
 #include "snippet.h"
+#include "snippets-import-export.h"
 #include <libanjuta/interfaces/ianjuta-snippets-manager.h>
 #include <libanjuta/interfaces/ianjuta-document-manager.h>
 #include <libanjuta/interfaces/ianjuta-preferences.h>
@@ -902,7 +903,7 @@ ipreferences_merge (IAnjutaPreferences* ipref,
 		g_warning ("Couldn't load preferences ui file: %s", error->message);
 		g_error_free (error);
 	}
-	anjuta_preferences_add_from_builder (prefs, bxml, SNIPPETS_MANAGER_PREFERENCES_ROOT, _("Snippets"),
+	anjuta_preferences_add_from_builder (prefs, bxml, SNIPPETS_MANAGER_PREFERENCES_ROOT, _("Code Snippets"),
 								 ICON_FILE);
 
 	/* Get the Gtk objects */
@@ -939,7 +940,7 @@ ipreferences_unmerge (IAnjutaPreferences* ipref,
 					  AnjutaPreferences* prefs,
 					  GError** e)
 {
-	anjuta_preferences_remove_page (prefs, _("Snippets"));
+	anjuta_preferences_remove_page (prefs, _("Code Snippets"));
 }
 
 static void
