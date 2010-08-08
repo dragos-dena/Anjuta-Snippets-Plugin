@@ -86,12 +86,6 @@ G_DEFINE_TYPE_WITH_CODE (SnippetsProvider,
 
 
 static void
-snippets_provider_dispose (GObject *obj)
-{
-	/* TODO */
-}
-
-static void
 snippets_provider_init (SnippetsProvider *obj)
 {
 	SnippetsProviderPrivate *priv = ANJUTA_SNIPPETS_PROVIDER_GET_PRIVATE (obj);
@@ -113,9 +107,7 @@ snippets_provider_init (SnippetsProvider *obj)
 static void
 snippets_provider_class_init (SnippetsProviderClass *klass)
 {
-	GObjectClass *object_class = G_OBJECT_CLASS (klass);
 	snippets_provider_parent_class = g_type_class_peek_parent (klass);
-	object_class->dispose = snippets_provider_dispose;
 	g_type_class_add_private (klass, sizeof (SnippetsProviderPrivate));	
 
 }

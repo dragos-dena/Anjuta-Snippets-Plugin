@@ -56,7 +56,7 @@ static GtkActionEntry actions_snippets[] = {
 	{
 		"ActionMenuEditSnippetsManager",
 		NULL,
-		N_("Snippets Manager"),
+		N_("Snippets"),
 		NULL,
 		NULL,
 		NULL},
@@ -889,9 +889,7 @@ ipreferences_merge (IAnjutaPreferences* ipref,
 	GError* error = NULL;
 	GtkBuilder* bxml = gtk_builder_new ();
 	GtkTreeView *global_vars_view = NULL;
-	GtkButton *add_variable_b = NULL, *delete_variable_b = NULL, *reset_default_b = NULL;
-	GtkCheckButton *overwrite_cb = NULL, *show_only_lang_cb = NULL; 
-	GtkFileChooserButton *default_folder_b = NULL;
+	GtkButton *add_variable_b = NULL, *delete_variable_b = NULL;
 	SnippetsManagerPlugin *snippets_manager_plugin = NULL;
 	GlobalVariablesUpdateData *global_vars_update_data = NULL;
 	
@@ -904,24 +902,16 @@ ipreferences_merge (IAnjutaPreferences* ipref,
 		g_warning ("Couldn't load preferences ui file: %s", error->message);
 		g_error_free (error);
 	}
-	anjuta_preferences_add_from_builder (prefs, bxml, SNIPPETS_MANAGER_PREFERENCES_ROOT, _("Snippets Manager"),
+	anjuta_preferences_add_from_builder (prefs, bxml, SNIPPETS_MANAGER_PREFERENCES_ROOT, _("Snippets"),
 								 ICON_FILE);
 
 	/* Get the Gtk objects */
 	global_vars_view  = GTK_TREE_VIEW (gtk_builder_get_object (bxml, "global_vars_view"));
 	add_variable_b    = GTK_BUTTON (gtk_builder_get_object (bxml, "add_var_button"));
 	delete_variable_b = GTK_BUTTON (gtk_builder_get_object (bxml, "delete_var_button"));
-	overwrite_cb      = GTK_CHECK_BUTTON (gtk_builder_get_object (bxml, "overwrite_cb"));
-	show_only_lang_cb = GTK_CHECK_BUTTON (gtk_builder_get_object (bxml, "show_only_lang_cb"));
-	reset_default_b   = GTK_BUTTON (gtk_builder_get_object (bxml, "reset_default_b"));
-	default_folder_b  = GTK_FILE_CHOOSER_BUTTON (gtk_builder_get_object (bxml, "default_folder_b"));
 	g_return_if_fail (GTK_IS_TREE_VIEW (global_vars_view));
 	g_return_if_fail (GTK_IS_BUTTON (add_variable_b));
 	g_return_if_fail (GTK_IS_BUTTON (delete_variable_b));
-	g_return_if_fail (GTK_IS_CHECK_BUTTON (overwrite_cb));
-	g_return_if_fail (GTK_IS_CHECK_BUTTON (show_only_lang_cb));
-	g_return_if_fail (GTK_IS_BUTTON (reset_default_b));
-	g_return_if_fail (GTK_IS_FILE_CHOOSER_BUTTON (default_folder_b));
 
 	/* Set up the Global Variables GtkTreeView */
 	set_up_global_variables_view (snippets_manager_plugin, global_vars_view);
@@ -949,7 +939,7 @@ ipreferences_unmerge (IAnjutaPreferences* ipref,
 					  AnjutaPreferences* prefs,
 					  GError** e)
 {
-	anjuta_preferences_remove_page (prefs, _("Snippets Manager"));
+	anjuta_preferences_remove_page (prefs, _("Snippets"));
 }
 
 static void

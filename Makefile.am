@@ -10,7 +10,7 @@ snippets_manager_glade_DATA = snippets-manager-preferences.ui \
 # The default installed plugins here.
 default_snippetsdir = $(anjuta_data_dir)
 default_snippets_DATA = \
-	snippets.xml \
+	snippets.anjuta-snippets \
 	snippets-global-variables.xml
                         
 
@@ -31,7 +31,7 @@ snippets_manager_plugin_DATA = $(plugin_in_files:.plugin.in=.plugin)
 
 AM_CPPFLAGS= \
 	$(WARN_CFLAGS) \
-	$(DEPRECATED_FLAGS) \ 
+	$(DEPRECATED_FLAGS) \
 	$(LIBXML_CFLAGS) \
 	$(LIBANJUTA_CFLAGS) \
 	-DG_LOG_DOMAIN=\"libanjuta-snippets-manager\"

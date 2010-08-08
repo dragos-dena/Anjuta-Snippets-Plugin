@@ -32,7 +32,7 @@
 #include <glib/gstdio.h>
 #include <gtk/gtk.h>
 
-#define DEFAULT_SNIPPETS_FILE               "snippets.xml"
+#define DEFAULT_SNIPPETS_FILE               "snippets.anjuta-snippets"
 #define DEFAULT_GLOBAL_VARS_FILE            "snippets-global-variables.xml"
 #define USER_SNIPPETS_DB_DIR                "snippets-database"
 

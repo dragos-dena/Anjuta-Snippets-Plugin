@@ -54,8 +54,8 @@ struct _SnippetsManagerPlugin
 	   Provides search functions. */
 	SnippetsDB* snippets_db;
 	
-	/* Snippets Interaction Interpreter. This should take care of interacting with
-	   the editor for inserting and live editing the snippets. TODO */
+	/* Snippets Interaction Interpreter. This takes care of interacting with
+	   the editor for inserting and live editing the snippets.  */
 	SnippetsInteraction* snippets_interaction;
 		
 	/* GUI parts. */

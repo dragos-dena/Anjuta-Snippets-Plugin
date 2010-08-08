@@ -75,18 +75,6 @@ struct _SnippetEditingInfo
 G_DEFINE_TYPE (SnippetsInteraction, snippets_interaction, G_TYPE_OBJECT);
 
 static void
-snippets_interaction_dispose (GObject *obj)
-{
-	/* TODO */
-}
-
-static void
-snippets_interaction_finalize (GObject *obj)
-{
-	/* TODO */
-}
-
-static void
 snippets_interaction_init (SnippetsInteraction *snippets_interaction)
 {
 	SnippetsInteractionPrivate* priv = ANJUTA_SNIPPETS_INTERACTION_GET_PRIVATE (snippets_interaction);
@@ -109,11 +97,7 @@ snippets_interaction_init (SnippetsInteraction *snippets_interaction)
 static void
 snippets_interaction_class_init (SnippetsInteractionClass *snippets_interaction_class)
 {
-	GObjectClass *klass = G_OBJECT_CLASS (snippets_interaction_class);
 	snippets_interaction_parent_class = g_type_class_peek_parent (snippets_interaction_class);
-	klass->dispose  = snippets_interaction_dispose;
-	klass->finalize = snippets_interaction_finalize;
-
 	g_type_class_add_private (snippets_interaction_class, sizeof (SnippetsInteractionPrivate));
 }
 
@@ -329,7 +313,7 @@ update_variables_values (SnippetsInteraction *snippets_interaction,
 
 			/* We found a variable value modified */
 			diff = ianjuta_iterable_diff (var_iter, iter, NULL);
-			printf ("%d\n", diff);
+
 			if ((diff == 0) ||
 			    (diff > 0 && diff <= var_info->cur_value_length))
 			{
@@ -343,7 +327,7 @@ update_variables_values (SnippetsInteraction *snippets_interaction,
 		if (found) break;
 
 	}
-	printf ("\n");
+
 	if (found)
 	{
 		g_return_if_fail (edited_app_node != NULL);
@@ -573,6 +557,40 @@ delete_snippet_editing_info (SnippetsInteraction *snippets_interaction)
 	priv->editing_info = NULL;
 }
 
+static gint
+sort_appearances (gconstpointer a,
+                  gconstpointer b)
+{
+	IAnjutaIterable *ia = IANJUTA_ITERABLE (a),
+	                *ib = IANJUTA_ITERABLE (b);
+
+	/* Assertions */
+	g_return_val_if_fail (IANJUTA_IS_ITERABLE (a), 0);
+	g_return_val_if_fail (IANJUTA_IS_ITERABLE (b), 0);
+
+	return ianjuta_iterable_get_position (ia, NULL) - ianjuta_iterable_get_position (ib, NULL);
+}
+
+static gint
+sort_variables (gconstpointer a,
+                gconstpointer b)
+{
+	SnippetVariableInfo *var1 = (SnippetVariableInfo *)a,
+	                    *var2 = (SnippetVariableInfo *)b;
+	IAnjutaIterable *var1_min = NULL, *var2_min = NULL;
+
+	var1->appearances = g_list_sort (var1->appearances, sort_appearances);
+	var2->appearances = g_list_sort (var2->appearances, sort_appearances);
+
+	var1_min = IANJUTA_ITERABLE (var1->appearances->data);
+	var2_min = IANJUTA_ITERABLE (var2->appearances->data);
+	g_return_val_if_fail (IANJUTA_IS_ITERABLE (var1_min), 0);
+	g_return_val_if_fail (IANJUTA_IS_ITERABLE (var2_min), 0);
+
+	return ianjuta_iterable_get_position (var1_min, NULL) - 
+	       ianjuta_iterable_get_position (var2_min, NULL);
+}
+
 static void
 start_snippet_editing_session (SnippetsInteraction *snippets_interaction,
                                IAnjutaIterable *start_pos,
@@ -618,7 +636,7 @@ start_snippet_editing_session (SnippetsInteraction *snippets_interaction,
 		priv->editing_info->snippet_finish_position = NULL;
 	}
 
-	/* TODO - calculate positions of each variable appearance */
+	/* Calculate positions of each variable appearance */
 	relative_positions = snippet_get_variable_relative_positions (priv->cur_snippet);
 	variables_length   = snippet_get_variable_cur_values_len (priv->cur_snippet);
 
@@ -628,6 +646,10 @@ start_snippet_editing_session (SnippetsInteraction *snippets_interaction,
 	{
 		cur_var_positions = (GPtrArray *)iter->data;
 		cur_var_length    = GPOINTER_TO_INT (iter2->data);
+
+		/* If the variable doesn't have any appearance, we don't add it */
+		if (!cur_var_positions->len)
+			continue;
 
 		/* Initialize the current variable info */
 		cur_var_info = g_new0 (SnippetVariableInfo, 1);
@@ -659,8 +681,14 @@ start_snippet_editing_session (SnippetsInteraction *snippets_interaction,
 	g_list_free (relative_positions);
 	g_list_free (variables_length);
 
+	/* Sort the list with appearances so the user will edit the ones that appear first
+	   when the editing starts. */
+	priv->editing_info->snippet_vars_info = 
+		g_list_sort (priv->editing_info->snippet_vars_info, sort_variables);
+	
 	priv->editing_info->cur_var = g_list_first (priv->editing_info->snippet_vars_info);
 	focus_on_next_snippet_variable (snippets_interaction);
+
 }
 
 static void

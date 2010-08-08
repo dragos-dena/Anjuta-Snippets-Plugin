@@ -374,10 +374,10 @@ snippets_view_trigger_data_func (GtkTreeViewColumn *column,
 
 static void
 snippets_view_languages_data_func (GtkTreeViewColumn *column,
-                                  GtkCellRenderer *renderer,
-                                  GtkTreeModel *tree_model,
-                                  GtkTreeIter *iter,
-                                  gpointer user_data)
+                                   GtkCellRenderer *renderer,
+                                   GtkTreeModel *tree_model,
+                                   GtkTreeIter *iter,
+                                   gpointer user_data)
 { 
 	gchar *languages = NULL;
 
@@ -544,7 +544,9 @@ init_snippets_view (SnippetsBrowser *snippets_browser)
 	                                         snippets_view_languages_data_func,
 	                                         snippets_browser, NULL);
 	g_object_set (G_OBJECT (column), "resizable", TRUE, NULL);
+	g_object_set (G_OBJECT (column), "visible", FALSE, NULL);
 	gtk_tree_view_insert_column (priv->snippets_view, column, -1);
+
 }
 
 
@@ -647,6 +649,7 @@ snippets_browser_show_editor (SnippetsBrowser *snippets_browser)
 {
 	SnippetsBrowserPrivate *priv = NULL;
 	GtkTreeSelection *selection = NULL;
+	GtkTreeViewColumn *col = NULL;
 	
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
@@ -686,6 +689,9 @@ snippets_browser_show_editor (SnippetsBrowser *snippets_browser)
 	/* Set the current snippet for the editor */
 	selection = gtk_tree_view_get_selection (priv->snippets_view);
 	on_snippets_view_selection_changed (selection, snippets_browser);
+
+	col = gtk_tree_view_get_column (priv->snippets_view, SNIPPETS_VIEW_COL_LANGUAGES);
+	g_object_set (col, "visible", TRUE, NULL);
 	
 }
 
@@ -699,7 +705,8 @@ void
 snippets_browser_hide_editor (SnippetsBrowser *snippets_browser)
 {
 	SnippetsBrowserPrivate *priv = NULL;
-	
+	GtkTreeViewColumn *col = NULL;
+
 	/* Assertions */
 	g_return_if_fail (ANJUTA_IS_SNIPPETS_BROWSER (snippets_browser));
 	priv = ANJUTA_SNIPPETS_BROWSER_GET_PRIVATE (snippets_browser);
@@ -735,6 +742,9 @@ snippets_browser_hide_editor (SnippetsBrowser *snippets_browser)
 	snippets_browser_refilter_snippets_view (snippets_browser);
 
 	gtk_widget_set_sensitive (GTK_WIDGET (priv->insert_button), TRUE);
+
+	col = gtk_tree_view_get_column (priv->snippets_view, SNIPPETS_VIEW_COL_LANGUAGES);
+	g_object_set (col, "visible", FALSE, NULL);
 }
 
 /**
