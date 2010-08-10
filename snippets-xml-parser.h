@@ -34,4 +34,3 @@ gboolean     snippets_manager_save_variables_xml_file  (const gchar* global_vari
                                                         GList* global_vars_name_list,
                                                         GList* global_vars_value_list,
                                                         GList* global_vars_is_command_list);
-

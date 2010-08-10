@@ -54,7 +54,9 @@
 #define CDATA_START                  "<![CDATA["
 #define CDATA_END                    "]]>"
 #define CDATA_MID                    "]]><![CDATA["
-#define IS_CDATA_END(text, i)        (text[i - 1] == ']' && text[i] == ']' && text[i + 1] == '>')
+#define IS_CDATA_END(text, i)        (text[i - 1] == ']' && text[i] == ']' && text[i + 1] == '>')           
+
+#define QUOTE_STR                    "&quot;"
 
 
 static void
@@ -71,62 +73,6 @@ write_simple_end_tag (GOutputStream *os,
                       const gchar *name)
 {
 	gchar *tag = g_strconcat ("</", name, ">\n", NULL);
-	g_output_stream_write (os, tag, strlen (tag), NULL, NULL);
-	g_free (tag);
-}
-
-static void
-write_start_end_tag_with_content (GOutputStream *os,
-                                  const gchar *tag_name,
-                                  const gchar *content)
-{
-	gchar *tag_with_content = 
-		g_strconcat ("<", tag_name, ">", content, "</", tag_name, ">\n", NULL);
-
-	g_output_stream_write (os, tag_with_content, strlen (tag_with_content), NULL, NULL);
-	g_free (tag_with_content);
-}
-
-static void
-write_start_end_tag_with_content_as_list (GOutputStream *os,
-                                          const gchar *tag_name,
-                                          GList *content_list)
-{
-	GList *iter = NULL;
-	GString *content = g_string_new ("");
-	gchar *cur_word = NULL;
-
-	for (iter = g_list_first (content_list); iter != NULL; iter = g_list_next (iter))
-	{
-		cur_word = (gchar *)iter->data;
-		g_string_append (content, cur_word);
-		g_string_append (content, " ");
-	}
-
-	write_start_end_tag_with_content (os, tag_name, content->str);
-	g_string_free (content, TRUE);
-
-}
-
-static void
-write_anjuta_snippet_tag (GOutputStream *os,
-                          const gchar *trigger,
-                          const gchar *name)
-{
-	gchar *tag = g_strconcat ("<anjuta-snippet trigger=\"", trigger, "\" name=\"", name, "\">\n", NULL);
-	g_output_stream_write (os, tag, strlen (tag), NULL, NULL);
-	g_free (tag);
-}
-
-static void
-write_variable_tag (GOutputStream *os,
-                    const gchar *name,
-                    const gchar *default_val,
-                    gboolean is_global)
-{
-	const gchar *global_val = (is_global) ? NATIVE_XML_TRUE : NATIVE_XML_FALSE;
-	gchar *tag = g_strconcat ("<variable name=\"", name, "\" default=\"", default_val, 
-	                          "\" is_global=\"", global_val, "\" />\n", NULL);
 	g_output_stream_write (os, tag, strlen (tag), NULL, NULL);
 	g_free (tag);
 }
@@ -152,6 +98,102 @@ escape_text_cdata (const gchar *content)
 
 }
 
+static gchar*
+escape_quotes (const gchar *text)
+{
+	GString *escaped_text = g_string_new ("");
+	gint i = 0, len = 0;
+
+	len = strlen (text);
+	for (i = 0; i < len; i += 1)
+	{
+		if (text[i] == '\"')
+		{
+			escaped_text = g_string_append (escaped_text, QUOTE_STR);
+			continue;
+		}
+		
+		escaped_text = g_string_append_c (escaped_text, text[i]);
+	}
+
+	return g_string_free (escaped_text, FALSE);
+}
+
+static void
+write_start_end_tag_with_content (GOutputStream *os,
+                                  const gchar *tag_name,
+                                  const gchar *content)
+{
+	gchar *tag_with_content = NULL, *escaped_content = NULL;
+
+	escaped_content = escape_text_cdata (content);
+	tag_with_content = g_strconcat ("<", tag_name, ">", escaped_content, "</", tag_name, ">\n", NULL);
+	
+	g_output_stream_write (os, tag_with_content, strlen (tag_with_content), NULL, NULL);
+	g_free (tag_with_content);
+	g_free (escaped_content);
+}
+
+static void
+write_start_end_tag_with_content_as_list (GOutputStream *os,
+                                          const gchar *tag_name,
+                                          GList *content_list)
+{
+	GList *iter = NULL;
+	GString *content = g_string_new ("");
+	gchar *cur_word = NULL;
+
+	for (iter = g_list_first (content_list); iter != NULL; iter = g_list_next (iter))
+	{
+		cur_word = (gchar *)iter->data;
+		g_string_append (content, cur_word);
+		g_string_append (content, " ");
+	}
+	
+	write_start_end_tag_with_content (os, tag_name, content->str);
+	g_string_free (content, TRUE);
+
+}
+
+static void
+write_anjuta_snippet_tag (GOutputStream *os,
+                          const gchar *trigger,
+                          const gchar *name)
+{
+	gchar *tag = NULL, *escaped_name = NULL;
+
+	escaped_name = escape_quotes (name);
+	tag = g_strconcat ("<anjuta-snippet trigger=\"", trigger, "\" name=\"", escaped_name, "\">\n", NULL);
+	g_output_stream_write (os, tag, strlen (tag), NULL, NULL);
+	g_free (tag);
+	g_free (escaped_name);
+}
+
+static void
+write_variable_tag (GOutputStream *os,
+                    const gchar *name,
+                    const gchar *default_val,
+                    gboolean is_global)
+{
+	const gchar *global_val = (is_global) ? NATIVE_XML_TRUE : NATIVE_XML_FALSE;
+	gchar *tag = NULL, *escaped_name = NULL, *escaped_default_val = NULL;
+
+	/* Escape the quotes */
+	escaped_name = escape_quotes (name);
+	escaped_default_val = escape_quotes (default_val);
+
+	/* Write the tag */
+	tag = g_strconcat ("<variable name=\"", escaped_name, 
+	                   "\" default=\"", escaped_default_val, 
+	                   "\" is_global=\"", global_val, "\" />\n", NULL);
+	g_output_stream_write (os, tag, strlen (tag), NULL, NULL);
+
+	/* Free the data */
+	g_free (tag);
+	g_free (escaped_name);
+	g_free (escaped_default_val);
+}
+
 static gboolean
 write_snippet (GOutputStream *os,
                AnjutaSnippet *snippet)
@@ -159,7 +201,6 @@ write_snippet (GOutputStream *os,
 	GList *iter = NULL, *iter2 = NULL, *iter3 = NULL, *keywords = NULL,
 	      *vars_names = NULL, *vars_defaults = NULL, *vars_globals = NULL;
 	const gchar *content = NULL;
-	gchar *escaped_content = NULL;
 
 	/* Assertions */
 	g_return_val_if_fail (G_IS_OUTPUT_STREAM (os), FALSE);
@@ -201,9 +242,7 @@ write_snippet (GOutputStream *os,
 
 	/* Write the content */
 	content = snippet_get_content (snippet);
-	escaped_content = escape_text_cdata (content);
-	write_start_end_tag_with_content (os, NATIVE_XML_CONTENT_TAG, escaped_content);
-	g_free (escaped_content);
+	write_start_end_tag_with_content (os, NATIVE_XML_CONTENT_TAG, content);
 
 	/* Write the keywords */
 	keywords = snippet_get_keywords_list (snippet);
@@ -705,23 +744,29 @@ write_global_var_tags (GOutputStream *os,
                        const gchar *value,
                        gboolean is_command)
 {
-	gchar *command_string = NULL, *escaped_content = NULL, *line = NULL;
+	gchar *command_string = NULL, *escaped_content = NULL, *line = NULL,
+	      *escaped_name = NULL;
 
 	/* Assertions */
 	g_return_if_fail (G_IS_OUTPUT_STREAM (os));
 
+	/* Escape the text */
 	command_string = (is_command) ? GLOBAL_VARS_XML_TRUE : GLOBAL_VARS_XML_FALSE;
 	escaped_content = escape_text_cdata (value);
+	escaped_name = escape_quotes (name);
 
-	line = g_strconcat ("<global-variable name=\"", name, 
+	/* Write the tag */
+	line = g_strconcat ("<global-variable name=\"", escaped_name, 
 	                    "\" is_command=\"", command_string, "\">", 
 	                    escaped_content, 
 	                    "</global-variable>\n",
 	                    NULL);
 	g_output_stream_write (os, line, strlen (line), NULL, NULL);
 
+	/* Free the memory */
 	g_free (line);
 	g_free (escaped_content);
+	g_free (escaped_name);
 }
 
 /**
@@ -785,7 +830,7 @@ snippets_manager_save_variables_xml_file (const gchar* global_variables_path,
 	}
 	
 	write_simple_end_tag (os, GLOBAL_VARS_XML_ROOT);
-
+	
 	/* Close the file */
 	g_output_stream_close (os, NULL, NULL);
 	g_object_unref (os);

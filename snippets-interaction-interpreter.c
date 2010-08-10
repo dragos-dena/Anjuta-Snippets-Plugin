@@ -418,12 +418,10 @@ on_cur_editor_changed (IAnjutaEditor *cur_editor,
 	if (!priv->editing)
 		return;
 	
-//	g_signal_handlers_block_by_func (cur_editor, on_cur_editor_changed, user_data);
 	update_variables_values (ANJUTA_SNIPPETS_INTERACTION (user_data),
 	                         IANJUTA_ITERABLE (position),
 	                         sign * length,
 	                         text);
-//	g_signal_handlers_unblock_by_func (cur_editor, on_cur_editor_changed, user_data);
 
 }
 
@@ -649,7 +647,11 @@ start_snippet_editing_session (SnippetsInteraction *snippets_interaction,
 
 		/* If the variable doesn't have any appearance, we don't add it */
 		if (!cur_var_positions->len)
+		{
+			iter  = g_list_next (iter);
+			iter2 = g_list_next (iter2);
 			continue;
+		}
 
 		/* Initialize the current variable info */
 		cur_var_info = g_new0 (SnippetVariableInfo, 1);
